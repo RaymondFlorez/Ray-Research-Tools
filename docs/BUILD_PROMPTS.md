@@ -11,6 +11,7 @@ testable. Run, verify, then move to the next. They follow the phasing in
 ---
 
 ### Prompt 1 — Monorepo skeleton & tooling
+
 ```
 Set up a monorepo named "geoglobe" using pnpm workspaces. Create apps/web (React +
 TypeScript + Vite) and a placeholder apps/api. Add packages/scene-schema,
@@ -21,6 +22,7 @@ packages. Add a docker-compose.yml stub. Verify `pnpm -r build` passes.
 ```
 
 ### Prompt 2 — Globe MVP
+
 ```
 In apps/web, render a full-screen 3-D globe using deck.gl's GlobeView with a MapLibre
 GL basemap (no API token — use a free demo style or a self-hosted style). Add smooth
@@ -31,6 +33,7 @@ globe spins and renders the countries layer in the browser.
 ```
 
 ### Prompt 3 — Scene State package
+
 ```
 In packages/scene-schema, define the canonical Scene State TypeScript types and a
 Zod (or JSON Schema) validator matching ARCHITECTURE.md §5: viewport, time, layers[],
@@ -42,6 +45,7 @@ be driven FROM this store.
 ```
 
 ### Prompt 4 — Layer system & control panel
+
 ```
 In packages/layer-adapters, implement a LayerAdapter that converts a typed LayerSource
 (geojson, vector-tile, raster/tile, point, time-series) into a deck.gl layer config,
@@ -54,6 +58,7 @@ the globe.
 ```
 
 ### Prompt 5 — Data backend (PostGIS + Data Service API)
+
 ```
 Build apps/api with FastAPI. Add infra/docker-compose with PostgreSQL+PostGIS,
 pgvector, and Redis. Create migrations and a seed loader for one real sample dataset
@@ -65,6 +70,7 @@ earthquakes layer at /query/geo instead of a static file.
 ```
 
 ### Prompt 6 — Scene interactivity (selection, inspector, timeline)
+
 ```
 Add feature selection to the globe: clicking a feature updates Scene State.selection
 and opens an Inspector panel showing its properties. Add a timeline scrubber bound to
@@ -74,6 +80,7 @@ serializable. Add Playwright E2E tests for select-feature and scrub-timeline.
 ```
 
 ### Prompt 7 — Agent core (Anthropic tool loop + streaming)
+
 ```
 In agent/orchestrator, implement a plan-act-observe agent loop using the Anthropic
 Messages API with native tool use. Default to claude-opus-4-8 for planning and
@@ -88,6 +95,7 @@ end-to-end. Add a golden-trace test for that query.
 ```
 
 ### Prompt 8 — RAG (geo-tagged retrieval)
+
 ```
 Stand up the RAG subsystem: an ingestion pipeline that chunks documents and dataset
 descriptions, embeds them, and stores vectors in pgvector with geo metadata
@@ -98,6 +106,7 @@ Add a golden-trace test: a knowledge question that retrieves and pins results.
 ```
 
 ### Prompt 9 — MCP client & action ("openClaw") tools
+
 ```
 In agent/tools, build an MCP client that connects to configured external MCP servers
 at startup, discovers their tools, and merges them into a unified Tool Gateway with
@@ -110,6 +119,7 @@ sees one uniform tool list. Add tests for discovery, namespacing, and guardrails
 ```
 
 ### Prompt 10 — Hardening: auth, guardrails, observability
+
 ```
 Add OIDC auth (JWT) to apps/api with per-tool scopes enforced in the Tool Gateway.
 Enforce read-only DB role, statement timeouts, and row caps on all query tools; domain
@@ -121,6 +131,7 @@ calls.
 ```
 
 ### Prompt 11 — Performance, LOD & polish
+
 ```
 Optimize the globe for many/large layers: tile-based loading, level-of-detail and
 decimation in the layer adapters, viewport-bounded queries, and Redis caching of tiles
@@ -130,6 +141,7 @@ Add performance budget checks to CI.
 ```
 
 ### Prompt 12 — Packaging & deployment
+
 ```
 Containerize apps/web and apps/api. Provide a production docker-compose and a starter
 Kubernetes manifest set in infra/k8s (frontend behind CDN/static host; api + Postgres
@@ -141,8 +153,9 @@ stack and runs one end-to-end NL query. Tag a v0.1.0 release.
 ---
 
 ## How to use these well
+
 - **Verify between steps.** Each prompt ends in something runnable — run it, click
-  around, run the tests, *then* proceed. Don't batch.
+  around, run the tests, _then_ proceed. Don't batch.
 - **Keep the contracts central.** scene-schema and tool-contracts are the spine; resist
   letting apps drift from them.
 - **Commit per prompt.** One coherent commit (or PR) per step keeps history reviewable

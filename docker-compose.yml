@@ -1,0 +1,27 @@
+# GeoGlobe local dev stack (STUB).
+#
+# Full services (PostGIS + pgvector, Redis, api, web) are fleshed out in
+# docs/BUILD_PROMPTS.md Step 5. This stub documents the intended topology.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: geoglobe
+      POSTGRES_PASSWORD: geoglobe
+      POSTGRES_DB: geoglobe
+    ports:
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+
+  # api:   # enabled in Step 5 (FastAPI)
+  # web:   # enabled in Step 5 (Vite build served statically)
+
+volumes:
+  db-data:

@@ -1,0 +1,29 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+body {
+  margin: 0;
+  background: #0b1020;
+  color: #e8ecf5;
+}
+
+.app {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 4rem 1.5rem;
+}
+
+.app h1 {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.app .meta {
+  color: #7b86a6;
+  font-size: 0.85rem;
+}

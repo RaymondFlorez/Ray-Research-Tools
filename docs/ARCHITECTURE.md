@@ -15,13 +15,13 @@ rendered scene as a **queryable visual database**.
 
 ## 1. Design goals
 
-| Goal | Implication |
-|------|-------------|
-| Smooth 3‑D globe with many data layers | GPU-accelerated WebGL renderer, layer abstraction, LOD/tiling |
-| "Query the globe like a database" | A canonical, structured **scene/layer state** the agent can read & mutate |
-| Natural-language access to data | LLM agent + tool calling (RAG, action tools, MCP) |
-| Pluggable data of *different kinds* | Adapter pattern: vector, raster, point-cloud, time-series, GeoJSON, tiles |
-| Reproducible & explainable | Every NL query → a logged, replayable sequence of tool calls |
+| Goal                                   | Implication                                                               |
+| -------------------------------------- | ------------------------------------------------------------------------- |
+| Smooth 3‑D globe with many data layers | GPU-accelerated WebGL renderer, layer abstraction, LOD/tiling             |
+| "Query the globe like a database"      | A canonical, structured **scene/layer state** the agent can read & mutate |
+| Natural-language access to data        | LLM agent + tool calling (RAG, action tools, MCP)                         |
+| Pluggable data of _different kinds_    | Adapter pattern: vector, raster, point-cloud, time-series, GeoJSON, tiles |
+| Reproducible & explainable             | Every NL query → a logged, replayable sequence of tool calls              |
 
 ---
 
@@ -73,9 +73,10 @@ rendered scene as a **queryable visual database**.
 ## 3. Frontend
 
 ### 3.1 Rendering engine
+
 **Recommendation: `deck.gl` `GlobeView` over a MapLibre/Cesium base.**
 
-- **deck.gl** — best-in-class for *data layers* (ScatterplotLayer, HexagonLayer,
+- **deck.gl** — best-in-class for _data layers_ (ScatterplotLayer, HexagonLayer,
   ArcLayer, GeoJsonLayer, HeatmapLayer, TripsLayer, BitmapLayer, TileLayer). Layers
   are declarative and data-driven, which maps cleanly to "the agent edits a layer
   list." Native `GlobeView` renders a true 3‑D sphere.
@@ -89,15 +90,17 @@ rendered scene as a **queryable visual database**.
 > This design assumes deck.gl. A `Renderer` interface keeps the choice swappable.
 
 ### 3.2 App shell
+
 - **React + TypeScript + Vite.**
 - **State:** Zustand (or Redux Toolkit) holding the **Scene State** (§5). Kept small,
-  serializable, and the *only* thing the agent reads/writes on the client.
+  serializable, and the _only_ thing the agent reads/writes on the client.
 - **UI:** Chat panel, layer/legend panel, timeline scrubber, search, inspector
   (click a feature → properties).
 - **Transport:** WebSocket (or SSE) for streamed agent tokens + scene patches;
   REST for CRUD and bulk data.
 
 ### 3.3 Data layer adapter
+
 A `LayerAdapter` normalizes heterogeneous sources into deck.gl layer configs:
 
 ```
@@ -142,21 +145,25 @@ and writes patches to it to change the view.
     {
       "id": "quakes",
       "type": "scatterplot",
-      "source": { "kind": "geo-query", "dataset": "earthquakes",
-                  "filter": { "mag": { "gte": 4.5 } } },
+      "source": {
+        "kind": "geo-query",
+        "dataset": "earthquakes",
+        "filter": { "mag": { "gte": 4.5 } },
+      },
       "encoding": { "radius": "mag", "color": { "field": "depth", "scale": "viridis" } },
-      "visible": true, "opacity": 0.9
-    }
+      "visible": true,
+      "opacity": 0.9,
+    },
   ],
   "selection": { "layerId": "quakes", "featureIds": ["us7000..."] },
-  "annotations": []
+  "annotations": [],
 }
 ```
 
 - The agent mutates scene state via **JSON Patch** operations (add layer, set filter,
   fly-to, select features). The client applies patches → deck.gl re-renders.
 - Because scene state is structured, "query the globe" = run a predicate over the
-  *currently materialized* layer data (client-side) **or** re-issue the underlying
+  _currently materialized_ layer data (client-side) **or** re-issue the underlying
   data query (server-side). The agent chooses based on data size.
 
 ---
@@ -164,6 +171,7 @@ and writes patches to it to change the view.
 ## 6. LLM Agent Orchestration
 
 ### 6.1 Model & loop
+
 - **Default models: Claude Opus 4.8** for planning/complex reasoning, **Claude Sonnet
   4.6** for fast tool-loop turns. (Model IDs: `claude-opus-4-8`, `claude-sonnet-4-6`.)
   Use the Anthropic Messages API with native **tool use**; stream tokens to the client.
@@ -174,6 +182,7 @@ and writes patches to it to change the view.
   stable) to cut cost/latency.
 
 ### 6.2 Tool categories
+
 1. **RAG tools** — `rag_search(query, geo_bbox?)` over a vector store of documents,
    dataset descriptions, and place/feature metadata. Returns chunks **with geo
    coordinates** so retrieved knowledge can be pinned to the globe.
@@ -189,12 +198,14 @@ and writes patches to it to change the view.
    Their tools are surfaced into the same tool list with a namespace prefix.
 
 ### 6.3 Tool gateway
+
 A single registry exposes every tool to the model with: JSON schema, auth scope,
 rate limit, and an output transformer (truncate, geo-normalize). MCP tools are
 discovered at startup and merged in. This keeps the agent code uniform regardless of
 whether a tool is internal, an action tool, or remote MCP.
 
 ### 6.4 Safety / guardrails
+
 - Read-only DB role + statement timeout + row caps for SQL/geo tools.
 - Domain allow-list + size caps for action/web tools.
 - Scene mutations are **patches the client validates** against a schema before
@@ -205,13 +216,13 @@ whether a tool is internal, an action tool, or remote MCP.
 
 ## 7. Data stores
 
-| Store | Tech | Holds |
-|-------|------|-------|
-| Geospatial relational | **PostgreSQL + PostGIS** | vector features, attributes, curated query views |
-| Vector / RAG | **pgvector** (start) → **Qdrant** (scale) | doc + metadata embeddings w/ geo tags |
-| Object / tiles | **S3-compatible** (MinIO local) | rasters, COGs, pre-rendered tiles, point clouds |
-| Time-series | **TimescaleDB** (PostGIS extension) | sensor/event streams by time+place |
-| Cache | **Redis** | tile cache, query cache, session/scene snapshots |
+| Store                 | Tech                                      | Holds                                            |
+| --------------------- | ----------------------------------------- | ------------------------------------------------ |
+| Geospatial relational | **PostgreSQL + PostGIS**                  | vector features, attributes, curated query views |
+| Vector / RAG          | **pgvector** (start) → **Qdrant** (scale) | doc + metadata embeddings w/ geo tags            |
+| Object / tiles        | **S3-compatible** (MinIO local)           | rasters, COGs, pre-rendered tiles, point clouds  |
+| Time-series           | **TimescaleDB** (PostGIS extension)       | sensor/event streams by time+place               |
+| Cache                 | **Redis**                                 | tile cache, query cache, session/scene snapshots |
 
 Co-locating PostGIS + pgvector + TimescaleDB in one Postgres keeps the early stack
 small; split out Qdrant/Timescale only when volume demands.
