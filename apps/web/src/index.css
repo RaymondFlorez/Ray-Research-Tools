@@ -6,24 +6,59 @@
     sans-serif;
 }
 
-body {
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
   margin: 0;
-  background: #0b1020;
+  height: 100%;
+  background: #060a16;
   color: #e8ecf5;
 }
 
 .app {
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 4rem 1.5rem;
+  position: relative;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
 }
 
-.app h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+/* deck.gl mounts a positioned canvas; give it the full viewport. */
+.globe {
+  position: absolute;
+  inset: 0;
 }
 
-.app .meta {
-  color: #7b86a6;
+.globe canvas {
+  outline: none;
+}
+
+.overlay {
+  position: absolute;
+  top: 1.25rem;
+  left: 1.25rem;
+  pointer-events: none;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+.overlay h1 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 0.02em;
+}
+
+.overlay p {
+  margin: 0.25rem 0 0;
   font-size: 0.85rem;
+  color: #aab4d0;
+}
+
+.overlay .meta {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: #6b769a;
 }

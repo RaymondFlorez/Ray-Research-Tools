@@ -10,6 +10,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@deck.gl/core": "^9.1.0",
+    "@deck.gl/layers": "^9.1.0",
+    "@deck.gl/react": "^9.1.0",
     "@geoglobe/scene-schema": "workspace:*",
     "@geoglobe/layer-adapters": "workspace:*",
     "react": "^18.3.1",
