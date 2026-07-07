@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
+from .agent.executor import ToolExecutor
+from .agent.orchestrator import Orchestrator
 from .config import Settings, get_settings
 from .models import Catalog, GeoQueryRequest, GeoQueryResponse, SqlQueryRequest, SqlQueryResponse
 from .repository import DataRepository, InMemoryRepository, UnsupportedOperation
@@ -94,6 +96,41 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
         except UnsupportedOperation as exc:
             raise HTTPException(status_code=501, detail=str(exc)) from exc
         return Response(content=data, media_type="application/vnd.mapbox-vector-tile")
+
+    @app.websocket("/ws/agent")
+    async def agent_ws(ws: WebSocket) -> None:
+        """Stream the agent loop: receive {query}, emit text/tool_use/patch/done events."""
+        await ws.accept()
+        settings = get_settings()
+        repo = get_repository()
+        try:
+            from .agent.llm import AnthropicLLMClient
+
+            llm = AnthropicLLMClient(api_key=settings.anthropic_api_key)
+        except Exception as exc:  # SDK missing or no credentials
+            await ws.send_json({"type": "error", "data": {"message": f"agent unavailable: {exc}"}})
+            await ws.close()
+            return
+
+        orchestrator = Orchestrator(
+            llm=llm,
+            executor=ToolExecutor(repo),
+            planner_model=settings.agent_planner_model,
+            fast_model=settings.agent_fast_model,
+            max_turns=settings.agent_max_turns,
+        )
+        try:
+            while True:
+                payload = await ws.receive_json()
+                query = payload.get("query", "")
+                if not query:
+                    continue
+                for event in orchestrator.run(query):
+                    await ws.send_json({"type": event.type, "data": event.data})
+        except WebSocketDisconnect:
+            return
+        except Exception as exc:
+            await ws.send_json({"type": "error", "data": {"message": str(exc)}})
 
     return app
 

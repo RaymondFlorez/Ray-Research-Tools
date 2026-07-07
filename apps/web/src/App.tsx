@@ -3,6 +3,7 @@ import { GlobeCanvas } from './globe';
 import { LayerPanel } from './ui/LayerPanel';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
+import { ChatPanel } from './ui/ChatPanel';
 import { useSceneStore } from './store/sceneStore';
 
 // `?test=1` disables auto-rotation so E2E can click a stable feature.
@@ -30,6 +31,10 @@ export function App() {
       <aside className="sidebar">
         <LayerPanel />
         <Inspector />
+      </aside>
+
+      <aside className="sidebar-left">
+        <ChatPanel />
       </aside>
 
       <footer className="dock">

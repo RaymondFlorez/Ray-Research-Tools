@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     max_rows: int = 5000
     statement_timeout_ms: int = 5000
 
+    # LLM agent (Step 7). API key resolved by the Anthropic SDK if unset here.
+    anthropic_api_key: str | None = None
+    agent_planner_model: str = "claude-opus-4-8"
+    agent_fast_model: str = "claude-sonnet-4-6"
+    agent_max_turns: int = 12
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://localhost:4173",
