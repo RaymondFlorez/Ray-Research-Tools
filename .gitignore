@@ -5,6 +5,11 @@ build/
 coverage/
 .DS_Store
 
+# playwright
+test-results/
+playwright-report/
+.playwright/
+
 # env
 .env
 .env.local

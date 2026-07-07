@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSceneStore } from '../store/sceneStore';
+import { useInspectorStore } from '../store/inspectorStore';
 import { useResolvedData } from '../data/useResolvedData';
 import { DeckGlobeRenderer } from './DeckGlobeRenderer';
 import { viewportToViewState } from './sceneAdapter';
@@ -23,6 +24,7 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
   const scene = useSceneStore((s) => s.scene);
   const setViewport = useSceneStore((s) => s.setViewport);
   const select = useSceneStore((s) => s.select);
+  const setPicked = useInspectorStore((s) => s.setPicked);
   const interacting = useRef(false);
   const resolvedData = useResolvedData(scene.layers);
 
@@ -65,7 +67,10 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
       onInteractionChange={(active) => {
         interacting.current = active;
       }}
-      onPick={(pick) => select(pick && { layerId: pick.layerId, featureIds: [pick.featureId] })}
+      onPick={(pick) => {
+        select(pick && { layerId: pick.layerId, featureIds: [pick.featureId] });
+        setPicked(pick);
+      }}
     />
   );
 }

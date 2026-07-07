@@ -181,3 +181,102 @@ body,
   width: 2.4rem;
   text-align: right;
 }
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Inspector */
+.inspector-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.inspector-layer {
+  font-size: 0.72rem;
+  color: #7e9ccc;
+}
+
+.inspector-id {
+  font-size: 0.68rem;
+  color: #8894b4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 55%;
+}
+
+.inspector-props {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.inspector-prop {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.74rem;
+}
+
+.inspector-prop dt {
+  color: #8894b4;
+}
+
+.inspector-prop dd {
+  margin: 0;
+  color: #dbe3f5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Timeline dock */
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 2.5rem));
+}
+
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.timeline-title {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9fb0d6;
+}
+
+.timeline input[type='range'] {
+  flex: 1;
+  accent-color: #c98a5a;
+}
+
+.timeline-label {
+  font-size: 0.74rem;
+  color: #dbe3f5;
+  width: 4.6rem;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-all {
+  background: rgba(126, 156, 204, 0.14);
+  border: none;
+  color: #cdd8f0;
+  border-radius: 5px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
