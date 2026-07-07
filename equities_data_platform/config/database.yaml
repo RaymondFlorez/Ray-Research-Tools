@@ -1,0 +1,19 @@
+# Database configuration per environment. The active environment is selected
+# by the APP_ENV variable (default "local"). DATABASE_URL in .env always wins
+# over this file when set.
+
+local:
+  url: sqlite:///data/processed/equities.db
+  echo: false
+
+test:
+  url: sqlite:///:memory:
+  echo: false
+
+production:
+  # Point at a real Postgres instance for multi-user / server deployments.
+  # Example: postgresql+psycopg://user:password@host:5432/equities
+  url_env: DATABASE_URL
+  echo: false
+  pool_size: 10
+  max_overflow: 5

@@ -1,0 +1,41 @@
+[project]
+name = "equities-data-platform"
+version = "0.1.0"
+description = "Local-first, free, and legal U.S. public equities data platform: securities master, prices, fundamentals, filings, and ownership."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "requests>=2.31",
+    "SQLAlchemy>=2.0",
+    "pydantic>=2.5",
+    "PyYAML>=6.0",
+    "python-dotenv>=1.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "tenacity>=8.2",
+    "click>=8.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+    "responses>=0.25",
+    "httpx>=0.27",
+    "ruff>=0.4",
+]
+
+[project.scripts]
+equities-platform = "src.main:cli"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = { find = { include = ["src*"] } }
+
+[tool.pytest.ini_options]
+testpaths = ["src/tests"]
+pythonpath = ["."]

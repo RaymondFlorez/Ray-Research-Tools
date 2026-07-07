@@ -1,0 +1,45 @@
+# Source configuration for all free/legal data providers used by the platform.
+# URLs are the canonical endpoints; do not point these at scraped or mirrored copies.
+
+sec:
+  # Contact identity sent as the User-Agent header on every SEC request, per
+  # https://www.sec.gov/os/webmaster-faq#developers . Overridden by SEC_USER_AGENT env var.
+  user_agent_env: SEC_USER_AGENT
+  base_www: https://www.sec.gov
+  base_data: https://data.sec.gov
+  company_tickers_url: https://www.sec.gov/files/company_tickers.json
+  company_tickers_exchange_url: https://www.sec.gov/files/company_tickers_exchange.json
+  submissions_url_template: https://data.sec.gov/submissions/CIK{cik10}.json
+  company_facts_url_template: https://data.sec.gov/api/xbrl/companyfacts/CIK{cik10}.json
+  full_text_search_url: https://efts.sec.gov/LATEST/search-index?q=%22{query}%22&forms={forms}
+  submission_archive_template: https://www.sec.gov/Archives/edgar/data/{cik}/{accession_nodash}/{doc}
+  # Requests per second ceiling. SEC asks for <=10 req/s; we default conservatively.
+  rate_limit_per_sec: 5
+  forms_of_interest:
+    insider: ["3", "4", "5"]
+    ownership: ["13F-HR", "13F-HR/A"]
+
+nasdaq:
+  base_url: https://ftp.nasdaqtrader.com/dynamic/SymDirectory
+  nasdaq_listed_url: https://ftp.nasdaqtrader.com/dynamic/SymDirectory/nasdaqlisted.txt
+  other_listed_url: https://ftp.nasdaqtrader.com/dynamic/SymDirectory/otherlisted.txt
+
+stooq:
+  base_url: https://stooq.com
+  # {ticker} is lowercased and dotted class shares become dashes, e.g. brk-b.us
+  daily_csv_url_template: https://stooq.com/q/d/l/?s={ticker}.us&i=d
+  rate_limit_per_sec: 2
+
+yahoo_fallback:
+  enabled_env: ENABLE_YAHOO_FALLBACK
+  # Unofficial, undocumented endpoint. Used ONLY as a fallback and always
+  # tagged source="yahoo_fallback" downstream so it is never confused with
+  # an authoritative source.
+  chart_url_template: https://query1.finance.yahoo.com/v8/finance/chart/{ticker}
+  rate_limit_per_sec: 1
+
+investor_relations:
+  enabled: false
+  note: >
+    Optional manual/curated enrichment only. No automated scraping of IR pages
+    is performed by this platform; add curated files under data/raw/ir/ by hand.
