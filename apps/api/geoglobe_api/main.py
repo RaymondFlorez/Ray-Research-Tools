@@ -8,8 +8,27 @@ from fastapi.middleware.cors import CORSMiddleware
 from .agent.executor import ToolExecutor
 from .agent.orchestrator import Orchestrator
 from .config import Settings, get_settings
-from .models import Catalog, GeoQueryRequest, GeoQueryResponse, SqlQueryRequest, SqlQueryResponse
+from .models import (
+    Catalog,
+    GeoQueryRequest,
+    GeoQueryResponse,
+    RagHitModel,
+    RagSearchRequest,
+    RagSearchResponse,
+    SqlQueryRequest,
+    SqlQueryResponse,
+)
+from .rag import RagService, build_seeded_service
 from .repository import DataRepository, InMemoryRepository, UnsupportedOperation
+
+_rag_singleton: RagService | None = None
+
+
+def get_rag() -> RagService:
+    global _rag_singleton
+    if _rag_singleton is None:
+        _rag_singleton = build_seeded_service()
+    return _rag_singleton
 from .sql_guard import SqlNotAllowed, validate_read_only_sql
 from .tiles import InvalidTile, validate_tile
 
@@ -97,6 +116,23 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
             raise HTTPException(status_code=501, detail=str(exc)) from exc
         return Response(content=data, media_type="application/vnd.mapbox-vector-tile")
 
+    @app.post("/rag/search", response_model=RagSearchResponse)
+    def rag_search(req: RagSearchRequest, rag: RagService = Depends(get_rag)) -> RagSearchResponse:
+        hits = rag.search(req.query, bbox=req.bbox, k=req.k)
+        return RagSearchResponse(
+            hits=[
+                RagHitModel(
+                    doc_id=h.doc_id,
+                    title=h.title,
+                    text=h.text,
+                    longitude=h.longitude,
+                    latitude=h.latitude,
+                    score=h.score,
+                )
+                for h in hits
+            ]
+        )
+
     @app.websocket("/ws/agent")
     async def agent_ws(ws: WebSocket) -> None:
         """Stream the agent loop: receive {query}, emit text/tool_use/patch/done events."""
@@ -114,7 +150,7 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
 
         orchestrator = Orchestrator(
             llm=llm,
-            executor=ToolExecutor(repo),
+            executor=ToolExecutor(repo, rag=get_rag()),
             planner_model=settings.agent_planner_model,
             fast_model=settings.agent_fast_model,
             max_turns=settings.agent_max_turns,

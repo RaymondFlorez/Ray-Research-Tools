@@ -1,0 +1,37 @@
+[
+  {
+    "id": "ring-of-fire",
+    "title": "Pacific Ring of Fire",
+    "longitude": 160.0,
+    "latitude": 0.0,
+    "text": "The Pacific Ring of Fire is a horseshoe-shaped belt around the Pacific Ocean where a large number of earthquakes and volcanic eruptions occur. About 90 percent of the world's earthquakes and most of its strongest quakes happen along this zone, driven by the movement and collision of tectonic plates and subduction of oceanic crust."
+  },
+  {
+    "id": "san-andreas",
+    "title": "San Andreas Fault",
+    "longitude": -120.5,
+    "latitude": 36.0,
+    "text": "The San Andreas Fault is a continental transform fault that runs roughly 1,200 kilometers through California. It forms the tectonic boundary between the Pacific Plate and the North American Plate. Frequent earthquakes along the fault, including large magnitude ruptures near San Francisco and Los Angeles, make California one of the most seismically active regions in North America."
+  },
+  {
+    "id": "tokyo-seismicity",
+    "title": "Seismicity near Tokyo, Japan",
+    "longitude": 139.7,
+    "latitude": 35.7,
+    "text": "Japan sits at the junction of several tectonic plates, making the Tokyo region one of the most earthquake-prone urban areas on Earth. Deep subduction of the Pacific and Philippine Sea plates produces frequent, sometimes very deep, earthquakes. Strict building codes and early-warning systems reflect the constant seismic hazard around the capital."
+  },
+  {
+    "id": "himalaya-collision",
+    "title": "Himalayan Collision Zone",
+    "longitude": 85.0,
+    "latitude": 28.0,
+    "text": "The Himalayas formed from the ongoing collision of the Indian Plate with the Eurasian Plate. This continental collision continues to raise the mountains and generates large, shallow earthquakes across Nepal, northern India, and Tibet. The 2015 Gorkha earthquake is a recent example of the intense seismic activity along this boundary."
+  },
+  {
+    "id": "mid-atlantic-ridge",
+    "title": "Mid-Atlantic Ridge",
+    "longitude": -30.0,
+    "latitude": 0.0,
+    "text": "The Mid-Atlantic Ridge is a divergent tectonic plate boundary running down the middle of the Atlantic Ocean, where new oceanic crust forms as plates spread apart. Earthquakes here are generally shallow and moderate compared with subduction zones, and volcanic activity along the ridge builds islands such as Iceland."
+  }
+]

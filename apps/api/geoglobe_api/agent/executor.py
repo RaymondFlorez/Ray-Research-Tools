@@ -11,8 +11,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..models import AttributeFilter, GeoQueryRequest
+from ..rag import RagService
 from ..repository import DataRepository, UnsupportedOperation
-from .tools import DATA_TOOL_NAMES, SCENE_TOOL_NAMES
+from .tools import DATA_TOOL_NAMES, RAG_TOOL_NAMES, SCENE_TOOL_NAMES
 
 
 @dataclass
@@ -27,8 +28,9 @@ class ToolOutcome:
 
 
 class ToolExecutor:
-    def __init__(self, repo: DataRepository) -> None:
+    def __init__(self, repo: DataRepository, rag: RagService | None = None) -> None:
         self._repo = repo
+        self._rag = rag
 
     def execute(self, name: str, args: dict[str, Any]) -> ToolOutcome:
         try:
@@ -36,6 +38,8 @@ class ToolExecutor:
                 return self._scene(name, args)
             if name in DATA_TOOL_NAMES:
                 return self._data(name, args)
+            if name in RAG_TOOL_NAMES:
+                return self._rag_search(args)
             return ToolOutcome(result=f"Unknown tool '{name}'", is_error=True)
         except Exception as exc:  # surface tool errors to the model, don't crash the loop
             return ToolOutcome(result=f"Tool '{name}' failed: {exc}", is_error=True)
@@ -96,7 +100,37 @@ class ToolExecutor:
                 patches=[{"op": "replace", "path": "/selection", "value": sel}],
             )
 
+        if name == "add_annotations":
+            annotations = [
+                {
+                    "id": f"ann-{i}",
+                    "longitude": a["longitude"],
+                    "latitude": a["latitude"],
+                    "text": a["text"],
+                }
+                for i, a in enumerate(args["annotations"])
+            ]
+            return ToolOutcome(
+                result=f"Pinned {len(annotations)} annotation(s).",
+                patches=[{"op": "replace", "path": "/annotations", "value": annotations}],
+            )
+
         return ToolOutcome(result=f"Unhandled scene tool '{name}'", is_error=True)
+
+    # ---- RAG tools -------------------------------------------------------------------
+
+    def _rag_search(self, args: dict[str, Any]) -> ToolOutcome:
+        if self._rag is None:
+            return ToolOutcome(result="RAG is not available", is_error=True)
+        bbox = tuple(args["bbox"]) if args.get("bbox") else None
+        hits = self._rag.search(args["query"], bbox=bbox, k=args.get("k", 4))
+        if not hits:
+            return ToolOutcome(result="No relevant passages found.")
+        lines = [
+            f"[{h.title} @ {h.longitude:.1f},{h.latitude:.1f} score={h.score:.2f}] {h.text}"
+            for h in hits
+        ]
+        return ToolOutcome(result="Retrieved passages:\n" + "\n".join(lines))
 
     @staticmethod
     def _build_layer(args: dict[str, Any]) -> dict[str, Any]:

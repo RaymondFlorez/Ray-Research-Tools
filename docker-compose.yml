@@ -7,7 +7,8 @@
 
 services:
   db:
-    image: postgis/postgis:16-3.4
+    # PostGIS + pgvector (see infra/db/Dockerfile).
+    build: ./infra/db
     environment:
       POSTGRES_USER: geoglobe
       POSTGRES_PASSWORD: geoglobe
@@ -16,8 +17,8 @@ services:
       - '5432:5432'
     volumes:
       - db-data:/var/lib/postgresql/data
-      # Migrations in infra/db run automatically on first init, in filename order.
-      - ./infra/db:/docker-entrypoint-initdb.d:ro
+      # Migrations in infra/db/init run automatically on first init, in filename order.
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U geoglobe']
       interval: 5s

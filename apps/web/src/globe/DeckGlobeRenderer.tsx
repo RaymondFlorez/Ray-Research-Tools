@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
 import DeckGL from '@deck.gl/react';
 import { _GlobeView as GlobeView, type Layer, type PickingInfo } from '@deck.gl/core';
-import { SolidPolygonLayer } from '@deck.gl/layers';
+import { ScatterplotLayer, SolidPolygonLayer, TextLayer } from '@deck.gl/layers';
 import { buildDeckLayers } from '@geoglobe/layer-adapters';
+import type { Annotation } from '@geoglobe/scene-schema';
 import type { GlobeRendererProps, PickResult } from './types';
 
 // A single polygon spanning the whole sphere; on a GlobeView this tessellates into the
@@ -50,6 +51,7 @@ export function DeckGlobeRenderer({
   onPick,
   layers,
   resolvedData,
+  annotations,
   time,
   controller = true,
 }: GlobeRendererProps) {
@@ -78,7 +80,43 @@ export function DeckGlobeRenderer({
     [layers, time?.current, time?.range, resolvedData],
   );
 
-  const allLayers: Layer[] = useMemo(() => [ocean, ...dataLayers], [ocean, dataLayers]);
+  const annotationLayers = useMemo(() => {
+    const anns = annotations ?? [];
+    if (anns.length === 0) return [] as Layer[];
+    const getPos = (a: Annotation) => [a.longitude, a.latitude] as [number, number];
+    return [
+      new ScatterplotLayer<Annotation>({
+        id: 'annotations-pins',
+        data: anns,
+        getPosition: getPos,
+        getRadius: 6,
+        radiusUnits: 'pixels',
+        getFillColor: [255, 196, 120, 235],
+        stroked: true,
+        getLineColor: [20, 30, 50, 255],
+        lineWidthMinPixels: 1,
+        pickable: true,
+      }),
+      new TextLayer<Annotation>({
+        id: 'annotations-labels',
+        data: anns,
+        getPosition: getPos,
+        getText: (a) => a.text,
+        getSize: 12,
+        getColor: [245, 235, 220, 255],
+        getPixelOffset: [0, -14],
+        background: true,
+        getBackgroundColor: [10, 16, 32, 200],
+        backgroundPadding: [4, 2],
+        sizeUnits: 'pixels',
+      }),
+    ];
+  }, [annotations]);
+
+  const allLayers: Layer[] = useMemo(
+    () => [ocean, ...dataLayers, ...annotationLayers],
+    [ocean, dataLayers, annotationLayers],
+  );
 
   return (
     <DeckGL

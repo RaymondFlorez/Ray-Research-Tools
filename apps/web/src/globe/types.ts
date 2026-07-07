@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react';
-import type { Layer as SceneLayer, TimeState } from '@geoglobe/scene-schema';
+import type { Annotation, Layer as SceneLayer, TimeState } from '@geoglobe/scene-schema';
 
 /**
  * Engine-agnostic globe abstraction.
@@ -31,6 +31,8 @@ export interface GlobeRendererProps {
   layers: SceneLayer[];
   /** Data already fetched for geo-query layers (layerId → records). */
   resolvedData?: Record<string, unknown>;
+  /** Pinned annotations (e.g. RAG results) to draw as labelled markers. */
+  annotations?: Annotation[];
   /** Current time window, used by time-aware layers. */
   time?: TimeState;
   /** Enable orbit/zoom controls. Default true. */

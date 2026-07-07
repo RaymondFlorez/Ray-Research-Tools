@@ -1,4 +1,5 @@
-import { SCENE_SCHEMA_VERSION } from '@geoglobe/scene-schema';
+import { useEffect } from 'react';
+import { SCENE_SCHEMA_VERSION, type PatchOp } from '@geoglobe/scene-schema';
 import { GlobeCanvas } from './globe';
 import { LayerPanel } from './ui/LayerPanel';
 import { Inspector } from './ui/Inspector';
@@ -12,6 +13,15 @@ const TEST_MODE =
 
 export function App() {
   const layerCount = useSceneStore((s) => s.scene.layers.length);
+
+  // In test mode, expose the store so E2E/verification can drive the scene directly
+  // (e.g. apply the same patches the agent would emit) without a live backend.
+  useEffect(() => {
+    if (!TEST_MODE) return;
+    (window as unknown as { __geoglobe?: unknown }).__geoglobe = {
+      applyPatch: (ops: PatchOp[]) => useSceneStore.getState().applyPatch(ops),
+    };
+  }, []);
 
   return (
     <div className="app">

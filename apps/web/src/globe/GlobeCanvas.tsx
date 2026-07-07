@@ -54,6 +54,7 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
       viewState={viewState}
       layers={scene.layers}
       resolvedData={resolvedData}
+      annotations={scene.annotations}
       time={scene.time}
       onViewStateChange={(vs) =>
         setViewport({

@@ -48,6 +48,25 @@ class SqlQueryResponse(BaseModel):
     truncated: bool = False
 
 
+class RagSearchRequest(BaseModel):
+    query: str
+    bbox: tuple[float, float, float, float] | None = None
+    k: int = 4
+
+
+class RagHitModel(BaseModel):
+    doc_id: str
+    title: str
+    text: str
+    longitude: float
+    latitude: float
+    score: float
+
+
+class RagSearchResponse(BaseModel):
+    hits: list[RagHitModel]
+
+
 class CatalogEntry(BaseModel):
     id: str
     title: str

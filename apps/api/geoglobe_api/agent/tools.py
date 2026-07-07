@@ -100,6 +100,49 @@ SCENE_TOOLS: list[dict[str, Any]] = [
             "additionalProperties": False,
         },
     },
+    {
+        "name": "add_annotations",
+        "description": "Pin labelled markers on the globe — e.g. to surface RAG results at "
+        "their coordinates. Replaces any existing annotations.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "annotations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "longitude": {"type": "number"},
+                            "latitude": {"type": "number"},
+                            "text": {"type": "string"},
+                        },
+                        "required": ["longitude", "latitude", "text"],
+                    },
+                }
+            },
+            "required": ["annotations"],
+            "additionalProperties": False,
+        },
+    },
+]
+
+RAG_TOOLS: list[dict[str, Any]] = [
+    {
+        "name": "rag_search",
+        "description": "Semantic search over the geospatial knowledge base. Returns "
+        "passages WITH coordinates so you can pin them via add_annotations. Optionally "
+        "restrict to a bounding box.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "bbox": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4},
+                "k": {"type": "integer", "minimum": 1, "maximum": 10},
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
 ]
 
 DATA_TOOLS: list[dict[str, Any]] = [
@@ -130,8 +173,9 @@ DATA_TOOLS: list[dict[str, Any]] = [
 
 
 def all_tools() -> list[dict[str, Any]]:
-    return [*SCENE_TOOLS, *DATA_TOOLS]
+    return [*SCENE_TOOLS, *DATA_TOOLS, *RAG_TOOLS]
 
 
 SCENE_TOOL_NAMES = {t["name"] for t in SCENE_TOOLS}
 DATA_TOOL_NAMES = {t["name"] for t in DATA_TOOLS}
+RAG_TOOL_NAMES = {t["name"] for t in RAG_TOOLS}
