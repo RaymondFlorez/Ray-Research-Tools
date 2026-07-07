@@ -10,6 +10,25 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@geoglobe/scene-schema": "workspace:*"
+  },
+  "peerDependencies": {
+    "@deck.gl/aggregation-layers": "^9.1.0",
+    "@deck.gl/core": "^9.1.0",
+    "@deck.gl/geo-layers": "^9.1.0",
+    "@deck.gl/layers": "^9.1.0",
+    "@deck.gl/extensions": "^9.1.0"
+  },
+  "devDependencies": {
+    "@deck.gl/aggregation-layers": "^9.1.0",
+    "@deck.gl/core": "^9.1.0",
+    "@deck.gl/geo-layers": "^9.1.0",
+    "@deck.gl/layers": "^9.1.0",
+    "vitest": "^2.1.8",
+    "@deck.gl/extensions": "^9.1.0"
   }
 }

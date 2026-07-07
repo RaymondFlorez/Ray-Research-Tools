@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSceneStore } from '../store/sceneStore';
 import { DeckGlobeRenderer } from './DeckGlobeRenderer';
-import { sceneToGlobeLayers, viewportToViewState } from './sceneAdapter';
+import { viewportToViewState } from './sceneAdapter';
 import type { GlobeRenderer } from './types';
 
 const AUTO_ROTATE_DEG_PER_SEC = 6;
@@ -15,16 +15,16 @@ export interface GlobeCanvasProps {
 
 /**
  * Renders the globe entirely FROM the Scene State store (the single source of truth).
- * Camera changes (drag/zoom/auto-rotate) write back to the store; layers are derived
- * from `scene.layers`. No rendering-only local state for what's on screen.
+ * Camera changes write back to the store via `setViewport`; layers, time, and selection
+ * are read from the store. Feature clicks flow through the validated patch path.
  */
 export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }: GlobeCanvasProps) {
   const scene = useSceneStore((s) => s.scene);
   const setViewport = useSceneStore((s) => s.setViewport);
+  const select = useSceneStore((s) => s.select);
   const interacting = useRef(false);
 
   const viewState = useMemo(() => viewportToViewState(scene.viewport), [scene.viewport]);
-  const layers = useMemo(() => sceneToGlobeLayers(scene), [scene]);
 
   useEffect(() => {
     if (!autoRotate) return;
@@ -48,6 +48,8 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
   return (
     <Renderer
       viewState={viewState}
+      layers={scene.layers}
+      time={scene.time}
       onViewStateChange={(vs) =>
         setViewport({
           longitude: vs.longitude,
@@ -60,7 +62,7 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
       onInteractionChange={(active) => {
         interacting.current = active;
       }}
-      layers={layers}
+      onPick={(pick) => select(pick && { layerId: pick.layerId, featureIds: [pick.featureId] })}
     />
   );
 }

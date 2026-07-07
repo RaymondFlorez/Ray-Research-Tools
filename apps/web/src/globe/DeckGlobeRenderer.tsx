@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import DeckGL from '@deck.gl/react';
-import { _GlobeView as GlobeView } from '@deck.gl/core';
-import type { Layer, PickingInfo } from '@deck.gl/core';
-import { GeoJsonLayer, SolidPolygonLayer } from '@deck.gl/layers';
-import type { GlobeLayerSpec, GlobeRendererProps } from './types';
+import { _GlobeView as GlobeView, type Layer, type PickingInfo } from '@deck.gl/core';
+import { SolidPolygonLayer } from '@deck.gl/layers';
+import { buildDeckLayers } from '@geoglobe/layer-adapters';
+import type { GlobeRendererProps, PickResult } from './types';
 
-// A single polygon spanning the whole sphere; on a GlobeView this tessellates into
-// the curved "ocean" surface behind the landmasses (the canonical deck.gl globe base).
+// A single polygon spanning the whole sphere; on a GlobeView this tessellates into the
+// curved "ocean" surface behind the data layers (the canonical deck.gl globe base).
 const WHOLE_GLOBE: [number, number][] = [
   [-180, 90],
   [0, 90],
@@ -16,59 +16,79 @@ const WHOLE_GLOBE: [number, number][] = [
   [-180, -90],
 ];
 
-function toDeckLayer(spec: GlobeLayerSpec): Layer {
-  switch (spec.kind) {
-    case 'sphere':
-      return new SolidPolygonLayer({
-        id: spec.id,
-        data: [WHOLE_GLOBE],
-        getPolygon: (d) => d as [number, number][],
-        stroked: false,
-        filled: true,
-        getFillColor: [...spec.color, 255],
-      });
-    case 'geojson':
-      return new GeoJsonLayer({
-        id: spec.id,
-        data: spec.url,
-        stroked: true,
-        filled: true,
-        getFillColor: spec.fill,
-        getLineColor: spec.line,
-        lineWidthMinPixels: spec.lineWidthMinPixels ?? 0.5,
-        pickable: true,
-      });
-    default: {
-      // Exhaustiveness guard: adding a new GlobeLayerSpec kind forces handling here.
-      const _never: never = spec;
-      return _never;
-    }
-  }
+const OCEAN_COLOR: [number, number, number, number] = [15, 28, 54, 255];
+
+function tooltipText(object: Record<string, unknown> | null | undefined): string | null {
+  if (!object) return null;
+  // GeoJSON features carry a `properties` bag; flat records carry fields directly.
+  const props = (object.properties as Record<string, unknown> | undefined) ?? object;
+  const name = props.NAME ?? props.name;
+  return name != null ? String(name) : null;
+}
+
+function toPick(info: PickingInfo): PickResult | null {
+  if (!info.layer || info.object == null) return null;
+  const object = info.object as Record<string, unknown>;
+  const props = (object.properties as Record<string, unknown> | undefined) ?? object;
+  const featureId =
+    (props.id as string | undefined) ??
+    (props.NAME as string | undefined) ??
+    (props.name as string | undefined) ??
+    String(info.index);
+  return { layerId: info.layer.id, featureId, properties: props };
 }
 
 /**
- * deck.gl implementation of the `GlobeRenderer` contract. Renders a true 3-D sphere
- * via deck.gl's GlobeView with orbit/zoom controls, no map token required.
+ * deck.gl implementation of the `GlobeRenderer` contract: a true 3-D sphere via
+ * GlobeView with an ocean base, plus data layers built from canonical Scene State by
+ * `@geoglobe/layer-adapters`. No map token required.
  */
 export function DeckGlobeRenderer({
   viewState,
   onViewStateChange,
   onInteractionChange,
+  onPick,
   layers,
+  time,
   controller = true,
 }: GlobeRendererProps) {
   const view = useMemo(() => new GlobeView({ id: 'globe', resolution: 4 }), []);
-  const deckLayers = useMemo(() => layers.map(toDeckLayer), [layers]);
+
+  const ocean = useMemo(
+    () =>
+      new SolidPolygonLayer({
+        id: 'ocean',
+        data: [WHOLE_GLOBE],
+        getPolygon: (d) => d as [number, number][],
+        stroked: false,
+        filled: true,
+        getFillColor: OCEAN_COLOR,
+      }),
+    [],
+  );
+
+  const dataLayers = useMemo(
+    () => buildDeckLayers(layers, { currentTime: time?.current, timeRange: time?.range }),
+    [layers, time?.current, time?.range],
+  );
+
+  const allLayers: Layer[] = useMemo(() => [ocean, ...dataLayers], [ocean, dataLayers]);
 
   return (
     <DeckGL
       views={view}
       viewState={viewState}
       controller={controller}
-      layers={deckLayers}
-      getTooltip={({ object }: PickingInfo) =>
-        object?.properties?.NAME ? { text: String(object.properties.NAME) } : null
-      }
+      layers={allLayers}
+      getTooltip={({ object }: PickingInfo) => {
+        const text = tooltipText(object as Record<string, unknown> | null);
+        return text ? { text } : null;
+      }}
+      onClick={(info: PickingInfo) => {
+        if (!onPick) return;
+        // A click on the ocean base (or empty space) clears the selection.
+        onPick(info.layer && info.layer.id !== 'ocean' ? toPick(info) : null);
+      }}
       onViewStateChange={(params: { viewState: Record<string, unknown> }) => {
         const vs = params.viewState;
         onViewStateChange?.({

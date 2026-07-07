@@ -10,14 +10,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@deck.gl/aggregation-layers": "^9.1.0",
     "@deck.gl/core": "^9.1.0",
+    "@deck.gl/geo-layers": "^9.1.0",
     "@deck.gl/layers": "^9.1.0",
     "@deck.gl/react": "^9.1.0",
     "@geoglobe/scene-schema": "workspace:*",
     "@geoglobe/layer-adapters": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "zustand": "^5.0.2"
+    "zustand": "^5.0.2",
+    "@deck.gl/extensions": "^9.1.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.18",

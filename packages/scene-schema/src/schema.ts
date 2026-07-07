@@ -26,16 +26,34 @@ export const TimeStateSchema = z.object({
   range: z.tuple([z.string(), z.string()]).nullable().default(null),
 });
 
-export const LayerTypeSchema = z.enum(['geojson', 'polygon', 'scatterplot', 'heatmap', 'arc']);
+export const LayerTypeSchema = z.enum([
+  'geojson',
+  'polygon',
+  'scatterplot',
+  'column',
+  'heatmap',
+  'arc',
+]);
 
-/** Where a layer's data comes from. Extended in Step 4 (@geoglobe/layer-adapters). */
+/**
+ * Where a layer's data comes from. `@geoglobe/layer-adapters` maps each kind to a
+ * deck.gl layer:
+ *  - geojson     → FeatureCollection URL (polygons/lines/points)
+ *  - json        → URL to a flat array of records (points; scatterplot/heatmap)
+ *  - geo-query   → backend Data Service query (Step 5)
+ *  - vector-tile → MVT tile template URL (Step 5/11)
+ *  - raster      → raster tile template URL (basemap/imagery)
+ */
 export const LayerSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('geojson'), url: z.string().min(1) }),
+  z.object({ kind: z.literal('json'), url: z.string().min(1) }),
   z.object({
     kind: z.literal('geo-query'),
     dataset: z.string().min(1),
     filter: z.record(z.string(), z.unknown()).optional(),
   }),
+  z.object({ kind: z.literal('vector-tile'), url: z.string().min(1) }),
+  z.object({ kind: z.literal('raster'), url: z.string().min(1) }),
 ]);
 
 /** Visual encoding. Open-ended (passthrough) but common fields are typed. */
@@ -44,8 +62,32 @@ export const EncodingSchema = z
     fill: RgbaSchema.optional(),
     line: RgbaSchema.optional(),
     lineWidthMinPixels: z.number().nonnegative().optional(),
+    /** Radius in pixels: a constant, or a data field name to scale by. */
     radius: z.union([z.number(), z.string()]).optional(),
-    color: z.object({ field: z.string(), scale: z.string() }).optional(),
+    radiusScale: z.number().positive().optional(),
+    radiusMinPixels: z.number().nonnegative().optional(),
+    radiusMaxPixels: z.number().nonnegative().optional(),
+    /** Color ramp driven by a data field. */
+    color: z
+      .object({
+        field: z.string(),
+        scale: z.string(),
+        domain: z.tuple([z.number(), z.number()]).optional(),
+      })
+      .optional(),
+    /** Heatmap weight: a constant, or a data field name. */
+    weight: z.union([z.number(), z.string()]).optional(),
+    /** Column extrusion (3-D bars): height from a constant or field, plus scale/radius. */
+    elevation: z.union([z.number(), z.string()]).optional(),
+    elevationScale: z.number().positive().optional(),
+    radiusMeters: z.number().positive().optional(),
+    /** For `json` point sources: [lngField, latField]. Defaults to ['lng','lat']. */
+    position: z.tuple([z.string(), z.string()]).optional(),
+    /** Field holding an ISO timestamp; enables the time filter for this layer. */
+    timeField: z.string().optional(),
+    /** Attribute filter: keep rows whose `filterField` value is within `filterRange`. */
+    filterField: z.string().optional(),
+    filterRange: z.tuple([z.number(), z.number()]).optional(),
   })
   .passthrough();
 
