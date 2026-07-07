@@ -1,7 +1,10 @@
 // @geoglobe/scene-schema
 //
-// Canonical Scene State types + validators are implemented in BUILD_PROMPTS.md Step 3.
-// This placeholder establishes the package boundary so the rest of the monorepo can
-// import from "@geoglobe/scene-schema" before the schema lands.
+// Canonical Scene State: the serializable "visual database" contract (ARCHITECTURE §5).
+// Exports the Zod schemas, their inferred types, and the immutable JSON Patch helper.
 
-export const SCENE_SCHEMA_VERSION = '0.0.0';
+export const SCENE_SCHEMA_VERSION = '0.1.0';
+
+export * from './schema';
+export * from './types';
+export * from './patch';

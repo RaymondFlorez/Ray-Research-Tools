@@ -1,22 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { useSceneStore } from '../store/sceneStore';
 import { DeckGlobeRenderer } from './DeckGlobeRenderer';
-import type { GlobeLayerSpec, GlobeRenderer, GlobeViewState } from './types';
-
-const INITIAL_VIEW_STATE: GlobeViewState = { longitude: 0, latitude: 20, zoom: 0.9 };
-
-// Step 2 MVP layers: a solid "ocean" sphere plus the static world-country polygons.
-// Step 3 will move this list into the Scene State store and drive it from there.
-const MVP_LAYERS: GlobeLayerSpec[] = [
-  { id: 'ocean', kind: 'sphere', color: [15, 28, 54] },
-  {
-    id: 'countries',
-    kind: 'geojson',
-    url: `${import.meta.env.BASE_URL}data/countries.geojson`,
-    fill: [58, 78, 110, 210],
-    line: [126, 156, 204, 255],
-    lineWidthMinPixels: 0.5,
-  },
-];
+import { sceneToGlobeLayers, viewportToViewState } from './sceneAdapter';
+import type { GlobeRenderer } from './types';
 
 const AUTO_ROTATE_DEG_PER_SEC = 6;
 
@@ -27,9 +13,18 @@ export interface GlobeCanvasProps {
   autoRotate?: boolean;
 }
 
+/**
+ * Renders the globe entirely FROM the Scene State store (the single source of truth).
+ * Camera changes (drag/zoom/auto-rotate) write back to the store; layers are derived
+ * from `scene.layers`. No rendering-only local state for what's on screen.
+ */
 export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }: GlobeCanvasProps) {
-  const [viewState, setViewState] = useState<GlobeViewState>(INITIAL_VIEW_STATE);
+  const scene = useSceneStore((s) => s.scene);
+  const setViewport = useSceneStore((s) => s.setViewport);
   const interacting = useRef(false);
+
+  const viewState = useMemo(() => viewportToViewState(scene.viewport), [scene.viewport]);
+  const layers = useMemo(() => sceneToGlobeLayers(scene), [scene]);
 
   useEffect(() => {
     if (!autoRotate) return;
@@ -39,26 +34,33 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
       const dt = (now - last) / 1000;
       last = now;
       if (!interacting.current) {
-        setViewState((v) => ({
-          ...v,
-          longitude:
-            ((((v.longitude + dt * AUTO_ROTATE_DEG_PER_SEC + 180) % 360) + 360) % 360) - 180,
-        }));
+        const vp = useSceneStore.getState().scene.viewport;
+        const longitude =
+          ((((vp.longitude + dt * AUTO_ROTATE_DEG_PER_SEC + 180) % 360) + 360) % 360) - 180;
+        setViewport({ ...vp, longitude });
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [autoRotate]);
+  }, [autoRotate, setViewport]);
 
   return (
     <Renderer
       viewState={viewState}
-      onViewStateChange={setViewState}
+      onViewStateChange={(vs) =>
+        setViewport({
+          longitude: vs.longitude,
+          latitude: vs.latitude,
+          zoom: vs.zoom,
+          pitch: vs.pitch ?? 0,
+          bearing: vs.bearing ?? 0,
+        })
+      }
       onInteractionChange={(active) => {
         interacting.current = active;
       }}
-      layers={MVP_LAYERS}
+      layers={layers}
     />
   );
 }
