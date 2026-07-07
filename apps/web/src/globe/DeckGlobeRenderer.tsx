@@ -49,6 +49,7 @@ export function DeckGlobeRenderer({
   onInteractionChange,
   onPick,
   layers,
+  resolvedData,
   time,
   controller = true,
 }: GlobeRendererProps) {
@@ -68,8 +69,13 @@ export function DeckGlobeRenderer({
   );
 
   const dataLayers = useMemo(
-    () => buildDeckLayers(layers, { currentTime: time?.current, timeRange: time?.range }),
-    [layers, time?.current, time?.range],
+    () =>
+      buildDeckLayers(layers, {
+        currentTime: time?.current,
+        timeRange: time?.range,
+        resolvedData: resolvedData as Record<string, unknown> | undefined,
+      }),
+    [layers, time?.current, time?.range, resolvedData],
   );
 
   const allLayers: Layer[] = useMemo(() => [ocean, ...dataLayers], [ocean, dataLayers]);

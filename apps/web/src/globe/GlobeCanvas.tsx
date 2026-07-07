@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useSceneStore } from '../store/sceneStore';
+import { useResolvedData } from '../data/useResolvedData';
 import { DeckGlobeRenderer } from './DeckGlobeRenderer';
 import { viewportToViewState } from './sceneAdapter';
 import type { GlobeRenderer } from './types';
@@ -23,6 +24,7 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
   const setViewport = useSceneStore((s) => s.setViewport);
   const select = useSceneStore((s) => s.select);
   const interacting = useRef(false);
+  const resolvedData = useResolvedData(scene.layers);
 
   const viewState = useMemo(() => viewportToViewState(scene.viewport), [scene.viewport]);
 
@@ -49,6 +51,7 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
     <Renderer
       viewState={viewState}
       layers={scene.layers}
+      resolvedData={resolvedData}
       time={scene.time}
       onViewStateChange={(vs) =>
         setViewport({

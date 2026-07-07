@@ -48,6 +48,24 @@ const DEMO_LAYERS: Layer[] = [
     opacity: 0.85,
   },
   {
+    // Fed by the Data Service: POST /query/geo (dataset=earthquakes, mag >= 4.5).
+    // Resolved client-side by useResolvedData; renders once the backend is reachable.
+    id: 'earthquakes',
+    type: 'scatterplot',
+    source: { kind: 'geo-query', dataset: 'earthquakes', filter: { mag: { gte: 4.5 } } },
+    encoding: {
+      position: ['lng', 'lat'],
+      radius: 'mag',
+      radiusScale: 1.6,
+      radiusMinPixels: 2,
+      radiusMaxPixels: 14,
+      color: { field: 'depth', scale: 'magma', domain: [0, 650] },
+      timeField: 'time',
+    },
+    visible: true,
+    opacity: 0.9,
+  },
+  {
     id: 'cities-columns',
     type: 'column',
     source: { kind: 'json', url: `${BASE}data/cities.json` },

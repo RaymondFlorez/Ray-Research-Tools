@@ -29,6 +29,8 @@ export interface GlobeRendererProps {
   onPick?: (pick: PickResult | null) => void;
   /** Canonical Scene State data layers to render. */
   layers: SceneLayer[];
+  /** Data already fetched for geo-query layers (layerId → records). */
+  resolvedData?: Record<string, unknown>;
   /** Current time window, used by time-aware layers. */
   time?: TimeState;
   /** Enable orbit/zoom controls. Default true. */

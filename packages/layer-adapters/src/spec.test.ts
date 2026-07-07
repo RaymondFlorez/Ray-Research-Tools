@@ -154,16 +154,21 @@ describe('buildLayerSpec — tile sources', () => {
   });
 });
 
-describe('buildLayerSpec — errors', () => {
-  it('throws for geo-query sources (resolved by the backend in Step 5)', () => {
-    expect(() =>
-      buildLayerSpec(
-        layer({
-          id: 'q',
-          type: 'scatterplot',
-          source: { kind: 'geo-query', dataset: 'earthquakes' },
-        }),
-      ),
-    ).toThrow(/geo-query/);
+describe('buildLayerSpec — geo-query resolution', () => {
+  const quakeLayer = layer({
+    id: 'earthquakes',
+    type: 'scatterplot',
+    source: { kind: 'geo-query', dataset: 'earthquakes' },
+  });
+
+  it('throws for an unresolved geo-query source', () => {
+    expect(() => buildLayerSpec(quakeLayer)).toThrow(/geo-query/);
+  });
+
+  it('uses injected resolvedData for a geo-query layer', () => {
+    const rows = [{ lng: 1, lat: 2, mag: 5 }];
+    const spec = buildLayerSpec(quakeLayer, { resolvedData: { earthquakes: rows } });
+    expect(spec.type).toBe('ScatterplotLayer');
+    expect(spec.props.data).toBe(rows);
   });
 });

@@ -21,6 +21,12 @@ export interface DeckLayerSpec {
 export interface BuildOptions {
   currentTime?: string | null;
   timeRange?: TimeRange;
+  /**
+   * Data already fetched for a layer id (e.g. a `geo-query` layer resolved by the
+   * backend). When present it is used directly instead of the source URL, which is how
+   * geo-query layers become renderable on the client.
+   */
+  resolvedData?: Record<string, unknown>;
 }
 
 const DEFAULT_FILL: RGBA = [58, 78, 110, 210];
@@ -36,6 +42,13 @@ function urlSource(source: LayerSource): string {
     throw new Error(`geo-query sources are resolved by the Data Service (Step 5), not the adapter`);
   }
   throw new Error(`Source kind '${source.kind}' has no direct data URL`);
+}
+
+/** Data for a layer: injected (already-fetched) data wins over a source URL. */
+function resolveData(layer: Layer, opts: BuildOptions): unknown {
+  const injected = opts.resolvedData?.[layer.id];
+  if (injected !== undefined) return injected;
+  return urlSource(layer.source);
 }
 
 function positionAccessor(encoding: Encoding): (d: Datum) => [number, number] {
@@ -147,7 +160,7 @@ export function buildLayerSpec(layer: Layer, opts: BuildOptions = {}): DeckLayer
         type: 'GeoJsonLayer',
         props: {
           ...common,
-          data: urlSource(layer.source),
+          data: resolveData(layer, opts),
           stroked: true,
           filled: true,
           getFillColor: fillColor(layer.encoding, DEFAULT_FILL),
@@ -159,7 +172,7 @@ export function buildLayerSpec(layer: Layer, opts: BuildOptions = {}): DeckLayer
     case 'scatterplot': {
       const props: Record<string, unknown> = {
         ...common,
-        data: urlSource(layer.source),
+        data: resolveData(layer, opts),
         getPosition: positionAccessor(layer.encoding),
         getRadius: radiusAccessor(layer.encoding),
         radiusUnits: 'pixels',
@@ -173,7 +186,7 @@ export function buildLayerSpec(layer: Layer, opts: BuildOptions = {}): DeckLayer
     case 'column': {
       const props: Record<string, unknown> = {
         ...common,
-        data: urlSource(layer.source),
+        data: resolveData(layer, opts),
         getPosition: positionAccessor(layer.encoding),
         getElevation: elevationAccessor(layer.encoding),
         elevationScale: layer.encoding.elevationScale ?? 1,
@@ -192,7 +205,7 @@ export function buildLayerSpec(layer: Layer, opts: BuildOptions = {}): DeckLayer
       // flat map. On the globe, prefer 'column' or 'scatterplot' for density.
       const props: Record<string, unknown> = {
         ...common,
-        data: urlSource(layer.source),
+        data: resolveData(layer, opts),
         getPosition: positionAccessor(layer.encoding),
         getWeight: weightAccessor(layer.encoding),
         radiusPixels: 40,

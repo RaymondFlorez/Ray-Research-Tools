@@ -1,7 +1,9 @@
-# GeoGlobe local dev stack (STUB).
+# GeoGlobe local dev stack.
 #
-# Full services (PostGIS + pgvector, Redis, api, web) are fleshed out in
-# docs/BUILD_PROMPTS.md Step 5. This stub documents the intended topology.
+# `docker compose up` brings up PostGIS + Redis + the FastAPI Data Service.
+# Then seed the sample data:
+#   docker compose exec api python -m geoglobe_api.seed
+# The web app (apps/web) runs separately via `pnpm --filter @geoglobe/web dev`.
 
 services:
   db:
@@ -14,14 +16,29 @@ services:
       - '5432:5432'
     volumes:
       - db-data:/var/lib/postgresql/data
+      # Migrations in infra/db run automatically on first init, in filename order.
+      - ./infra/db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U geoglobe']
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     ports:
       - '6379:6379'
 
-  # api:   # enabled in Step 5 (FastAPI)
-  # web:   # enabled in Step 5 (Vite build served statically)
+  api:
+    build: ./apps/api
+    environment:
+      GEOGLOBE_DATABASE_URL: postgresql+psycopg://geoglobe:geoglobe@db:5432/geoglobe
+      GEOGLOBE_CORS_ORIGINS: '["http://localhost:5173","http://localhost:4173"]'
+    ports:
+      - '8000:8000'
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   db-data:

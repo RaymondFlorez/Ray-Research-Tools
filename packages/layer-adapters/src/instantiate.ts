@@ -44,7 +44,21 @@ export function specToDeckLayer(spec: DeckLayerSpec): DeckLayer {
   return new Ctor(props as any);
 }
 
-/** Build live deck.gl layers directly from canonical Scene State layers. */
+/** True once a geo-query layer's data has been fetched and injected. */
+function isRenderable(layer: Layer, opts: BuildOptions): boolean {
+  if (layer.source.kind === 'geo-query') {
+    return opts.resolvedData?.[layer.id] !== undefined;
+  }
+  return true;
+}
+
+/**
+ * Build live deck.gl layers from canonical Scene State layers. Geo-query layers whose
+ * data hasn't resolved yet are skipped (they render on the next pass once fetched), so a
+ * pending backend never crashes the globe.
+ */
 export function buildDeckLayers(layers: readonly Layer[], opts: BuildOptions = {}): DeckLayer[] {
-  return layers.map((layer) => specToDeckLayer(buildLayerSpec(layer, opts)));
+  return layers
+    .filter((layer) => isRenderable(layer, opts))
+    .map((layer) => specToDeckLayer(buildLayerSpec(layer, opts)));
 }
