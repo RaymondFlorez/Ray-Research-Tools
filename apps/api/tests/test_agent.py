@@ -6,7 +6,7 @@ and asserts the orchestrator emits the right DATA lookups, scene patches, and fi
 all deterministically, with no Anthropic API key or network.
 """
 
-from geoglobe_api.agent.executor import ToolExecutor
+from geoglobe_api.agent.gateway import build_gateway
 from geoglobe_api.agent.llm import AssistantTurn, ScriptedLLMClient, ToolCall
 from geoglobe_api.agent.orchestrator import Orchestrator
 from geoglobe_api.repository import InMemoryRepository
@@ -15,7 +15,7 @@ from geoglobe_api.repository import InMemoryRepository
 def _run(turns):
     orch = Orchestrator(
         llm=ScriptedLLMClient(turns=turns),
-        executor=ToolExecutor(InMemoryRepository()),
+        gateway=build_gateway(InMemoryRepository()),
         planner_model="planner",
         fast_model="fast",
         max_turns=6,
@@ -90,7 +90,7 @@ def orchestrator_models(turns):
     client = ScriptedLLMClient(turns=turns)
     orch = Orchestrator(
         llm=client,
-        executor=ToolExecutor(InMemoryRepository()),
+        gateway=build_gateway(InMemoryRepository()),
         planner_model="planner",
         fast_model="fast",
         max_turns=6,
@@ -113,7 +113,7 @@ def test_data_tool_result_fed_back():
     client = ScriptedLLMClient(turns=turns)
     orch = Orchestrator(
         llm=client,
-        executor=ToolExecutor(InMemoryRepository()),
+        gateway=build_gateway(InMemoryRepository()),
         planner_model="p",
         fast_model="f",
         max_turns=4,

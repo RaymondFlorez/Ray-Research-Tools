@@ -1,6 +1,6 @@
 """Tests for the RAG subsystem and the retrieve→pin agent flow."""
 
-from geoglobe_api.agent.executor import ToolExecutor
+from geoglobe_api.agent.gateway import build_gateway
 from geoglobe_api.agent.llm import AssistantTurn, ScriptedLLMClient, ToolCall
 from geoglobe_api.agent.orchestrator import Orchestrator
 from geoglobe_api.rag import build_seeded_service
@@ -68,7 +68,7 @@ def test_agent_retrieves_then_pins_annotations():
 
     orch = Orchestrator(
         llm=ScriptedLLMClient(turns=turns),
-        executor=ToolExecutor(InMemoryRepository(), rag=rag),
+        gateway=build_gateway(InMemoryRepository(), rag=rag),
         planner_model="p",
         fast_model="f",
         max_turns=6,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import Depends, FastAPI, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from .agent.executor import ToolExecutor
+from .agent.gateway import build_gateway
 from .agent.orchestrator import Orchestrator
 from .config import Settings, get_settings
 from .models import (
@@ -150,7 +150,7 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
 
         orchestrator = Orchestrator(
             llm=llm,
-            executor=ToolExecutor(repo, rag=get_rag()),
+            gateway=build_gateway(repo, rag=get_rag()),
             planner_model=settings.agent_planner_model,
             fast_model=settings.agent_fast_model,
             max_turns=settings.agent_max_turns,
