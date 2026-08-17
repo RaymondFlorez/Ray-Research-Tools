@@ -16,6 +16,11 @@ import { CATEGORIES, FOCUS_META, LEVEL_META } from "@/lib/data/taxonomy";
 import { MovementCard } from "@/components/movement/movement-card";
 import { formatDuration } from "@/lib/utils";
 
+// Every slug is known at build time, so anything else is a genuine 404 rather
+// than a page to render on demand. Without this, Next serves the not-found UI
+// with a 200 (a soft 404) for unknown params.
+export const dynamicParams = false;
+
 export async function generateStaticParams() {
   const slugs = await listMovementSlugs();
   return slugs.map((slug) => ({ slug }));

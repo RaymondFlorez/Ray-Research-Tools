@@ -22,7 +22,14 @@ npm run build      # production build
 npm run start      # serve the production build
 npm run lint       # eslint
 npm run typecheck  # tsc --noEmit
+npm run smoke      # boot the built app and assert every route responds
+npm run verify     # typecheck → lint → build → smoke (what CI runs)
 ```
+
+`npm run smoke` is the check a green build does not give you: it starts the
+production server and asserts each route returns the right status *and*
+contains the content it should. It caught a soft 404 — unknown `[slug]` routes
+rendering the not-found page with a 200 — that the build reported as fine.
 
 No database or API keys are required to run the app. Content is served from a
 typed seed layer behind the same async interface a Prisma implementation will

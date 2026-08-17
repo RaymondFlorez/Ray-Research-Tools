@@ -187,7 +187,26 @@ Movement demonstration videos are likewise unpublished (`mediaReady: false` on
 every seeded movement). The player renders its poster surface and an honest
 note rather than firing a 404 per page view.
 
-## 10. Production readiness checklist
+## 10. CI
+
+`.github/workflows/ci.yml` runs on pushes to `main` and `claude/**`, and on PRs
+into `main`: `typecheck` → `lint --max-warnings=0` → `build` → `smoke`.
+
+The smoke step (`scripts/smoke.mjs`) boots the production server and asserts
+every route's status and a content string that only correct output contains. A
+green build proves the app compiles, not that it renders — a broken server
+component, a bad `generateStaticParams`, or a failing route handler all compile
+cleanly. It earned its place immediately by catching a **soft 404**: unknown
+`[slug]` params rendered the not-found UI with an HTTP 200, which misleads
+crawlers and any client that checks status rather than body.
+
+The fix is `export const dynamicParams = false` on the three `[slug]` routes.
+Every slug is known at build time, so anything else is a genuine 404. **When
+content moves to the database and slugs are no longer build-time-known, this
+must flip back to `true`** — and the soft-404 behaviour needs re-testing, since
+`notFound()` alone did not produce a 404 status here.
+
+## 11. Production readiness checklist
 
 Implemented in this build:
 

@@ -14,6 +14,11 @@ import { PRODUCT_TYPE_LABELS } from "@/lib/data/products";
 import { posterStyle } from "@/lib/data/taxonomy";
 import { formatPrice } from "@/lib/utils";
 
+// Every slug is known at build time, so anything else is a genuine 404 rather
+// than a page to render on demand. Without this, Next serves the not-found UI
+// with a 200 (a soft 404) for unknown params.
+export const dynamicParams = false;
+
 export async function generateStaticParams() {
   const slugs = await listProductSlugs();
   return slugs.map((slug) => ({ slug }));
