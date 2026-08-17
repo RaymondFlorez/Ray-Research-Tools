@@ -98,7 +98,10 @@ def parse_form4_xml(accession_number: str, xml_bytes: bytes) -> list[InsiderTran
     officer_title = _text(relationship.find("officerTitle")) if relationship is not None else None
 
     records: list[InsiderTransactionRecord] = []
-    for table_tag, txn_tag in (("nonDerivativeTable", "nonDerivativeTransaction"), ("derivativeTable", "derivativeTransaction")):
+    for table_tag, txn_tag in (
+        ("nonDerivativeTable", "nonDerivativeTransaction"),
+        ("derivativeTable", "derivativeTransaction"),
+    ):
         table = root.find(f"./{table_tag}")
         if table is None:
             continue

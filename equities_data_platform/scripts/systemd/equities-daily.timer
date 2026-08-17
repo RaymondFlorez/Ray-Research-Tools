@@ -1,0 +1,12 @@
+[Unit]
+Description=Run equities daily refresh after US market close (weekdays)
+
+[Timer]
+# 22:30 US/Eastern; systemd evaluates OnCalendar in the unit's Timezone.
+OnCalendar=Mon..Fri 22:30 America/New_York
+# If the box was off at the scheduled time, run on next boot instead of skipping.
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

@@ -71,7 +71,7 @@ def fetch_company_tickers_with_exchange(client: HttpClient | None = None) -> lis
     fields = payload["fields"]
     records = []
     for row in payload["data"]:
-        rec = dict(zip(fields, row))
+        rec = dict(zip(fields, row, strict=False))
         records.append(
             SecTickerRecord(
                 cik=str(rec["cik"]).zfill(10),

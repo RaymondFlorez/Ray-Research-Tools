@@ -131,22 +131,45 @@ skipped once their `accession_number` is already recorded.
 
 ### Scheduling
 
-Run `daily-refresh` once per trading day and `quarterly-refresh` once per
-quarter (e.g. via cron or a systemd timer). Both are ordinary CLI commands
-with no daemon required.
+Run `daily-refresh` once per trading day and `quarterly-refresh` around SEC
+filing deadlines. Both are ordinary CLI commands with no daemon required,
+and `scripts/` ships ready-made wrappers for both common schedulers:
+
+* `scripts/run_job.sh <job>` -- shared entry point that activates the
+  project venv, loads `.env`, and writes a timestamped log per run into
+  `data/logs/`. Cron/systemd entries stay one line each.
+* `scripts/crontab.example` -- paste-ready crontab: daily refresh 22:30 ET
+  weekdays, fundamentals on the 1st and 15th, optional weekly backfill.
+* `scripts/systemd/equities-{daily,quarterly}.{service,timer}` -- systemd
+  timer units with `Persistent=true` (a missed run fires on next boot) and
+  timezone-pinned `OnCalendar` schedules. Install with:
+
+  ```bash
+  sudo cp scripts/systemd/equities-*.{service,timer} /etc/systemd/system/
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now equities-daily.timer equities-quarterly.timer
+  ```
 
 ## API
 
 Read-only JSON endpoints, once `serve` is running:
 
 * `GET /securities?ticker=AAPL` / `GET /securities/{id}` / `GET /securities/{id}/tickers`
-* `GET /prices/{id}?start=&end=&source=`
+* `GET /prices/{id}?start=&end=&source=&adjusted=`
 * `GET /fundamentals/{id}?tag=&taxonomy=`
 * `GET /filings/{id}?form_type=`
 * `GET /insiders/{id}?transaction_code=`
 * `GET /ownership/{id}?as_of=`
 
 Interactive docs at `http://localhost:8000/docs`.
+
+`adjusted=true` back-adjusts OHLC and volume through the splits/dividends
+recorded in `corporate_actions`, computed at read time so stored bars are
+never rewritten (Stooq closes are already vendor-adjusted; the flag mainly
+matters for raw sources such as `yahoo_fallback`). Sector/industry on each
+security are derived offline from its SEC-reported SIC code via the
+public-domain SIC division/major-group tables in
+`src/normalization/sic_codes.py` -- no extra data source needed.
 
 ## Testing
 

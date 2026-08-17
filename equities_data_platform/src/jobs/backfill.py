@@ -15,7 +15,11 @@ from src.database.db import get_session, init_db
 from src.database.models import Security
 from src.ingestion.stooq_prices import fetch_daily_history
 from src.jobs.daily_refresh import refresh_securities_master
-from src.jobs.quarterly_refresh import refresh_fundamentals, refresh_institutional_ownership, refresh_insider_transactions
+from src.jobs.quarterly_refresh import (
+    refresh_fundamentals,
+    refresh_insider_transactions,
+    refresh_institutional_ownership,
+)
 from src.normalization.prices import upsert_price_bars
 
 logger = get_logger("jobs.backfill")

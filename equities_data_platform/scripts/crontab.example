@@ -1,0 +1,22 @@
+# Example crontab for the equities data platform.
+# Install with:  crontab -e   and paste (adjusting the path).
+#
+# Times are in the host's local time; the entries below assume US/Eastern so
+# the daily refresh runs after the market close and after Stooq's EOD files
+# settle. Adjust if your host runs UTC (add ~5 hours in winter, 4 in summer).
+#
+# run_job.sh handles venv activation, .env loading, and per-run log files in
+# data/logs/, so the entries stay one line each.
+
+PLATFORM=/opt/equities_data_platform
+
+# Securities master + EOD prices + latest filings: 22:30 ET every weekday.
+30 22 * * 1-5  $PLATFORM/scripts/run_job.sh daily-refresh
+
+# Fundamentals (XBRL company facts) + 13F holdings: 03:00 ET on the 1st and
+# 15th of each month -- SEC quarterly data trickles in around filing deadlines,
+# so twice a month keeps fundamentals fresh without hammering the API.
+0 3 1,15 * *   $PLATFORM/scripts/run_job.sh quarterly-refresh
+
+# Optional: weekly deep price backfill (fills gaps, new listings' history):
+# 0 4 * * 6    $PLATFORM/scripts/run_job.sh backfill --start 2000-01-01

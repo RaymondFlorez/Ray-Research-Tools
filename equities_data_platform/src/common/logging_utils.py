@@ -60,7 +60,7 @@ class RunLogger:
         self._error_count = 0
         self._notes: list[str] = []
 
-    def __enter__(self) -> "RunLogger":
+    def __enter__(self) -> RunLogger:
         with get_session() as session:
             run = IngestionRun(job_name=self.job_name, source=self.source, status=RunStatus.RUNNING)
             session.add(run)

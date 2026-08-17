@@ -1,0 +1,12 @@
+[Unit]
+Description=Run equities fundamentals refresh on the 1st and 15th
+
+[Timer]
+# 03:00 US/Eastern on the 1st and 15th -- SEC quarterly data arrives in waves
+# around filing deadlines, so twice a month keeps it fresh without hammering EDGAR.
+OnCalendar=*-*-01,15 03:00 America/New_York
+Persistent=true
+RandomizedDelaySec=30m
+
+[Install]
+WantedBy=timers.target

@@ -131,12 +131,12 @@ class Security(Base):
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
 
-    tickers: Mapped[list["Ticker"]] = relationship(back_populates="security", cascade="all, delete-orphan")
-    identifiers: Mapped[list["SecurityIdentifier"]] = relationship(
+    tickers: Mapped[list[Ticker]] = relationship(back_populates="security", cascade="all, delete-orphan")
+    identifiers: Mapped[list[SecurityIdentifier]] = relationship(
         back_populates="security", cascade="all, delete-orphan"
     )
-    prices: Mapped[list["Price"]] = relationship(back_populates="security", cascade="all, delete-orphan")
-    corporate_actions: Mapped[list["CorporateAction"]] = relationship(
+    prices: Mapped[list[Price]] = relationship(back_populates="security", cascade="all, delete-orphan")
+    corporate_actions: Mapped[list[CorporateAction]] = relationship(
         back_populates="security", cascade="all, delete-orphan"
     )
 
@@ -380,7 +380,7 @@ class IngestionRun(Base):
     error_count: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    errors: Mapped[list["ErrorLog"]] = relationship(back_populates="run", cascade="all, delete-orphan")
+    errors: Mapped[list[ErrorLog]] = relationship(back_populates="run", cascade="all, delete-orphan")
 
 
 class ErrorLog(Base):

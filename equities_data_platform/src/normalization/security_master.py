@@ -28,6 +28,7 @@ from src.ingestion.nasdaq_symbols import NasdaqSymbolRecord
 from src.ingestion.sec_submissions import SubmissionsRecord
 from src.ingestion.sec_tickers import SecTickerRecord
 from src.normalization.identifiers import normalize_ticker
+from src.normalization.sic_codes import sic_to_industry, sic_to_sector
 
 _TYPE_PATTERNS: list[tuple[re.Pattern, SecurityType]] = [
     (re.compile(r"\bwarrants?\b", re.I), SecurityType.WARRANT),
@@ -199,6 +200,9 @@ def apply_submissions_enrichment(
     """
     security.sic_code = record.sic_code or security.sic_code
     security.sic_description = record.sic_description or security.sic_description
+    if security.sic_code:
+        security.sector = sic_to_sector(security.sic_code) or security.sector
+        security.industry = sic_to_industry(security.sic_code) or security.industry
     if record.company_name:
         security.company_name = record.company_name
     if record.exchanges:

@@ -8,8 +8,8 @@ yahoo_fallback.py) when Stooq has no data for a symbol.
 from __future__ import annotations
 
 import csv
-import io
 import datetime as dt
+import io
 from dataclasses import dataclass
 
 import yaml

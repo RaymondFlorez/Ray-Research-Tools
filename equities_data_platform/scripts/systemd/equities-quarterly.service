@@ -1,0 +1,13 @@
+# Fundamentals (XBRL) + 13F refresh (oneshot; fired by the timer).
+[Unit]
+Description=Equities data platform - quarterly/fundamentals refresh
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=equities
+WorkingDirectory=/opt/equities_data_platform
+ExecStart=/opt/equities_data_platform/scripts/run_job.sh quarterly-refresh
+Nice=10
+TimeoutStartSec=12h

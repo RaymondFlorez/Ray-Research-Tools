@@ -39,3 +39,16 @@ packages = { find = { include = ["src*"] } }
 [tool.pytest.ini_options]
 testpaths = ["src/tests"]
 pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Pin the rule set explicitly so newer ruff releases don't shift the goalposts.
+select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends()/Query() call-in-default idiom is intentional.
+ignore = ["B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Fixture data (fixed-width EDGAR index samples) keeps its verbatim long lines.
+"src/tests/*" = ["E501"]

@@ -1,0 +1,21 @@
+# Daily securities-master + price + filings refresh (oneshot; fired by the timer).
+#
+# Install (as root, after adjusting WorkingDirectory/User):
+#   cp scripts/systemd/equities-daily.{service,timer} /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now equities-daily.timer
+[Unit]
+Description=Equities data platform - daily refresh
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=equities
+WorkingDirectory=/opt/equities_data_platform
+ExecStart=/opt/equities_data_platform/scripts/run_job.sh daily-refresh
+# The SEC fair-access policy asks for identified traffic; run_job.sh loads
+# SEC_USER_AGENT from .env, or set it here instead:
+# Environment=SEC_USER_AGENT="Your Name you@example.com"
+Nice=10
+TimeoutStartSec=4h
