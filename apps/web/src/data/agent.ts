@@ -4,7 +4,7 @@ import { API_URL } from './api';
 const WS_URL = `${API_URL.replace(/^http/, 'ws')}/ws/agent`;
 
 export interface AgentEvent {
-  type: 'text' | 'tool_use' | 'patch' | 'tool_result' | 'done' | 'error';
+  type: 'text' | 'tool_use' | 'patch' | 'tool_result' | 'usage' | 'done' | 'error';
   data: {
     text?: string;
     name?: string;
@@ -12,6 +12,10 @@ export interface AgentEvent {
     ops?: PatchOp[];
     result?: string;
     message?: string;
+    input_tokens?: number;
+    output_tokens?: number;
+    cost_usd?: number;
+    trace_id?: string;
   };
 }
 

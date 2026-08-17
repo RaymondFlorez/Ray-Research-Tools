@@ -51,6 +51,17 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         } catch (err) {
           console.error('agent patch rejected', err);
         }
+      } else if (event.type === 'usage' && event.data.cost_usd != null) {
+        const { input_tokens, output_tokens, cost_usd } = event.data;
+        set((s) => ({
+          messages: [
+            ...s.messages,
+            {
+              role: 'system',
+              text: `${input_tokens} in / ${output_tokens} out tokens · $${cost_usd?.toFixed(4)}`,
+            },
+          ],
+        }));
       } else if (event.type === 'error' && event.data.message) {
         set((s) => ({ messages: [...s.messages, { role: 'system', text: event.data.message! }] }));
       }

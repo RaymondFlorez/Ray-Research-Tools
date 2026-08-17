@@ -19,6 +19,12 @@ class ToolCall:
 
 
 @dataclass
+class Usage:
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+@dataclass
 class AssistantTurn:
     """One assistant response: text, any tool calls, and the raw content blocks to
     append to the running message history for the next turn."""
@@ -27,6 +33,7 @@ class AssistantTurn:
     tool_calls: list[ToolCall]
     assistant_content: list[dict[str, Any]]
     stop_reason: str = "end_turn"
+    usage: Usage = field(default_factory=Usage)
 
 
 class LLMClient(Protocol):
@@ -90,6 +97,10 @@ class AnthropicLLMClient:
             tool_calls=tool_calls,
             assistant_content=assistant_content,
             stop_reason=response.stop_reason or "end_turn",
+            usage=Usage(
+                input_tokens=getattr(response.usage, "input_tokens", 0),
+                output_tokens=getattr(response.usage, "output_tokens", 0),
+            ),
         )
 
 

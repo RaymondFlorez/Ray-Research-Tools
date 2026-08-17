@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     agent_fast_model: str = "claude-sonnet-4-6"
     agent_max_turns: int = 12
 
+    # Auth (Step 10). Off by default for dev; enable + set a secret in production.
+    auth_required: bool = False
+    jwt_secret: str | None = None
+    jwt_audience: str | None = None
+
+    # Observability (Step 10).
+    trace_buffer_size: int = 200
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://localhost:4173",

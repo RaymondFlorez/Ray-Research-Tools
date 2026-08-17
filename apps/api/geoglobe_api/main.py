@@ -20,8 +20,11 @@ from .models import (
 )
 from .rag import RagService, build_seeded_service
 from .repository import DataRepository, InMemoryRepository, UnsupportedOperation
+from .security import AuthContext, JwtError, authenticate_ws, require_auth
+from .tracing import TraceRecorder, TraceStore
 
 _rag_singleton: RagService | None = None
+_trace_store: TraceStore | None = None
 
 
 def get_rag() -> RagService:
@@ -29,6 +32,13 @@ def get_rag() -> RagService:
     if _rag_singleton is None:
         _rag_singleton = build_seeded_service()
     return _rag_singleton
+
+
+def get_trace_store() -> TraceStore:
+    global _trace_store
+    if _trace_store is None:
+        _trace_store = TraceStore(get_settings().trace_buffer_size)
+    return _trace_store
 from .sql_guard import SqlNotAllowed, validate_read_only_sql
 from .tiles import InvalidTile, validate_tile
 
@@ -78,6 +88,7 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
         req: GeoQueryRequest,
         repo: DataRepository = Depends(get_repository),
         settings: Settings = Depends(get_settings),
+        _auth: AuthContext = Depends(require_auth),
     ) -> GeoQueryResponse:
         if req.limit > settings.max_rows:
             req.limit = settings.max_rows
@@ -90,6 +101,7 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
     def query_sql(
         req: SqlQueryRequest,
         repo: DataRepository = Depends(get_repository),
+        _auth: AuthContext = Depends(require_auth),
     ) -> SqlQueryResponse:
         try:
             validate_read_only_sql(req.sql)  # reject early with a clear 400
@@ -133,11 +145,30 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
             ]
         )
 
+    @app.get("/traces")
+    def list_traces(
+        _auth: AuthContext = Depends(require_auth),
+    ) -> list[dict]:
+        """Recent NL-query traces: tool calls, patches, spans, tokens, cost. Replayable."""
+        return [t.to_dict() for t in get_trace_store().list()]
+
+    @app.get("/traces/{trace_id}")
+    def get_trace(trace_id: str, _auth: AuthContext = Depends(require_auth)) -> dict:
+        trace = get_trace_store().get(trace_id)
+        if trace is None:
+            raise HTTPException(status_code=404, detail="trace not found")
+        return trace.to_dict()
+
     @app.websocket("/ws/agent")
     async def agent_ws(ws: WebSocket) -> None:
-        """Stream the agent loop: receive {query}, emit text/tool_use/patch/done events."""
-        await ws.accept()
+        """Stream the agent loop: receive {query}, emit text/tool_use/patch/usage/done."""
         settings = get_settings()
+        try:
+            auth = await authenticate_ws(ws, settings)
+        except JwtError as exc:
+            await ws.close(code=1008, reason=str(exc))
+            return
+        await ws.accept()
         repo = get_repository()
         try:
             from .agent.llm import AnthropicLLMClient
@@ -148,9 +179,10 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
             await ws.close()
             return
 
+        # The gateway enforces this session's scopes on every tool call.
         orchestrator = Orchestrator(
             llm=llm,
-            gateway=build_gateway(repo, rag=get_rag()),
+            gateway=build_gateway(repo, rag=get_rag(), granted_scopes=auth.scopes),
             planner_model=settings.agent_planner_model,
             fast_model=settings.agent_fast_model,
             max_turns=settings.agent_max_turns,
@@ -161,8 +193,10 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
                 query = payload.get("query", "")
                 if not query:
                     continue
-                for event in orchestrator.run(query):
+                recorder = TraceRecorder(query)
+                for event in orchestrator.run(query, recorder=recorder):
                     await ws.send_json({"type": event.type, "data": event.data})
+                get_trace_store().add(recorder.finish())
         except WebSocketDisconnect:
             return
         except Exception as exc:
