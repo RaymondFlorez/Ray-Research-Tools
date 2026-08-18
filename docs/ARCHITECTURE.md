@@ -200,6 +200,16 @@ cleanly. It earned its place immediately by catching a **soft 404**: unknown
 `[slug]` params rendered the not-found UI with an HTTP 200, which misleads
 crawlers and any client that checks status rather than body.
 
+The smoke script owns its server process deliberately. The first CI run
+exposed a second bug — in the test harness itself: it spawned `npx next start`
+and sent SIGTERM on the way out, which killed the `npx` wrapper but not the
+`next-server` grandchild. The orphan held the script's stdio pipes open, Node's
+event loop never drained, and the job hung for 14 minutes after printing "All
+38 checks passed" before the runner killed it. It now spawns the real binary
+detached, kills the whole process group, exits explicitly rather than waiting
+for the loop to drain, and carries a watchdog so any future hang fails in
+seconds with the server log attached instead of burning to the job timeout.
+
 The fix is `export const dynamicParams = false` on the three `[slug]` routes.
 Every slug is known at build time, so anything else is a genuine 404. **When
 content moves to the database and slugs are no longer build-time-known, this
