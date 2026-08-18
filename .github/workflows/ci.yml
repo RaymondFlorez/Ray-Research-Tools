@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+    branches: ["main"]
+
+# A newer push supersedes an in-flight run for the same ref.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint, build, smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        # Warnings are allowed to land; errors are not.
+        run: npm run lint -- --max-warnings=0
+
+      - name: Build
+        run: npm run build
+
+      # A green build proves the app compiles, not that it renders. This boots
+      # the production server and asserts every route responds with the content
+      # it should — the check that catches a broken server component or a bad
+      # generateStaticParams.
+      - name: Smoke test routes
+        run: npm run smoke
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build-output
+          path: |
+            .next/build-manifest.json
+            .next/trace
+          retention-days: 5
+          if-no-files-found: ignore

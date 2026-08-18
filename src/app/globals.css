@@ -1,0 +1,328 @@
+@import "tailwindcss";
+
+/* ============================================================================
+   ALPHA MOVEMENT — DESIGN TOKENS
+   Dark-mode-first. Light mode is a secondary, opt-in surface.
+   Every token below maps 1:1 to the brand specification.
+   ========================================================================= */
+
+@theme {
+  /* --- Backgrounds ------------------------------------------------------ */
+  /* Named "void" rather than "base": Tailwind reserves `text-base` for a
+     font-size utility, so a `base` color token would silently lose every
+     text-on-light button. */
+  --color-void: #0a0a0b; /* primary background — near black */
+  --color-surface: #141416; /* secondary surface / cards */
+  --color-elevated: #1c1c1f; /* elevated surfaces / modals */
+  --color-line: #2a2a2e; /* subtle borders / dividers */
+  --color-line-strong: #3a3a40; /* hover / focus border */
+
+  /* --- Text ------------------------------------------------------------- */
+  --color-ink: #f5f5f5; /* primary text */
+  --color-ink-2: #a1a1aa; /* secondary text */
+  --color-ink-3: #71717a; /* tertiary / muted */
+
+  /* --- Accent & Brand --------------------------------------------------- */
+  --color-accent: #c0c0c0; /* soft metallic silver */
+  --color-titanium: #b8b8c0; /* muted titanium */
+  --color-accent-hi: #e4e4e7; /* interactive hover / active */
+  --color-positive: #8b9a7d; /* muted sage */
+  --color-warning: #d4a574; /* soft amber */
+  --color-danger: #c45c5c; /* muted red */
+
+  /* --- Category accents (library taxonomy) ------------------------------ */
+  --color-goata: #b8b8c0;
+  --color-primal: #a89a86;
+  --color-flow: #8b9a7d;
+  --color-hybrid: #9aa4b8;
+  --color-functional: #b39d8a;
+  --color-cardio: #a68f9c;
+
+  /* --- Typography ------------------------------------------------------- */
+  --font-sans:
+    var(--font-inter), ui-sans-serif, -apple-system, BlinkMacSystemFont,
+    "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --text-display: 4.25rem;
+  --text-display--line-height: 1.02;
+  --text-display--letter-spacing: -0.035em;
+  --text-display--font-weight: 500;
+
+  --text-title: 2.5rem;
+  --text-title--line-height: 1.1;
+  --text-title--letter-spacing: -0.025em;
+  --text-title--font-weight: 500;
+
+  --text-heading: 1.5rem;
+  --text-heading--line-height: 1.25;
+  --text-heading--letter-spacing: -0.015em;
+  --text-heading--font-weight: 500;
+
+  --text-body: 1rem; /* 16px — spec: 15–16px body */
+  --text-body--line-height: 1.65;
+
+  --text-small: 0.875rem;
+  --text-small--line-height: 1.55;
+
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1.4;
+  --text-micro--letter-spacing: 0.14em;
+
+  /* --- Radii ------------------------------------------------------------ */
+  --radius-card: 14px; /* spec: 12–16px */
+  --radius-panel: 18px;
+  --radius-pill: 999px;
+
+  /* --- Elevation: soft, never harsh ------------------------------------- */
+  --shadow-low:
+    0 1px 2px rgb(0 0 0 / 0.5), inset 0 1px 0 0 rgb(255 255 255 / 0.02);
+  --shadow-mid:
+    0 8px 24px -8px rgb(0 0 0 / 0.7), inset 0 1px 0 0 rgb(255 255 255 / 0.03);
+  --shadow-high:
+    0 24px 64px -16px rgb(0 0 0 / 0.85), inset 0 1px 0 0 rgb(255 255 255 / 0.045);
+  --shadow-glow: 0 0 0 1px rgb(192 192 192 / 0.14), 0 0 32px -8px rgb(192 192 192 / 0.14);
+
+  /* --- Motion: spring-based, purposeful --------------------------------- */
+  --ease-spring: linear(
+    0, 0.006, 0.025, 0.101, 0.539 25.7%, 0.721, 0.849, 0.937, 0.991 51.4%,
+    1.014, 1.02, 1.018, 1.011 66.8%, 1.002, 0.999 79.1%, 1
+  );
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/* ============================================================================
+   BASE
+   ========================================================================= */
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  body {
+    background-color: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv11", "ss01";
+    font-variant-ligatures: contextual;
+    /* Subtle depth: radial wash from near-black to card charcoal */
+    background-image:
+      radial-gradient(
+        120rem 60rem at 50% -20rem,
+        rgb(28 28 31 / 0.9) 0%,
+        transparent 65%
+      ),
+      radial-gradient(
+        60rem 40rem at 100% 0%,
+        rgb(184 184 192 / 0.035) 0%,
+        transparent 60%
+      );
+    background-attachment: fixed;
+    min-height: 100dvh;
+  }
+
+  ::selection {
+    background: rgb(192 192 192 / 0.22);
+    color: var(--color-accent-hi);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Refined, near-invisible scrollbars */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-line-strong);
+    background-clip: content-box;
+  }
+}
+
+/* ============================================================================
+   UTILITIES
+   ========================================================================= */
+
+@utility eyebrow {
+  font-size: var(--text-micro);
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+  font-weight: 500;
+}
+
+/* Hairline metallic rule — used to separate philosophy sections */
+@utility rule-metal {
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-line-strong) 18%,
+    rgb(192 192 192 / 0.28) 50%,
+    var(--color-line-strong) 82%,
+    transparent
+  );
+}
+
+/* Text that catches light like brushed titanium */
+@utility text-metal {
+  background: linear-gradient(
+    170deg,
+    #ffffff 0%,
+    #e4e4e7 28%,
+    #b8b8c0 58%,
+    #8a8a92 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility surface-card {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-low);
+}
+
+@utility surface-elevated {
+  background-color: var(--color-elevated);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-high);
+}
+
+/* Glass chrome for sticky navigation */
+@utility chrome-blur {
+  background-color: rgb(10 10 11 / 0.72);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+/* ============================================================================
+   SKELETON LOADING — refined dark shimmer, never a spinner
+   ========================================================================= */
+
+@keyframes am-shimmer {
+  0% {
+    background-position: -180% 0;
+  }
+  100% {
+    background-position: 180% 0;
+  }
+}
+
+@utility skeleton {
+  background-color: var(--color-elevated);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(255 255 255 / 0.045) 45%,
+    rgb(255 255 255 / 0.07) 50%,
+    rgb(255 255 255 / 0.045) 55%,
+    transparent 100%
+  );
+  background-size: 180% 100%;
+  animation: am-shimmer 1.9s var(--ease-in-out-soft) infinite;
+  border-radius: 8px;
+}
+
+/* ============================================================================
+   ENTRANCE MOTION — used where JS-driven springs would be overkill
+   ========================================================================= */
+
+@keyframes am-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility animate-rise {
+  animation: am-rise 0.62s var(--ease-out-quint) both;
+}
+
+@keyframes am-breathe {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.06);
+  }
+}
+
+@utility animate-breathe {
+  animation: am-breathe 5.5s var(--ease-in-out-soft) infinite;
+}
+
+/* ============================================================================
+   OPTIONAL LIGHT MODE — secondary surface, same structure, inverted values
+   ========================================================================= */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-void: #fafafa;
+  --color-surface: #ffffff;
+  --color-elevated: #ffffff;
+  --color-line: #e4e4e7;
+  --color-line-strong: #d4d4d8;
+  --color-ink: #18181b;
+  --color-ink-2: #52525b;
+  --color-ink-3: #8a8a93;
+  --color-accent: #52525b;
+  --color-accent-hi: #18181b;
+}
+
+:root[data-theme="light"] body {
+  background-image: none;
+}

@@ -1,0 +1,43 @@
+{
+  "name": "Alpha Movement",
+  "short_name": "Alpha",
+  "description": "A modern synthesis training system: GOATA joint mechanics, primal patterns, internal arts, hybrid strength, and smart cardio.",
+  "start_url": "/today",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0A0B",
+  "theme_color": "#0A0A0B",
+  "categories": ["health", "fitness", "lifestyle"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today",
+      "url": "/today",
+      "description": "Your training week at a glance"
+    },
+    {
+      "name": "Sessions",
+      "url": "/sessions",
+      "description": "Calendar and session builder"
+    },
+    {
+      "name": "Library",
+      "url": "/library",
+      "description": "Movement library"
+    }
+  ]
+}

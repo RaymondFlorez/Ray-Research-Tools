@@ -1,0 +1,523 @@
+// ============================================================================
+// ALPHA MOVEMENT — PRODUCTION DATA MODEL
+//
+// The running app reads through src/lib/data/* (a typed repository layer with
+// seeded content) so the UI can be developed and demoed without a database.
+// Swapping in this schema is a matter of implementing the same repository
+// functions against a PrismaClient — no screen changes required.
+//
+//   npx prisma migrate dev --name init
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Identity & profiles
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  CLIENT
+  COACH
+  ADMIN
+}
+
+enum SkillLevel {
+  FOUNDATION
+  DEVELOPING
+  ADVANCED
+}
+
+enum TrainingFocus {
+  JOINT_HEALTH
+  HYBRID_ATHLETE
+  AESTHETICS
+  MOBILITY_FLOW
+  NERVOUS_SYSTEM
+  ENDURANCE
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String
+  role          UserRole   @default(CLIENT)
+  passwordHash  String?
+  emailVerified DateTime?
+  image         String?
+  timezone      String     @default("America/Los_Angeles")
+  level         SkillLevel @default(FOUNDATION)
+  focus         TrainingFocus[]
+  onboardedAt   DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  coachProfile     Coach?
+  sessionsAsClient TrainingSession[]  @relation("ClientSessions")
+  logs             SessionLog[]
+  flows            Flow[]
+  favorites        Favorite[]
+  orders           Order[]
+  entitlements     Entitlement[]
+  savedArticles    SavedArticle[]
+  calendarLinks    CalendarConnection[]
+  pushSubs         PushSubscription[]
+  accounts         Account[]
+  sessionsAuth     AuthSession[]
+
+  @@index([role])
+}
+
+// NextAuth-compatible tables so OAuth can be added without a migration rewrite.
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model AuthSession {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Coach {
+  id               String          @id @default(cuid())
+  userId           String          @unique
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title            String
+  bio              String          @db.Text
+  credentials      String[]
+  specialties      MovementCategoryEnum[]
+  sessionRateCents Int             @default(18000)
+  acceptingClients Boolean         @default(true)
+  approvedAt       DateTime?
+
+  availability AvailabilityWindow[]
+  sessions     TrainingSession[]    @relation("CoachSessions")
+  products     Product[]
+}
+
+model AvailabilityWindow {
+  id       String @id @default(cuid())
+  coachId  String
+  coach    Coach  @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  weekday  Int // 0 = Sunday
+  startMin Int // minutes from local midnight
+  endMin   Int
+
+  @@index([coachId, weekday])
+}
+
+// ----------------------------------------------------------------------------
+// Movement library
+// ----------------------------------------------------------------------------
+
+enum MovementCategoryEnum {
+  GOATA
+  PRIMAL
+  FLOW
+  HYBRID
+  FUNCTIONAL
+  CARDIO
+}
+
+model Movement {
+  id          String               @id @default(cuid())
+  slug        String               @unique
+  name        String
+  category    MovementCategoryEnum
+  group       String
+  level       SkillLevel
+  durationSec Int
+  summary     String               @db.Text
+  why         String               @db.Text
+  cues        String[]
+  chains      String[]
+  equipment   String[]
+  focus       TrainingFocus[]
+  videoUrl    String
+  poster      String
+  published   Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  prerequisites Movement[] @relation("MovementPrereq")
+  unlocks       Movement[] @relation("MovementPrereq")
+
+  flowItems  FlowItem[]
+  favorites  Favorite[]
+  blockLinks SessionBlockMovement[]
+
+  @@index([category, level])
+}
+
+model Favorite {
+  userId     String
+  movementId String
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  movement   Movement @relation(fields: [movementId], references: [id], onDelete: Cascade)
+
+  @@id([userId, movementId])
+}
+
+model Flow {
+  id          String     @id @default(cuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  isPublic    Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+  items       FlowItem[]
+
+  @@index([userId])
+}
+
+model FlowItem {
+  id          String   @id @default(cuid())
+  flowId      String
+  flow        Flow     @relation(fields: [flowId], references: [id], onDelete: Cascade)
+  movementId  String
+  movement    Movement @relation(fields: [movementId], references: [id])
+  position    Int
+  durationSec Int
+  note        String?
+
+  @@unique([flowId, position])
+}
+
+// ----------------------------------------------------------------------------
+// Sessions, scheduling & the feedback loop
+// ----------------------------------------------------------------------------
+
+enum SessionType {
+  LIVE
+  IN_PERSON
+  GROUP
+  ASYNC
+}
+
+enum SessionStatus {
+  REQUESTED
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum RecurrenceRule {
+  NONE
+  WEEKLY
+  BIWEEKLY
+  EVERY_WEEKDAY
+}
+
+model TrainingSession {
+  id           String         @id @default(cuid())
+  title        String
+  type         SessionType
+  status       SessionStatus  @default(REQUESTED)
+  coachId      String
+  coach        Coach          @relation("CoachSessions", fields: [coachId], references: [id])
+  clientId     String
+  client       User           @relation("ClientSessions", fields: [clientId], references: [id])
+  startsAt     DateTime // stored UTC
+  durationMin  Int
+  timezone     String // IANA zone the session was authored in
+  recurrence   RecurrenceRule @default(NONE)
+  recurrenceEnd DateTime?
+  location     String?
+  joinUrl      String?
+  notes        String?        @db.Text
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  blocks    SessionBlock[]
+  log       SessionLog?
+  reminders Reminder[]
+
+  @@index([clientId, startsAt])
+  @@index([coachId, startsAt])
+}
+
+model SessionBlock {
+  id          String               @id @default(cuid())
+  sessionId   String
+  session     TrainingSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  category    MovementCategoryEnum
+  label       String
+  durationMin Int
+  position    Int
+  movements   SessionBlockMovement[]
+
+  @@unique([sessionId, position])
+}
+
+model SessionBlockMovement {
+  blockId    String
+  block      SessionBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  movementId String
+  movement   Movement     @relation(fields: [movementId], references: [id])
+  position   Int
+
+  @@id([blockId, movementId])
+}
+
+model SessionLog {
+  id              String          @id @default(cuid())
+  sessionId       String          @unique
+  session         TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completedAt     DateTime        @default(now())
+  movementQuality Int // 1–5
+  rpe             Int // 1–10
+  loadKg          Float?
+  restingHr       Int?
+  hrvMs           Int?
+  sleepHours      Float?
+  soreness        String[]
+  athleteNote     String?         @db.Text
+  coachNote       String?         @db.Text
+
+  @@index([userId, completedAt])
+}
+
+enum ReminderChannel {
+  PUSH
+  EMAIL
+}
+
+model Reminder {
+  id            String          @id @default(cuid())
+  sessionId     String
+  session       TrainingSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  channel       ReminderChannel
+  minutesBefore Int
+  sentAt        DateTime?
+
+  @@index([sentAt])
+}
+
+enum CalendarProvider {
+  GOOGLE
+  APPLE
+  OUTLOOK
+}
+
+model CalendarConnection {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     CalendarProvider
+  accessToken  String           @db.Text
+  refreshToken String?          @db.Text
+  expiresAt    DateTime?
+  calendarId   String?
+  syncToken    String?
+  createdAt    DateTime         @default(now())
+
+  @@unique([userId, provider])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------------
+// Commerce
+// ----------------------------------------------------------------------------
+
+enum ProductType {
+  APPAREL
+  GEAR
+  RECOVERY
+  EBOOK
+  VIDEO_SERIES
+  PROGRAM
+  AUDIO
+}
+
+enum ProductKind {
+  PHYSICAL
+  DIGITAL
+}
+
+enum ModerationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model Product {
+  id             String           @id @default(cuid())
+  slug           String           @unique
+  name           String
+  type           ProductType
+  kind           ProductKind
+  tagline        String
+  description    String           @db.Text
+  priceCents     Int
+  compareAtCents Int?
+  currency       String           @default("USD")
+  contents       String[] // digital deliverables
+  poster         String
+  featured       Boolean          @default(false)
+  moderation     ModerationStatus @default(PENDING)
+  creatorId      String?
+  creator        Coach?           @relation(fields: [creatorId], references: [id])
+  stripePriceId  String?
+  createdAt      DateTime         @default(now())
+
+  variants     ProductVariant[]
+  orderLines   OrderLine[]
+  entitlements Entitlement[]
+
+  @@index([type, moderation])
+}
+
+model ProductVariant {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  label     String
+  sku       String  @unique
+  inStock   Boolean @default(true)
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  REFUNDED
+  FAILED
+}
+
+model Order {
+  id                    String      @id @default(cuid())
+  userId                String
+  user                  User        @relation(fields: [userId], references: [id])
+  status                OrderStatus @default(PENDING)
+  subtotalCents         Int
+  taxCents              Int         @default(0)
+  totalCents            Int
+  currency              String      @default("USD")
+  stripeCheckoutId      String?     @unique
+  stripePaymentIntentId String?
+  createdAt             DateTime    @default(now())
+  lines                 OrderLine[]
+
+  @@index([userId, createdAt])
+}
+
+model OrderLine {
+  id            String  @id @default(cuid())
+  orderId       String
+  order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product @relation(fields: [productId], references: [id])
+  variantId     String?
+  quantity      Int     @default(1)
+  unitCents     Int
+}
+
+/// Grants access to a digital product. Written by the Stripe webhook, read by
+/// the owned-content library and the offline download manager.
+model Entitlement {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  grantedAt   DateTime @default(now())
+  progressPct Int      @default(0)
+  downloaded  Boolean  @default(false)
+
+  @@unique([userId, productId])
+}
+
+// ----------------------------------------------------------------------------
+// Pulse — news & trends
+// ----------------------------------------------------------------------------
+
+enum PulseTopic {
+  TRAINING_SCIENCE
+  RECOVERY_LONGEVITY
+  MOVEMENT_CULTURE
+  MIND_BODY
+}
+
+model PulseArticle {
+  id           String          @id @default(cuid())
+  slug         String          @unique
+  title        String
+  source       String
+  sourceUrl    String
+  publishedAt  DateTime
+  topic        PulseTopic
+  summary      String          @db.Text
+  alphaTake    String?         @db.Text
+  takeAuthor   String?
+  readMinutes  Int
+  relatedFocus TrainingFocus[]
+  poster       String
+  published    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+
+  saves SavedArticle[]
+
+  @@index([topic, publishedAt])
+}
+
+model SavedArticle {
+  userId    String
+  articleId String
+  savedAt   DateTime     @default(now())
+  readAt    DateTime?
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   PulseArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, articleId])
+}
+
+// ----------------------------------------------------------------------------
+// Analytics — retention, session completion, product engagement
+// ----------------------------------------------------------------------------
+
+model AnalyticsEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  name       String // e.g. "session.completed", "product.viewed"
+  properties Json
+  occurredAt DateTime @default(now())
+
+  @@index([name, occurredAt])
+  @@index([userId, occurredAt])
+}
