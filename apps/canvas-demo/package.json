@@ -1,0 +1,20 @@
+{
+  "name": "@picasso/canvas-demo",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runnable Picasso canvas: a Canvas2D renderer driven by the canvas-core and canvas-render draw list",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "serve": "node ../../scripts/serve.mjs",
+    "shots": "node scripts/screenshot.mjs"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*",
+    "@picasso/canvas-render": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
