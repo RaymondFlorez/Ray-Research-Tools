@@ -13,12 +13,13 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 | [`@picasso/canvas-core`](packages/canvas-core) | Phase 0 canvas foundation: spatial model, binding states, port type system, DAG evaluation core. No runtime dependencies. |
 | [`@picasso/canvas-render`](packages/canvas-render) | Scene assembly: LOD bucketing, DOM mount lifecycle, edge geometry, binding visual signatures, passive-mode wash. |
 | [`@picasso/canvas-ink`](packages/canvas-ink) | Ink engine: append-only stroke capture, simplification, and the local model-free shape recognizer. |
+| [`@picasso/canvas-sync`](packages/canvas-sync) | Collaboration: the Yjs document schema, offline reconciliation, presence, snapshots and named versions. |
 
 ## Apps
 
 | App | Description |
 |---|---|
-| [`canvas-demo`](apps/canvas-demo) | A runnable canvas and a runnable ink surface, driven by the packages above, with headless-Chromium harnesses for both. |
+| [`canvas-demo`](apps/canvas-demo) | A runnable canvas, ink surface and two-client collaboration demo, driven by the packages above, each with a headless-Chromium harness. |
 
 ## Development
 
@@ -32,4 +33,5 @@ npm run build --workspaces
 node scripts/serve.mjs                          # http://localhost:8123/
 node apps/canvas-demo/scripts/screenshot.mjs    # canvas: headless capture + assertions
 node apps/canvas-demo/scripts/ink-shots.mjs     # ink: draws with real pointer events, asserts recognition
+node apps/canvas-demo/scripts/collab-shots.mjs  # collab: cuts the link, edits both sides, asserts convergence
 ```

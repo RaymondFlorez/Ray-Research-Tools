@@ -1,8 +1,8 @@
 {
-  "name": "@picasso/canvas-core",
+  "name": "@picasso/canvas-sync",
   "version": "0.0.0",
   "private": true,
-  "description": "Picasso analytic canvas: spatial model, binding states, port type system, and DAG evaluation core",
+  "description": "Picasso collaboration: the Yjs document schema, CRDT bindings, presence, and snapshots",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,14 +12,16 @@
       "default": "./dist/index.js"
     }
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*",
+    "@picasso/canvas-ink": "*",
+    "yjs": "^13.6.32"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

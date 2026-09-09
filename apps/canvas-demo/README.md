@@ -45,6 +45,17 @@ strokes, which exercises grouping.
 | line | 1 | line | 0.74 |
 | rectangle, four strokes | 4 | rectangle | 0.97 |
 
+## Collaboration
+
+`collab.html` runs two clients side by side: two separate Yjs documents with their own
+index, viewport and renderer, joined by a `Room` playing the part of the collab server.
+Cut the link, add nodes on both sides, reconnect, and watch them merge. The peer cursor is
+presence rather than document, so it keeps flowing even while the document link is down.
+
+`scripts/collab-shots.mjs` drives that sequence in headless Chromium and asserts on it:
+both clients start equal, the peer cursor arrives, offline each client sees only its own
+work (7 vs 6 nodes), and reconnecting leaves both with all 8.
+
 ## Screenshot harness
 
 `scripts/screenshot.mjs` drives the page in headless Chromium, asserts on the scene stats

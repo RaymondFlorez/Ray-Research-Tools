@@ -13,7 +13,8 @@
   "dependencies": {
     "@picasso/canvas-core": "*",
     "@picasso/canvas-render": "*",
-    "@picasso/canvas-ink": "*"
+    "@picasso/canvas-ink": "*",
+    "@picasso/canvas-sync": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
