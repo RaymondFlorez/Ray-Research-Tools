@@ -25,6 +25,26 @@ and the LOD ladder read correctly on a screen rather than only in a test.
 `DomMountManager` still runs, and the HUD reports how many nodes the DOM layer *would*
 mount, so the mount lifecycle is exercised even though this app has no DOM layer.
 
+## Ink surface
+
+`ink.html` is the same pipeline for pen input: capture through `getCoalescedEvents()`, an
+append-only builder, commit-time simplification, the 300ms recognition scheduler, stroke
+grouping, and the local shape pass. Draw a shape and the recognized kind, its confidence,
+and every candidate's score appear in the readout; the dashed ghost is a proposal, and
+nothing is applied without a press.
+
+`scripts/ink-shots.mjs` drives it with real mouse input in headless Chromium and asserts
+the recognizer saw the shape the mouse drew — including a rectangle drawn as four separate
+strokes, which exercises grouping.
+
+| Case | Strokes | Recognized | Confidence |
+|---|---|---|---|
+| rectangle | 1 | rectangle | 0.97 |
+| ellipse | 1 | ellipse | 0.84 |
+| arrow | 1 | arrow | 0.95 |
+| line | 1 | line | 0.74 |
+| rectangle, four strokes | 4 | rectangle | 0.97 |
+
 ## Screenshot harness
 
 `scripts/screenshot.mjs` drives the page in headless Chromium, asserts on the scene stats

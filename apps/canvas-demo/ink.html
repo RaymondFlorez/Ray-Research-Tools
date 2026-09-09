@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso ink demo</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #f6f5f2; }
+      #ink { display: block; touch-action: none; cursor: crosshair; }
+      #readout {
+        position: fixed; top: 12px; left: 12px; padding: 10px 12px;
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre; color: #1c1a17;
+        background: rgba(255,255,255,0.88); border: 1px solid #c9c6bf; border-radius: 6px;
+        pointer-events: none; min-width: 260px;
+      }
+      #help {
+        position: fixed; bottom: 12px; left: 12px;
+        font: 11px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; color: #6f6a61;
+        pointer-events: none;
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-render": "/packages/canvas-render/dist/index.js",
+          "@picasso/canvas-ink": "/packages/canvas-ink/dist/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <canvas id="ink"></canvas>
+    <div id="readout">draw a shape · c to clear</div>
+    <div id="help">recognition runs locally, 300ms after the pen lifts · the dashed ghost is a proposal, not a change</div>
+    <script type="module" src="/apps/canvas-demo/dist/ink.js"></script>
+  </body>
+</html>

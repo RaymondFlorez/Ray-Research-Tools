@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@picasso/canvas-core": "*",
-    "@picasso/canvas-render": "*"
+    "@picasso/canvas-render": "*",
+    "@picasso/canvas-ink": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
