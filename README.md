@@ -14,6 +14,7 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 | [`@picasso/canvas-render`](packages/canvas-render) | Scene assembly: LOD bucketing, DOM mount lifecycle, edge geometry, binding visual signatures, passive-mode wash. |
 | [`@picasso/canvas-ink`](packages/canvas-ink) | Ink engine: append-only stroke capture, simplification, and the local model-free shape recognizer. |
 | [`@picasso/canvas-sync`](packages/canvas-sync) | Collaboration: the Yjs document schema, offline reconciliation, presence, snapshots and named versions. |
+| [`@picasso/canvas-gl`](packages/canvas-gl) | The WebGL2 path: a scene becomes two instanced draw calls, so node count stops costing draw calls. |
 
 ## Apps
 
@@ -34,4 +35,5 @@ node scripts/serve.mjs                          # http://localhost:8123/
 node apps/canvas-demo/scripts/screenshot.mjs    # canvas: headless capture + assertions
 node apps/canvas-demo/scripts/ink-shots.mjs     # ink: draws with real pointer events, asserts recognition
 node apps/canvas-demo/scripts/collab-shots.mjs  # collab: cuts the link, edits both sides, asserts convergence
+node apps/canvas-demo/scripts/gl-shots.mjs      # webgl: verifies the shaders draw, measures 500..10,000 nodes
 ```

@@ -1,0 +1,31 @@
+{
+  "name": "@picasso/canvas-gl",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Picasso WebGL2 renderer: instanced node quads and bezier edges from a Scene draw list",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*",
+    "@picasso/canvas-render": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}

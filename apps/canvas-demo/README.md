@@ -45,6 +45,18 @@ strokes, which exercises grouping.
 | line | 1 | line | 0.74 |
 | rectangle, four strokes | 4 | rectangle | 0.97 |
 
+## WebGL
+
+`gl.html` runs the same document, index and `buildScene` as `index.html` — only the painter
+changes, which is the point of keeping the renderer a draw list. The HUD reports instances,
+draw calls, bytes uploaded and frame time.
+
+`scripts/gl-shots.mjs` verifies it in headless Chromium: it reads a pixel back from the
+framebuffer and checks it is the node's fill (proving the shaders drew rather than
+producing an empty frame), then measures 500 through 10,000 nodes. See
+[`@picasso/canvas-gl`](../../packages/canvas-gl) for the numbers and for what they do and
+do not establish on a software rasterizer.
+
 ## Collaboration
 
 `collab.html` runs two clients side by side: two separate Yjs documents with their own
