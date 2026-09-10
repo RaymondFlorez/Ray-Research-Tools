@@ -17,6 +17,12 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 | [`@picasso/canvas-gl`](packages/canvas-gl) | The WebGL2 path: a scene becomes two instanced draw calls, so node count stops costing draw calls. |
 | [`@picasso/canvas-data`](packages/canvas-data) | Data spine core: bitemporal point-in-time reads, corporate actions, entitlements and egress, the global time scrub. |
 
+## Crates
+
+| Crate | Description |
+|---|---|
+| [`pricing-core`](crates/pricing-core) | Rust pricing engine: BSM and the full Greek set, implied vol, American exercise with the C.2 accuracy guard, grid repricing. Compiles native and to WASM, verified bit-identical. |
+
 ## Apps
 
 | App | Description |
@@ -37,4 +43,9 @@ node apps/canvas-demo/scripts/screenshot.mjs    # canvas: headless capture + ass
 node apps/canvas-demo/scripts/ink-shots.mjs     # ink: draws with real pointer events, asserts recognition
 node apps/canvas-demo/scripts/collab-shots.mjs  # collab: cuts the link, edits both sides, asserts convergence
 node apps/canvas-demo/scripts/gl-shots.mjs      # webgl: verifies the shaders draw, measures 500..10,000 nodes
+
+# the Rust pricing core
+cd crates/pricing-core && cargo test --release
+cargo run --release --example grid_bench --manifest-path crates/pricing-core/Cargo.toml
+node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 ```
