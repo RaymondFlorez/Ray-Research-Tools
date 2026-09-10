@@ -15,6 +15,7 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 | [`@picasso/canvas-ink`](packages/canvas-ink) | Ink engine: append-only stroke capture, simplification, and the local model-free shape recognizer. |
 | [`@picasso/canvas-sync`](packages/canvas-sync) | Collaboration: the Yjs document schema, offline reconciliation, presence, snapshots and named versions. |
 | [`@picasso/canvas-gl`](packages/canvas-gl) | The WebGL2 path: a scene becomes two instanced draw calls, so node count stops costing draw calls. |
+| [`@picasso/canvas-data`](packages/canvas-data) | Data spine core: bitemporal point-in-time reads, corporate actions, entitlements and egress, the global time scrub. |
 
 ## Apps
 
