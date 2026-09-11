@@ -45,8 +45,21 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 1571 values spanning BSM, all ten
-Greeks, both American paths and implied vol. It currently reports agreement on every bit.
+hide exactly the disagreement it exists to find — across 3826 values spanning BSM, all ten
+Greeks, both American paths, implied vol, and every cell and guard figure of a 40-leg
+25x15 grid. It currently reports agreement on every bit.
+
+**The grid had to be added before the second failure showed up.** Every one of the 2250
+cell values already agreed; one guard figure did not, and only that one. The cells are the
+fast path, so a disagreement confined to `max_error` meant the guard had sampled different
+cells on the two targets — which it had. `Lcg::below` reduced with
+`(self.next_u64() >> 11) as usize % bound`, and `usize` is 64-bit natively and **32-bit on
+wasm32**, so the cast threw away 21 bits before the modulo. Client and server were
+spot-checking different cells of the same grid, giving the same book two different badges
+and two different cache keys. The reduction now happens in `u64`, before any narrowing.
+
+No native test could have found it: natively the two forms are the same expression. It is
+visible only by running the identical code on both targets and comparing.
 
 ## The accuracy guard, and what it found
 

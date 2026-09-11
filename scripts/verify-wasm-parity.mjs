@@ -44,8 +44,46 @@ const bits = (value) => {
   return view.getBigUint64(0).toString(16).padStart(16, '0');
 };
 
+/**
+ * Reprices the same 40-leg grid through WASM, once, and indexes the result by
+ * the label the native side emitted.
+ *
+ * The grid is checked as well as the scalars because scalar parity does not
+ * imply it: every cell sums across forty legs, so a last-bit disagreement
+ * anywhere inside compounds into the number the analyst actually reads.
+ */
+function wasmGrid() {
+  w.pc_book_reset();
+  for (let i = 0; i < 40; i += 1) {
+    w.pc_book_add_leg(
+      80 + (i % 20) * 2.5,
+      0.08 + (i % 5) * 0.24,
+      i % 2 === 0 ? 1 : 0,
+      i % 4 < 2 ? 1 : 0,
+      i % 3 === 0 ? -5 : 5,
+      100,
+      0.22 + (i % 7) * 0.02,
+    );
+  }
+  const cells = w.pc_grid_reprice(100, 0.045, 0.017, 25, 0.2, 15, 0.1, 7);
+  const stride = w.pc_grid_stride();
+  // Copied before anything else calls in: the view aliases linear memory.
+  const data = new Float64Array(w.memory.buffer, w.pc_grid_data(), cells * stride).slice();
+
+  const rows = new Map();
+  for (let i = 0; i < data.length; i += 1) {
+    rows.set(`cell${Math.floor(i / stride)}/${i % stride}`, data[i]);
+  }
+  for (let which = 0; which < 5; which += 1) rows.set(`guard${which}`, w.pc_guard_value(which));
+  return rows;
+}
+
+const grid = wasmGrid();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
+  if (grid.has(label)) return grid.get(label);
+
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
 
@@ -86,7 +124,8 @@ for (const [label, nativeBits] of native) {
 }
 
 console.log(
-  `compared ${native.length} values across BSM, Greeks, American and implied vol` +
+  `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
+    `and a 40-leg 25x15 grid` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

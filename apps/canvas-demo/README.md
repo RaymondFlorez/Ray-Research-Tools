@@ -89,3 +89,27 @@ Scene assembly is comfortably inside the frame budget at every level. The Canvas
 is not: at LOD0 with everything on screen it runs p50 15.5ms, which is the whole 60fps
 budget spent on painting 2,000 rects and 759 beziers one draw call at a time. That is the
 cost the WebGL instanced path exists to remove, and it is the reason the PRD specifies one.
+
+## Pricing
+
+`payoff.html` is the layers meeting: a `StrategyNode` from `canvas-core` holds the book,
+`canvas-pricing` reprices it through the same Rust the server runs, and the surface is
+drawn from cells read out of WASM linear memory. Pick a book, drag the decay slider, and
+the whole pipeline re-runs.
+
+`scripts/payoff-shots.mjs` verifies it in headless Chromium, which is the only place the
+claim actually has to hold — streaming instantiation refuses a module served with the
+wrong MIME type, and a stale artefact surfaces as a missing export deep inside a
+repricing loop. Neither is reachable from Node.
+
+| Book | Repricings | WASM call | Guard |
+|---|---|---|---|
+| call spread | 750 | 0.2ms | not needed |
+| butterfly | 1,125 | 0.3ms | not needed |
+| risk reversal, American | 1,396 | 5.6ms | escalated, 315 cells |
+| 40-leg mixed book | 17,120 | 12.6ms | escalated, 45 cells |
+
+Against the PRD's 90ms p95 budget. Cells the guard escalated to the exact lattice are
+drawn with a dot, and on the 40-leg book they form three contiguous columns around spot
+88 to 93 — the band where the American puts carry early-exercise value. The guard
+escalates a region, which is what Appendix C.2 says it should.

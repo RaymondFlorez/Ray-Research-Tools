@@ -16,6 +16,8 @@ const TYPES = {
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
+  // Required for `instantiateStreaming`, which refuses any other type.
+  '.wasm': 'application/wasm',
 };
 
 const server = createServer(async (req, res) => {

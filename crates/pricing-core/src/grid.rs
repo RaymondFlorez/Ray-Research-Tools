@@ -165,7 +165,13 @@ impl Lcg {
         if bound == 0 {
             0
         } else {
-            (self.next_u64() >> 11) as usize % bound
+            // The reduction happens in u64, before any narrowing. `as usize`
+            // first would truncate to 32 bits on wasm32 and to 64 natively, so
+            // the client and the server would sample *different cells* — and
+            // the grid would carry two different badges and two different cache
+            // keys for the same book. Found by the parity harness, which is
+            // what it is for.
+            ((self.next_u64() >> 11) % bound as u64) as usize
         }
     }
 }

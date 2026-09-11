@@ -8,14 +8,16 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "serve": "node ../../scripts/serve.mjs",
-    "shots": "node scripts/screenshot.mjs"
+    "shots": "node scripts/screenshot.mjs",
+    "payoff-shots": "node scripts/payoff-shots.mjs"
   },
   "dependencies": {
     "@picasso/canvas-core": "*",
     "@picasso/canvas-render": "*",
     "@picasso/canvas-ink": "*",
     "@picasso/canvas-sync": "*",
-    "@picasso/canvas-gl": "*"
+    "@picasso/canvas-gl": "*",
+    "@picasso/canvas-pricing": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
