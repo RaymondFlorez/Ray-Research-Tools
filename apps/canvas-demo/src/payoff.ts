@@ -97,6 +97,11 @@ for (const [key, { label }] of Object.entries(STRATEGIES)) {
   picker.append(new Option(label, key));
 }
 
+// `?book=reversal` opens on a named strategy, the same way the canvas demo takes
+// `?nodes` and `?scale`. Useful for linking straight at a particular surface.
+const requested = new URLSearchParams(location.search).get('book');
+if (requested !== null && requested in STRATEGIES) picker.value = requested;
+
 let latest: GridResult | undefined;
 
 function compute(): void {
