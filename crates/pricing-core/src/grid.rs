@@ -8,6 +8,7 @@
 //! repriced exactly. The badge the node shows says which happened.
 
 use crate::american;
+use crate::andersen_lake::{Boundary, Solver};
 use crate::bsm::{self, Greeks, Inputs, OptionType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -188,7 +189,61 @@ fn leg_inputs(leg: &Leg, market: &Market, spot: f64, vol_shift: f64, decay: f64)
     }
 }
 
-fn fast_greeks(inputs: &Inputs, style: Style) -> Greeks {
+/// The boundaries the grid will need, solved once each.
+///
+/// One per `(leg, volatility level)` — 600 for the PRD's 40-leg book over a
+/// 25×15 grid, against 15,000 repricings. The exercise boundary does not depend
+/// on the spot, so the entire spot axis reuses the same solve, and the
+/// boundaries are held at a unit strike so each one serves its leg at any
+/// strike too.
+///
+/// This is what makes Andersen-Lake affordable on a grid at all. Solved per
+/// cell it costs 26µs a time and blows the 90ms budget five times over; solved
+/// per `(leg, vol)` it is a tenth of the budget.
+struct BoundaryCache<'a> {
+    solver: &'a Solver,
+    /// `legs × vol levels`, in that order. `None` for European legs.
+    entries: Vec<Option<Boundary<'a>>>,
+    vol_count: usize,
+}
+
+impl<'a> BoundaryCache<'a> {
+    fn build(solver: &'a Solver, book: &[Leg], market: &Market, grid: &GridSpec, decay: f64) -> BoundaryCache<'a> {
+        let vol_count = grid.vol_shifts.len();
+        let mut entries = Vec::with_capacity(book.len() * vol_count);
+        for leg in book {
+            for &shift in &grid.vol_shifts {
+                entries.push(if leg.style == Style::American {
+                    let inputs = leg_inputs(leg, market, market.spot, shift, decay);
+                    if inputs.is_degenerate() {
+                        None
+                    } else {
+                        // Calls are priced through the mirrored put, so the
+                        // boundary they need has the rate and dividend swapped.
+                        let (rate, dividend) = match leg.kind {
+                            OptionType::Put => (market.rate, market.dividend),
+                            OptionType::Call => (market.dividend, market.rate),
+                        };
+                        Some(solver.unit_put_boundary(rate, dividend, inputs.vol, inputs.time))
+                    }
+                } else {
+                    None
+                });
+            }
+        }
+        BoundaryCache { solver, entries, vol_count }
+    }
+
+    fn get(&self, leg_index: usize, vol_index: usize) -> Option<&Boundary<'a>> {
+        self.entries[leg_index * self.vol_count + vol_index].as_ref()
+    }
+}
+
+fn fast_greeks(
+    inputs: &Inputs,
+    style: Style,
+    boundary: Option<(&Solver, &Boundary<'_>)>,
+) -> Greeks {
     match style {
         Style::European => bsm::greeks(inputs),
         Style::American => {
@@ -196,21 +251,35 @@ fn fast_greeks(inputs: &Inputs, style: Style) -> Greeks {
             // On the grid path that is the trade C.2 is making: Greeks accurate
             // enough to aggregate, prices measured by the guard.
             let mut g = bsm::greeks(inputs);
-            g.price = american::fast_price(inputs);
+            g.price = match boundary {
+                Some((solver, boundary)) => solver.price_with(inputs, boundary),
+                None => crate::andersen_lake::fast_price(inputs),
+            };
             g
         }
     }
 }
 
-fn price_book(book: &[Leg], market: &Market, spot: f64, vol_shift: f64, decay: f64, exact: bool) -> Cell {
+fn price_book(
+    book: &[Leg],
+    market: &Market,
+    spot: f64,
+    vol_shift: f64,
+    decay: f64,
+    exact: bool,
+    cache: Option<(&BoundaryCache<'_>, usize)>,
+) -> Cell {
     let mut cell = Cell {
         exact,
         ..Default::default()
     };
-    for leg in book {
+    for (index, leg) in book.iter().enumerate() {
         let inputs = leg_inputs(leg, market, spot, vol_shift, decay);
         let scale = leg.quantity * leg.multiplier;
-        let mut g = fast_greeks(&inputs, leg.style);
+        let boundary = cache.and_then(|(cache, vol_index)| {
+            cache.get(index, vol_index).map(|boundary| (cache.solver, boundary))
+        });
+        let mut g = fast_greeks(&inputs, leg.style, boundary);
         if exact && leg.style == Style::American {
             g.price = american::exact_price(&inputs);
         }
@@ -234,10 +303,21 @@ pub fn reprice_grid(
     let vol_count = grid.vol_shifts.len();
     let decay = grid.time_decay_days / 365.0;
 
+    let solver = crate::andersen_lake::fast_solver();
+    let cache = BoundaryCache::build(solver, book, market, grid, decay);
+
     let mut cells = Vec::with_capacity(spot_count * vol_count);
     for &shock in &grid.spot_shocks {
-        for &shift in &grid.vol_shifts {
-            cells.push(price_book(book, market, market.spot * shock, shift, decay, false));
+        for (vol_index, &shift) in grid.vol_shifts.iter().enumerate() {
+            cells.push(price_book(
+                book,
+                market,
+                market.spot * shock,
+                shift,
+                decay,
+                false,
+                Some((&cache, vol_index)),
+            ));
         }
     }
     let mut repricings = cells.len() * book.len();
@@ -293,7 +373,7 @@ pub fn reprice_grid(
             let spot = market.spot * grid.spot_shocks[si];
             let shift = grid.vol_shifts[vi];
 
-            let exact = price_book(book, market, spot, shift, decay, true);
+            let exact = price_book(book, market, spot, shift, decay, true, Some((&cache, vi)));
             repricings += book.len();
             sampled += 1;
 
@@ -318,7 +398,7 @@ pub fn reprice_grid(
             for vi in 0..vol_count {
                 let spot = market.spot * grid.spot_shocks[si];
                 cells[si * vol_count + vi] =
-                    price_book(book, market, spot, grid.vol_shifts[vi], decay, true);
+                    price_book(book, market, spot, grid.vol_shifts[vi], decay, true, Some((&cache, vi)));
                 escalated += 1;
                 repricings += book.len();
             }
@@ -356,5 +436,5 @@ pub fn reprice_grid(
 
 /// Aggregate Greeks for the book at the unshocked point (PRD 5.4).
 pub fn book_greeks(book: &[Leg], market: &Market) -> Cell {
-    price_book(book, market, market.spot, 0.0, 0.0, false)
+    price_book(book, market, market.spot, 0.0, 0.0, false, None)
 }

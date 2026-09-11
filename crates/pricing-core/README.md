@@ -1,11 +1,14 @@
 # pricing-core
 
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
-exercise, and multi-leg grid repricing with the accuracy guard from PRD Appendix C.2.
+exercise by Andersen-Lake, and multi-leg grid repricing with the accuracy guard from PRD
+Appendix C.2.
 
 ```bash
-cargo test --release                              # 20 tests
+cargo test --release                              # 37 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
+cargo run --release --example al_scan             # what the reference turned out to be
+cargo run --release --example al_sweep            # which scheme parameter actually matters
 cargo run --release --example error_scan          # fast-vs-exact error sweep
 cargo run --release --example lr_steps            # lattice accuracy against cost
 node ../../scripts/verify-wasm-parity.mjs         # native vs WASM, bit for bit
@@ -13,18 +16,22 @@ node ../../scripts/verify-wasm-parity.mjs         # native vs WASM, bit for bit
 
 ## The exit criterion
 
-"40-leg book reprices over a 375-cell grid under 90ms p95." Measured on this machine:
+"40-leg book reprices over a 375-cell grid under 90ms p95." Measured on this machine, with
+Andersen-Lake pricing every American cell and the guard sampling on top:
 
 | Book | Repricings | p50 | p95 | |
 |---|---|---|---|---|
-| 40 European legs | 15,000 | 1.83ms | 1.91ms | 47x inside budget |
-| 40 American legs, guard sampling | 15,320 | 12.6ms | 13.0ms | inside budget |
-| 120 European legs | 45,000 | 5.43ms | 5.66ms | inside budget |
-| 400 European legs | 150,000 | 18.4ms | 19.6ms | inside budget |
+| 40 European legs | 15,000 | 1.85ms | 2.42ms | 37x inside budget |
+| 40 American legs, guard sampling | 15,320 | 59.3ms | 60.5ms | inside budget |
+| 120 European legs | 45,000 | 5.59ms | 5.78ms | inside budget |
+| 400 European legs | 150,000 | 18.8ms | 19.2ms | inside budget |
 
-Pricing every cell on the lattice instead costs 86ms, so the fast path plus the guard is
-about 7x cheaper than exactness everywhere, and 40x cheaper before the lattice was
-optimised.
+**In the browser it is tighter, and on the hardest case it does not fit.** The same forty
+American legs cost 146ms through WASM against 60ms natively; a book with half its legs
+American — closer to what a chain-driven book looks like — comes in at 74ms. The criterion
+is met by the engine and by the realistic client case, and missed by the client on the
+worst one. The obvious lever is a quality knob on `GridSpec` so a client can drop to a
+coarser scheme, and it is not built yet.
 
 ## Bit-identical on client and server
 
@@ -63,54 +70,123 @@ visible only by running the identical code on both targets and comparing.
 
 ## The accuracy guard, and what it found
 
-Appendix C.2 specifies a fast approximation on grid paths, an exact lattice on detail
-views, and a guard that spot-checks 2 percent of cells and escalates the affected region
-when the approximation drifts past half a tick.
+Appendix C.2 specifies a fast approximation on grid paths, an exact method on detail views,
+and a guard that spot-checks 2 percent of cells and escalates the affected region when the
+approximation drifts past half a tick.
 
-**Deviation:** C.2 names Andersen-Lake for the fast path. This ships Bjerksund-Stensland
-1993, which needs only the univariate normal; Andersen-Lake is a high-order
-integral-equation method and a research project of its own, and the 2002 Bjerksund-Stensland
-refinement needs a bivariate normal CDF. `american::fast_price` is the single seam to
-replace.
+The first version of this crate deviated from C.2 and shipped Bjerksund-Stensland 1993 for
+the fast path, on the grounds that Andersen-Lake is a research project of its own. **The
+guard is what closed that deviation.** Sweeping 840 parameter combinations, BS93 differed
+from the reference by a mean of 2.6 cents per share and a worst case of 70 cents, against a
+half-tick tolerance of 0.5 cents — so the guard escalated almost anywhere early exercise
+carried value, and the fast path was exact only where early exercise was worthless.
 
-**What the guard then measured is the interesting part.** Sweeping 840 parameter
-combinations (`examples/error_scan.rs`), BS93 differs from the lattice by a mean of 2.7
-cents per share, a p95 of 13.7 cents, and a worst case of 58 cents — against a half-tick
-tolerance of 0.5 cents. Even short-dated at-the-money American puts miss by 1 to 2 cents.
+That converted "the approximation is probably fine" into a number, and the number said a
+more accurate method was required rather than optional. Which is how C.2's actual choice
+got built, and why it was built second: by measurement, rather than by taking the PRD's
+word for it.
 
-So on this approximation the guard escalates almost anywhere early exercise carries value,
-and the fast path is exact only where early exercise is worthless — an American call on a
-non-dividend payer, where it returns the European price by construction.
+`american::fast_price` still holds the closed form. It is thirty times faster than the
+solver, exact where early exercise has no value, and useful as an independent sanity check
+on a method that is now the primary one.
 
-That is the guard doing its job. It converted "the approximation is probably fine" into a
-number, and the number says a more accurate method is required rather than optional. It is
-also the strongest available argument for C.2's choice of Andersen-Lake, arrived at by
-measurement rather than by taking the PRD's word for it.
+## The reference was wrong
 
-## The exact reference
+This is the thing worth reading.
 
-The guard is only as good as what it checks against, so the reference matters.
+The crate used to price American options with Bjerksund-Stensland and check them against a
+Leisen-Reimer lattice, and it claimed the lattice at 51 steps carried "about a ninth of the
+tolerance it polices" — 5.6e-4 against a half-tick tolerance of 5e-3. Implementing
+Andersen-Lake, which Appendix C.2 asked for in the first place, turned that claim over.
 
-CRR converges at O(1/n) and systematically: its nodes fall where the geometry puts them, the
-strike lands between nodes, and the error does not average away. At 512 steps it is still
-1.8e-3 out. Leisen-Reimer inverts the binomial probabilities so the strike sits at the
-centre of the terminal distribution and converges at O(1/n²) — at 255 steps it is 2.3e-5,
-roughly 500 times better with half the work.
+The first sign was a systematic bias. Against the lattice, the new solver looked *worse*
+deep in the money on long maturities, and wrong in one direction only. A solver that is
+wrong is wrong in both directions; a solver that is right and graded against a biased
+yardstick is wrong in one. So the lattice went under the microscope instead:
 
-Step counts come from the measured accuracy-cost curve, not from round numbers:
+| | LR 255 | LR 4095 | LR 32767 | Andersen-Lake |
+|---|---|---|---|---|
+| deep ITM put, 2y | 39.875946 | 39.887902 | 39.888416 | 39.888449 |
+| ATM put, 6m | 7.226475 | 7.226096 | 7.226071 | 7.226059 |
 
-| Steps | Max error | Cost |
-|---|---|---|
-| 21 | 3.2e-3 | 3.9µs |
-| 51 | 5.6e-4 | 48µs |
-| 101 | 1.5e-4 | 310µs |
-| 255 | 2.3e-5 | 2,611µs |
+The lattice is still climbing at thirty-two thousand steps, towards where Andersen-Lake sat
+from the start. The solver was right; the reference was not.
 
-`EXACT_STEPS` is 51: the reference's own error is about a ninth of the tolerance it
-polices, and the guard prices 2 percent of cells times every leg, so a few hundred lattices
-per grid. At 101 steps that same guard runs 6x slower and blows the budget by itself.
-`DETAIL_STEPS` is 255, for a single position an analyst pinned as exact, where fifty times
-the work is irrelevant.
+Measured properly — against an Andersen-Lake scheme over-resolved several times over in
+every parameter, itself anchored against that 32,767-step lattice — over 1,680 cases:
+
+| method | mean | p95 | worst | cost |
+|---|---|---|---|---|
+| Bjerksund-Stensland 93 | 0.026266 | 0.130264 | 0.698977 | 0.9µs |
+| Leisen-Reimer, 51 steps | 0.002277 | 0.011521 | 0.062449 | 4.0µs |
+| Leisen-Reimer, 255 steps | 0.000444 | 0.002263 | 0.012503 | 69µs |
+| **Andersen-Lake FAST** | **0.000096** | **0.000486** | **0.002129** | 26µs |
+| Andersen-Lake ACCURATE | 0.000024 | 0.000117 | 0.001096 | 167µs |
+
+The 51-step lattice — *the guard's own reference* — has a worst case of 6.2 cents against
+the half-tick tolerance of 0.5 cents it was policing. The yardstick was out by twelve times
+the thing it was measuring. The 5.6e-4 figure was real, and was measured at the money;
+deep in the money on a two-year maturity the error is two orders of magnitude larger, and
+that is precisely the region early exercise lives in.
+
+Andersen-Lake is the only method in that table whose worst case fits inside the tolerance,
+and it beats a 255-step lattice on accuracy *and* on cost.
+
+## What that costs the guard
+
+C.2's architecture assumes the fast path is much worse than the lattice, so a cheap lattice
+can police it. That assumption no longer holds: the fast path is now more accurate than any
+lattice the guard could afford to run.
+
+So the guard's reference is Andersen-Lake at a finer scheme, and **it now measures
+convergence rather than method error** — it would not catch a mistake common to both
+schemes. Stated here because it is a real weakening of the guarantee, not a detail.
+
+The independent check moved to where it can afford to be honest:
+`andersen_lake::test::agrees_with_a_lattice_run_to_convergence` checks six cases against a
+32,767-step lattice, where a single price takes seconds and nothing has to fit in a frame
+budget. The lattice is still the cross-check; it is just no longer in the hot path.
+
+## The method, and one thing that did not work
+
+An American put is a European put plus the premium from exercising early, and Kim's
+representation writes that premium as an integral along the exercise boundary. Setting the
+spot to the boundary turns it into a nonlinear integral equation for the boundary itself,
+which iterates to a fixed point.
+
+Two transformations decide whether that is accurate or merely plausible. The boundary meets
+expiry with a `sqrt(t log(1/t))` cusp, so what gets interpolated is `ln(B/B(0))^2` against
+`sqrt(t)` — the square cancels the cusp, and a degree-six Chebyshev polynomial then fits
+what no polynomial in `t` could. And the integrand carries its own square-root singularity
+at the upper limit, which the substitution `u = tv^2` removes exactly.
+
+A third piece of Andersen-Lake is the Jacobi-**Newton** acceleration, and **it is not here,
+because three attempts at it all diverged.** From a flat starting boundary the Newton step
+lands far below anything a boundary could be; warm-starting it with a fixed-point pass and
+adding a trust region and a monotonicity guard each helped and none fixed it — the worst
+case went from 0.06 to 27.5 and grew with iteration count. The residual is the same
+equation either way, so the root was never in doubt; the step was. What ships is the plain
+fixed point, which converges linearly and reliably, and pays for it in iterations: eight
+passes where the paper needs three. `examples/al_sweep.rs` shows why that is the only
+parameter worth spending on — quadrature nodes, collocation nodes and pricing nodes are all
+saturated at their smallest useful settings, and the iteration count moves the error by two
+orders of magnitude on its own.
+
+## Why a grid can afford it
+
+Andersen-Lake costs 26µs a price against Bjerksund-Stensland's 0.9µs, and 15,000 of those
+would be 390ms — five times over budget.
+
+It fits because the exercise boundary does not depend on the spot, and is homogeneous of
+degree one in the strike. A 25x15 grid over a 40-leg book is 15,000 repricings but only 600
+distinct `(leg, volatility)` pairs: the spot axis moves the option through a boundary that
+does not move with it. `grid::BoundaryCache` solves each one once, at a unit strike, and
+every cell then costs one pricing integral.
+
+That is also why `Solver::price` routes through the unit boundary itself rather than
+solving at the contract's own strike. The two are identical in algebra and differ in the
+last bit, and PRD 7.1 wants the optimistic client price and the authoritative server one to
+*agree*, not to nearly agree. One arithmetic path is the only way to get that.
 
 ## Solver honesty
 

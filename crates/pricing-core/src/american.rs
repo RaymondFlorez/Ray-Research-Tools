@@ -253,29 +253,54 @@ pub fn leisen_reimer_price(inputs: &Inputs, steps: usize) -> f64 {
 
 /// Steps for the guard's reference lattice.
 ///
-/// Chosen from the measured accuracy-cost curve in `examples/lr_steps.rs`, not
-/// from a round number. Leisen-Reimer at 51 steps holds about 5.6e-4 per share
-/// against the closed form — roughly a ninth of the half-tick tolerance the
-/// guard checks, so the reference's own error does not eat the budget it is
-/// policing — and costs about 48us. The guard prices 2 percent of cells times
-/// every leg, so that cost is multiplied by a few hundred: at 101 steps the
-/// same guard runs 6x slower and blows the frame budget on its own.
+/// **No longer the guard's reference, because it was not accurate enough.**
+///
+/// This was chosen from `examples/lr_steps.rs`, on a measured error of 5.6e-4
+/// per share — about a ninth of the half-tick tolerance the guard polices. That
+/// measurement was taken at the money, and it does not survive contact with the
+/// rest of the surface: deep in the money on a two-year maturity the error at
+/// 51 steps is 6.2e-2, twelve times the tolerance it was supposed to police.
+/// `examples/al_scan.rs` has the full table, and `exact_price` now goes
+/// elsewhere.
+///
+/// Kept, with the step count it was measured at, because the lattice is still
+/// the independent cross-check on a method that now has no other.
 pub const EXACT_STEPS: usize = 51;
 
 /// Steps for a single position an analyst pinned as exact.
 ///
-/// About 2.3e-5 per share. Fifty times the work of the guard's lattice, which
-/// is irrelevant when it runs on one position rather than on hundreds.
+/// Worst case 1.3e-2 per share, on the same cases that caught out `EXACT_STEPS`
+/// — better, and still not good enough to be a reference. It costs 69us, which
+/// is more than the Andersen-Lake scheme that beats it by a factor of six.
 pub const DETAIL_STEPS: usize = 255;
 
-/// The exact American price used by the guard.
+/// The reference the guard checks the grid against.
+///
+/// **This was the lattice, and the lattice was not good enough.** At 51 steps
+/// Leisen-Reimer carries a mean error of 2.3e-3 and a worst case of 6.2e-2 per
+/// share, against the half-tick tolerance of 5e-3 the guard polices — the
+/// yardstick was out by twelve times the thing it was measuring. The 5.6e-4
+/// figure this crate used to quote was measured at the money, and the error
+/// deep in the money on long maturities is two orders of magnitude larger.
+/// `examples/al_scan.rs` has the numbers, and its first table shows the lattice
+/// still climbing towards the right answer at 32,767 steps.
+///
+/// So the reference is now Andersen-Lake at its guard scheme: mean 5.0e-5,
+/// worst 2.3e-3, and cheaper than a 255-step lattice besides.
+///
+/// **What that costs, stated plainly:** the guard's fast path is now
+/// Andersen-Lake too, so the guard compares one scheme against a finer scheme of
+/// the same method. It measures convergence, not method error, and it would not
+/// catch a mistake common to both. The independent check moved to where it can
+/// afford to be honest — `andersen_lake`'s test suite, against a lattice run out
+/// to 32,767 steps, where a single price may take a second.
 pub fn exact_price(inputs: &Inputs) -> f64 {
-    leisen_reimer_price(inputs, EXACT_STEPS)
+    crate::andersen_lake::guard_price(inputs)
 }
 
 /// The exact American price for a pinned detail view.
 pub fn detail_price(inputs: &Inputs) -> f64 {
-    leisen_reimer_price(inputs, DETAIL_STEPS)
+    crate::andersen_lake::accurate_price(inputs)
 }
 
 /// Greeks by central difference on the exact lattice, for a pinned position.

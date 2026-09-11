@@ -37,14 +37,19 @@ memory as a typed array. Measured in Chromium on this machine:
 
 | Book | Repricings | Time | Guard |
 |---|---|---|---|
-| call spread | 750 | 0.2ms | not needed |
-| butterfly | 1,125 | 0.3ms | not needed |
-| risk reversal, American | 1,396 | 5.6ms | escalated, 315 cells |
-| 40-leg mixed book | 17,120 | 12.6ms | escalated, 45 cells |
+| 40 European legs | 15,000 | 2.3ms | not needed |
+| 40 legs, half American | 15,000+ | 74ms | passed |
+| 40 legs, all American | 15,320 | 146ms | passed |
 
-Against a 90ms p95 budget. Under Node the all-European 40-leg book runs at 1.2ms p50;
-the same book with every leg American costs 37.8ms, about 3x the native figure, so the
-lattice is where WASM's cost shows up and the fast path is essentially free.
+Against a 90ms p95 budget, and the last row misses it. American legs are now priced by
+Andersen-Lake rather than a closed form — two hundred and seventy times more accurate, and
+enough to keep the guard from escalating at all, at four times the cost. Natively the same
+all-American book takes 60ms; WASM runs it about two and a half times slower, and that
+factor is what takes the worst case out of budget.
+
+The engine meets the criterion and so does the realistic mixed book. A client on a book of
+forty American legs does not, and the lever for it — a quality knob on the grid spec, so a
+browser can choose a coarser scheme — is not built.
 
 ## Every read is a copy, and that is not optional
 

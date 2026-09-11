@@ -10,9 +10,11 @@
 
 pub mod american;
 pub mod ffi;
+pub mod andersen_lake;
 pub mod bsm;
 pub mod grid;
 pub mod implied;
 pub mod normal;
+pub mod quad;
 
 pub use bsm::{Greeks, Inputs, OptionType};

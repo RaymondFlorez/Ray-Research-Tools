@@ -287,17 +287,19 @@ fn the_guard_does_not_run_when_there_is_nothing_to_approximate() {
     assert_eq!(result.cells.len(), 375);
 }
 
+/// The book that used to escalate, and no longer does.
+///
+/// Chosen from measurement: Bjerksund-Stensland 1993 was worst on deep
+/// in-the-money, long-dated, high-vol puts, and put this book roughly 58 cents
+/// per share out against the lattice — a hundred times the half-tick tolerance.
+/// The guard escalated almost every cell of it, which is what argued for
+/// building Andersen-Lake in the first place.
+///
+/// The same book now passes, and the assertion at the bottom is why: on one of
+/// these contracts the closed form is still tens of cents out, and the solver
+/// the grid actually uses is not.
 #[test]
-fn the_guard_catches_this_approximation_s_measured_failure_region() {
-    // Chosen from measurement, not assumption. Bjerksund-Stensland 1993 is
-    // worst on deep in-the-money, long-dated, high-vol options: the sweep in
-    // `examples/error_scan.rs` puts a 1.5-moneyness two-year 60-vol put at
-    // roughly 58 cents per share against the lattice, a hundred times the
-    // half-tick tolerance.
-    //
-    // Note this is *not* the region Appendix C.2 names. C.2 describes where
-    // Andersen-Lake fails; this crate ships a different approximation, so it
-    // has a different failure region, and the guard finds it either way.
+fn the_region_that_used_to_escalate_now_passes() {
     let book: Vec<Leg> = (0..8)
         .map(|i| Leg {
             strike: 150.0 + i as f64,
@@ -313,7 +315,54 @@ fn the_guard_catches_this_approximation_s_measured_failure_region() {
     let grid = GridSpec::linear(25, 0.2, 15, 0.1);
 
     let result = grid::reprice_grid(&book, &market, &grid, &GuardConfig::default());
-    assert_eq!(result.guard.outcome, GuardOutcome::Escalated, "guard missed the failure case");
+    assert_eq!(result.guard.outcome, GuardOutcome::Passed, "badge: {}", result.guard.badge);
+    assert_eq!(result.guard.escalated_cells, 0);
+    assert!(result.cells.iter().all(|c| !c.exact));
+
+    // The approximation that used to sit on the grid path, on one of these
+    // contracts, against the one that sits there now.
+    let contract = Inputs {
+        spot: 100.0,
+        strike: 150.0,
+        time: 2.0,
+        rate: 0.05,
+        dividend: 0.02,
+        vol: 0.6,
+        kind: OptionType::Put,
+    };
+    let truth = pricing_core::andersen_lake::accurate_price(&contract);
+    let closed_form = (american::fast_price(&contract) - truth).abs();
+    let solver = (pricing_core::andersen_lake::fast_price(&contract) - truth).abs();
+    assert!(closed_form > 0.2, "closed form was only {closed_form} out");
+    assert!(solver < 5e-3, "solver was {solver} out");
+}
+
+/// The escalation path itself, still exercised.
+///
+/// With an accurate fast path no realistic book escalates any more, so the way
+/// to test the mechanism is to make the tolerance smaller than the
+/// approximation instead of the other way round. A tick of a hundredth of a
+/// cent is not a market anyone trades, but it is a guard doing exactly what it
+/// would do if a future approximation were this far out.
+#[test]
+fn the_guard_escalates_when_the_tolerance_is_tighter_than_the_approximation() {
+    let book: Vec<Leg> = (0..8)
+        .map(|i| Leg {
+            strike: 150.0 + i as f64,
+            time: 2.0,
+            kind: OptionType::Put,
+            style: Style::American,
+            quantity: 50.0,
+            multiplier: 100.0,
+            vol: 0.6,
+        })
+        .collect();
+    let market = Market { spot: 100.0, rate: 0.05, dividend: 0.02 };
+    let grid = GridSpec::linear(25, 0.2, 15, 0.1);
+    let config = GuardConfig { tick_size: 1e-6, ..GuardConfig::default() };
+
+    let result = grid::reprice_grid(&book, &market, &grid, &config);
+    assert_eq!(result.guard.outcome, GuardOutcome::Escalated, "badge: {}", result.guard.badge);
     assert!(result.guard.escalated_cells > 0);
     assert!(result.guard.badge.starts_with("escalated:"), "badge was {}", result.guard.badge);
     // Escalated cells are marked, so the node can say which numbers are exact.
