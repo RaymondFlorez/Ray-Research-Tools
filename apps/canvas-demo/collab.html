@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso collaboration demo</title>
+    <style>
+      :root { --border: #c9c6bf; --muted: #6f6a61; --ink: #1c1a17; }
+      html, body { margin: 0; height: 100%; background: #eeece7; color: var(--ink);
+        font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; }
+      #bar { display: flex; gap: 10px; align-items: center; padding: 10px 14px;
+        border-bottom: 1px solid var(--border); background: #f6f5f2; }
+      button { font: inherit; padding: 5px 10px; border: 1px solid var(--border);
+        background: #fff; border-radius: 5px; cursor: pointer; color: inherit; }
+      button:hover { background: #f0eee9; }
+      #verdict { margin-left: auto; padding: 4px 10px; border-radius: 5px; }
+      #verdict[data-converged="true"] { background: #dff0e5; color: #1e5e3c; }
+      #verdict[data-converged="false"] { background: #fbe6df; color: #8e3320; }
+      #panes { display: flex; height: calc(100% - 46px); }
+      .pane { flex: 1; display: flex; flex-direction: column; }
+      .pane + .pane { border-left: 1px solid var(--border); }
+      .status { padding: 7px 12px; border-bottom: 1px solid var(--border); background: #f6f5f2; }
+      .status[data-online="false"] { background: #fbe6df; color: #8e3320; }
+      canvas { display: block; cursor: crosshair; }
+      #help { position: fixed; bottom: 10px; left: 14px; color: var(--muted); }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-render": "/packages/canvas-render/dist/index.js",
+          "@picasso/canvas-ink": "/packages/canvas-ink/dist/index.js",
+          "@picasso/canvas-sync": "/packages/canvas-sync/dist/index.js",
+          "yjs": "/node_modules/yjs/dist/yjs.mjs",
+          "lib0/array": "/node_modules/lib0/array.js",
+          "lib0/binary": "/node_modules/lib0/binary.js",
+          "lib0/decoding": "/node_modules/lib0/decoding.js",
+          "lib0/encoding": "/node_modules/lib0/encoding.js",
+          "lib0/error": "/node_modules/lib0/error.js",
+          "lib0/function": "/node_modules/lib0/function.js",
+          "lib0/iterator": "/node_modules/lib0/iterator.js",
+          "lib0/logging": "/node_modules/lib0/logging.js",
+          "lib0/map": "/node_modules/lib0/map.js",
+          "lib0/math": "/node_modules/lib0/math.js",
+          "lib0/object": "/node_modules/lib0/object.js",
+          "lib0/observable": "/node_modules/lib0/observable.js",
+          "lib0/promise": "/node_modules/lib0/promise.js",
+          "lib0/random": "/node_modules/lib0/random.js",
+          "lib0/set": "/node_modules/lib0/set.js",
+          "lib0/string": "/node_modules/lib0/string.js",
+          "lib0/time": "/node_modules/lib0/time.js",
+          "lib0/environment": "/node_modules/lib0/environment.js",
+          "lib0/buffer": "/node_modules/lib0/buffer.js",
+          "lib0/conditions": "/node_modules/lib0/conditions.js",
+          "lib0/storage": "/node_modules/lib0/storage.js",
+          "lib0/symbol": "/node_modules/lib0/symbol.js",
+          "lib0/number": "/node_modules/lib0/number.js",
+          "lib0/webcrypto": "/node_modules/lib0/webcrypto.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="bar">
+      <button id="add-a">add a node as Maya</button>
+      <button id="add-b">add a node as Ravi</button>
+      <button id="link">cut the link</button>
+      <span id="verdict"></span>
+    </div>
+    <div id="panes">
+      <div class="pane"><div class="status" id="status-a"></div><canvas id="canvas-a"></canvas></div>
+      <div class="pane"><div class="status" id="status-b"></div><canvas id="canvas-b"></canvas></div>
+    </div>
+    <div id="help">two Yjs documents, one room · cut the link, edit both sides, reconnect · cursors are presence, not document</div>
+    <script type="module" src="/apps/canvas-demo/dist/collab.js"></script>
+  </body>
+</html>

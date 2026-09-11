@@ -1,0 +1,23 @@
+[package]
+name = "pricing-core"
+version = "0.1.0"
+edition = "2021"
+description = "Picasso pricing core: Black-Scholes-Merton, implied vol, American exercise, and grid repricing"
+license = "UNLICENSED"
+publish = false
+
+# No dependencies, deliberately. The PRD compiles this crate to both a native
+# service and WASM, and every dependency is a thing that has to work in both.
+[dependencies]
+libm = "0.2.16"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[lib]
+name = "pricing_core"
+path = "src/lib.rs"
+# cdylib for the WASM target the PRD requires; rlib so tests and examples link.
+crate-type = ["cdylib", "rlib"]
