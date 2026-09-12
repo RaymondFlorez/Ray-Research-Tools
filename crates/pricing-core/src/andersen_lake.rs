@@ -231,8 +231,8 @@ impl Solver {
             // Jacobi, not Gauss-Seidel: every node is updated from the same
             // previous boundary, so the answer cannot depend on node ordering.
             let mut next = boundary.h;
-            for i in 0..last {
-                let tau = time * sq(0.5 * (1.0 + self.cheb.nodes[i]));
+            for (i, &node) in self.cheb.nodes.iter().enumerate().take(last) {
+                let tau = time * sq(0.5 * (1.0 + node));
                 if tau <= 0.0 {
                     continue;
                 }

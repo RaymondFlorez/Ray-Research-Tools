@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 31 tests
+npm test --workspace @picasso/canvas-pricing    # 47 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -16,6 +16,7 @@ node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 | `pricing.ts` | One option: price, ten Greeks, both American paths, implied vol |
 | `grid.ts` | A book across a spot-vol grid, in one boundary crossing, with the guard's report |
 | `strategy.ts` | `StrategyNode`: the book in params, the surface out, the badge in runtime state |
+| `curve.ts` | `CurveNode`: bootstrap from deposits, futures and swaps; fit Nelson-Siegel-Svensson; shock |
 
 ## Nothing here does arithmetic
 
@@ -54,6 +55,22 @@ below anything a chart can show.
 `quality` comes back on the result, and belongs in the node's cache key. A draft cell and a
 standard cell are different numbers from different code, and serving one as the other is
 the flickering tick of PRD 7.1 in another costume.
+
+## Two ways to get a curve, and they are different objects
+
+A bootstrap *reproduces* its inputs — `Curve.residuals()` is how a node proves it rather
+than asserting it, and on the market in the tests the worst is under 1e-8 basis points. A
+Nelson-Siegel-Svensson fit *approximates* them, and `NssFit.warning` names the tenor it
+misses by the most, because a six-parameter curve drawn smoothly through thirty bonds is
+what PRD 5.3 calls a smooth lie.
+
+Both run in Rust, not here. A curve feeds prices, and the client's number has to agree with
+the server's bit for bit. Reads go straight back into WASM too: the curve between pins is
+piecewise-constant forwards, and a JavaScript re-interpolation of sampled points would
+quietly be a different curve.
+
+A twelve-instrument bootstrap takes 0.35ms in the browser, inside the PRD's sub-millisecond
+claim.
 
 ## Every read is a copy, and that is not optional
 

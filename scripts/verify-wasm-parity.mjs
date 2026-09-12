@@ -80,9 +80,81 @@ function wasmGrid() {
 
 const grid = wasmGrid();
 
+/**
+ * Rebuilds the same curves through WASM.
+ *
+ * The bootstrap is a bisection that runs until the bracket collapses to
+ * adjacent doubles, so a single differing bit anywhere in the objective sends
+ * the two targets to different pins and every rate off that curve diverges.
+ * That makes this the sharpest parity check in the suite, and the reason the
+ * curve work is checked here rather than only in Rust.
+ */
+function wasmCurves() {
+  const rows = new Map();
+
+  w.pc_curve_reset();
+  w.pc_curve_add_deposit(0.0833, 0.0533);
+  w.pc_curve_add_deposit(0.25, 0.0528);
+  w.pc_curve_add_deposit(0.5, 0.0515);
+  w.pc_curve_add_future(0.5, 0.75, 0.0496, 0.4);
+  w.pc_curve_add_future(0.75, 1.0, 0.0471, 0.7);
+  for (const [maturity, rate] of [
+    [2, 0.0428], [3, 0.0401], [5, 0.0388], [7, 0.0387],
+    [10, 0.0392], [20, 0.0407], [30, 0.0396],
+  ]) {
+    w.pc_curve_add_swap(maturity, rate, 2);
+  }
+  rows.set('curve_pins', w.pc_curve_bootstrap());
+  for (let step = 0; step <= 80; step += 1) {
+    const t = 0.25 + step * 0.5;
+    rows.set(`curve_zero(${fmt(t)})`, w.pc_curve_zero(t));
+    rows.set(`curve_df(${fmt(t)})`, w.pc_curve_discount(t));
+    rows.set(`curve_fwd(${fmt(t)})`, w.pc_curve_forward(t, t + 0.5));
+  }
+  for (let index = 0; index < 12; index += 1) {
+    rows.set(`curve_resid(${index})`, w.pc_curve_residual(index));
+  }
+
+  for (const [shape, bps, pivot] of [[0, 50, 0], [1, 40, 2], [2, 25, 5], [3, 30, 5]]) {
+    w.pc_curve_bootstrap();
+    w.pc_curve_shock(shape, bps, pivot);
+    for (let step = 0; step <= 12; step += 1) {
+      const t = 0.25 + step * 2.5;
+      rows.set(`shock${shape}_zero(${fmt(t)})`, w.pc_curve_zero(t));
+    }
+  }
+
+  w.pc_nss_reset();
+  for (const [tenor, zero] of [
+    [0.25, 0.0521], [0.5, 0.0508], [1, 0.0472], [2, 0.0428], [3, 0.0404],
+    [5, 0.0389], [7, 0.0388], [10, 0.0394], [20, 0.0412], [30, 0.0399],
+  ]) {
+    w.pc_nss_observe(tenor, zero);
+  }
+  rows.set('nss_status', w.pc_nss_fit());
+  for (let which = 0; which < 6; which += 1) rows.set(`nss_param(${which})`, w.pc_nss_param(which));
+  for (let which = 0; which < 3; which += 1) rows.set(`nss_stat(${which})`, w.pc_nss_stat(which));
+  for (let step = 0; step <= 20; step += 1) {
+    const t = 0.25 + step * 1.5;
+    rows.set(`nss_zero(${fmt(t)})`, w.pc_nss_zero(t));
+  }
+  for (let index = 0; index < 10; index += 1) {
+    rows.set(`nss_resid(${index})`, w.pc_nss_residual(index));
+  }
+  return rows;
+}
+
+/** Rust's `{}` for an f64, which is what the native labels were built with. */
+function fmt(value) {
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+const curves = wasmCurves();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
   if (grid.has(label)) return grid.get(label);
+  if (curves.has(label)) return curves.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -125,7 +197,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `and a 40-leg 25x15 grid` +
+    `a 40-leg 25x15 grid, curve bootstraps and NSS fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

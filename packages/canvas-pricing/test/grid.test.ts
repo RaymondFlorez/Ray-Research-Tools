@@ -1,5 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { GridPricer, type Cell, type GridSpec, type Leg, type Market } from '../src/grid.js';
+import {
+  GridPricer,
+  type Cell,
+  type GridSpec,
+  type Leg,
+  type Market,
+  type Quality,
+} from '../src/grid.js';
 import { Pricer } from '../src/pricing.js';
 import { readFloats } from '../src/module.js';
 import { loadPricing } from './load.js';
@@ -151,7 +158,7 @@ describe('the boundary is crossed once', () => {
    */
   it('fits the 90ms budget at the quality a browser should drag at', () => {
     const allAmerican = bigBook(40, 'american');
-    const p95 = (quality: GridSpec['quality']): number => {
+    const p95 = (quality: Quality): number => {
       const spec2 = { ...spec, quality };
       grid.reprice(allAmerican, market, spec2);
       const runs = Array.from({ length: 8 }, () => grid.reprice(allAmerican, market, spec2).elapsedMs);

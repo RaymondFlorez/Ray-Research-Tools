@@ -66,5 +66,80 @@ fn main() {
         emit(format!("guard{which}"), ffi::pc_guard_value(which));
     }
 
+    // Curves. The bootstrap is a bracketed solve that runs to the last
+    // representable bit, so a single differing bit in the objective would send
+    // the two targets to different pins — which makes this the sharpest test of
+    // bit-identity in the crate.
+    ffi::pc_curve_reset();
+    ffi::pc_curve_add_deposit(0.0833, 0.0533);
+    ffi::pc_curve_add_deposit(0.25, 0.0528);
+    ffi::pc_curve_add_deposit(0.5, 0.0515);
+    ffi::pc_curve_add_future(0.5, 0.75, 0.0496, 0.4);
+    ffi::pc_curve_add_future(0.75, 1.0, 0.0471, 0.7);
+    for (maturity, rate) in [
+        (2.0, 0.0428),
+        (3.0, 0.0401),
+        (5.0, 0.0388),
+        (7.0, 0.0387),
+        (10.0, 0.0392),
+        (20.0, 0.0407),
+        (30.0, 0.0396),
+    ] {
+        ffi::pc_curve_add_swap(maturity, rate, 2.0);
+    }
+    emit("curve_pins".to_string(), ffi::pc_curve_bootstrap() as f64);
+    for step in 0..=80 {
+        let t = 0.25 + step as f64 * 0.5;
+        emit(format!("curve_zero({t})"), ffi::pc_curve_zero(t));
+        emit(format!("curve_df({t})"), ffi::pc_curve_discount(t));
+        emit(format!("curve_fwd({t})"), ffi::pc_curve_forward(t, t + 0.5));
+    }
+    for index in 0..12 {
+        emit(format!("curve_resid({index})"), ffi::pc_curve_residual(index));
+    }
+
+    // The same curve, rotated and shifted.
+    for (shape, bps, pivot) in [(0, 50.0, 0.0), (1, 40.0, 2.0), (2, 25.0, 5.0), (3, 30.0, 5.0)] {
+        ffi::pc_curve_bootstrap();
+        ffi::pc_curve_shock(shape, bps, pivot);
+        for step in 0..=12 {
+            let t = 0.25 + step as f64 * 2.5;
+            emit(format!("shock{shape}_zero({t})"), ffi::pc_curve_zero(t));
+        }
+    }
+
+    // Nelson-Siegel-Svensson: a grid search over two decay times, so every
+    // candidate has to score identically on both targets or the search lands
+    // somewhere else entirely.
+    ffi::pc_nss_reset();
+    for (tenor, zero) in [
+        (0.25, 0.0521),
+        (0.5, 0.0508),
+        (1.0, 0.0472),
+        (2.0, 0.0428),
+        (3.0, 0.0404),
+        (5.0, 0.0389),
+        (7.0, 0.0388),
+        (10.0, 0.0394),
+        (20.0, 0.0412),
+        (30.0, 0.0399),
+    ] {
+        ffi::pc_nss_observe(tenor, zero);
+    }
+    emit("nss_status".to_string(), ffi::pc_nss_fit() as f64);
+    for which in 0..6 {
+        emit(format!("nss_param({which})"), ffi::pc_nss_param(which));
+    }
+    for which in 0..3 {
+        emit(format!("nss_stat({which})"), ffi::pc_nss_stat(which));
+    }
+    for step in 0..=20 {
+        let t = 0.25 + step as f64 * 1.5;
+        emit(format!("nss_zero({t})"), ffi::pc_nss_zero(t));
+    }
+    for index in 0..10 {
+        emit(format!("nss_resid({index})"), ffi::pc_nss_residual(index));
+    }
+
     println!("{}", rows.join("\n"));
 }

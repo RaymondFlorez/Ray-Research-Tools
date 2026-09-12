@@ -1,12 +1,13 @@
 # pricing-core
 
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
-exercise by Andersen-Lake, and multi-leg grid repricing with the accuracy guard from PRD
-Appendix C.2.
+exercise by Andersen-Lake, multi-leg grid repricing with the accuracy guard from PRD
+Appendix C.2, and yield curves — bootstrapped, fitted, and shocked.
 
 ```bash
-cargo test --release                              # 37 tests
+cargo test --release                              # 64 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
+cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
 cargo run --release --example al_sweep            # which scheme parameter actually matters
 cargo run --release --example error_scan          # fast-vs-exact error sweep
@@ -202,6 +203,64 @@ That is also why `Solver::price` routes through the unit boundary itself rather 
 solving at the contract's own strike. The two are identical in algebra and differ in the
 last bit, and PRD 7.1 wants the optimistic client price and the authoritative server one to
 *agree*, not to nearly agree. One arithmetic path is the only way to get that.
+
+## Curves
+
+PRD 5.3 asks for two ways to get a curve, and they are not the same kind of object.
+
+A **bootstrap reproduces its inputs.** Every instrument it was built from reprices to par
+off it, and `Curve::bootstrap_residuals` returns those residuals rather than asserting they
+are small — "this curve reproduces the market" is a claim a `CurveNode` should be able to
+show. On the twelve-instrument curve in the tests the worst residual is 4e-16, which is the
+floor of a double.
+
+A **fit approximates its inputs**, and the residuals are the whole point. Six
+Nelson-Siegel-Svensson parameters through thirty bonds will miss something, and PRD 5.3 is
+explicit about the failure mode: "a fit with poor residuals shows a warning rather than a
+smooth lie." So `NssFit` carries the RMSE, the worst point, *which tenor* it was, and a
+warning above two basis points of RMSE — wider than the bid-ask on an on-the-run, so a miss
+that size is a bond the curve does not explain.
+
+Only the two decay times are genuinely nonlinear; for any pair of them the best four betas
+are one 4x4 solve. So the fit searches a log-spaced grid over the decay times and refines
+inside the winning cell — slower than a gradient method and indifferent to where it starts,
+on a surface that is known to have local minima.
+
+**Shocks all compile to one representation.** Appendix A puts the wire type as
+`{ kind: 'curve'; currency: string; tenorDeltasBps: Record<string, number> }`, so parallel,
+steepener, flattener, butterfly and a shape the analyst drew with the pen are constructors
+for a vector of basis-point deltas at the standard tenors — not five code paths that can
+disagree about what composing two shocks means.
+
+Measured, against the PRD's "sub-millisecond range":
+
+| | p50 | p95 |
+|---|---|---|
+| bootstrap, 19 instruments | 314µs | 561µs |
+| parallel shock, applied | 0.9µs | 0.9µs |
+| DV01, 30y bond | 1.9µs | 1.9µs |
+| key rate DV01, 10 buckets | 14.2µs | 14.8µs |
+| Nelson-Siegel-Svensson fit | 684µs | 739µs |
+
+In the browser the twelve-instrument bootstrap is 0.35ms, also inside it.
+
+### Why the bootstrap uses bisection
+
+A swap's intermediate payments interpolate against the very pin being solved for, so that
+leg of the bootstrap is a root find rather than a closed form. It uses bisection, and runs
+until the bracket collapses to adjacent doubles.
+
+Bisection's control flow depends on nothing but the *sign* of the objective. A last-bit
+disagreement between two targets can only matter within one ulp of the root, where the
+bracket still contains it — so the answer moves by bits and the iteration count does not
+move at all. Newton's step size *is* the objective's value, so the same last-bit
+disagreement changes where the next evaluation lands, how many are needed, and what the two
+targets converge to. For a crate that has to be bit-identical on client and server, that is
+the difference that matters, and `verify-wasm-parity.mjs` now covers 349 curve values to
+prove it.
+
+Running to the last bit rather than to a tolerance costs about three times as much and
+stays inside the budget, so precision is the cheaper thing to spend.
 
 ## Solver honesty
 

@@ -359,3 +359,222 @@ pub extern "C" fn pc_guard_badge_ptr() -> *const u8 {
 pub extern "C" fn pc_guard_badge_len() -> i32 {
     BADGE.with(|badge| badge.borrow().len() as i32)
 }
+
+// ---------------------------------------------------------------------------
+// Curves (PRD 5.3).
+//
+// "Curve bootstraps must run in the sub-millisecond range and must produce
+// bit-identical results on client and server." Same shape as the grid surface:
+// the instruments are pushed one at a time, the build happens in one call, and
+// the results are read back by index — a curve is tens of numbers, not
+// thousands, so there is no buffer to share.
+
+use crate::curve::{self, Curve, CurveShock, Instrument, Nss, NssFit};
+
+thread_local! {
+    static INSTRUMENTS: RefCell<Vec<Instrument>> = const { RefCell::new(Vec::new()) };
+    static CURVE: RefCell<Option<Curve>> = const { RefCell::new(None) };
+    static OBSERVED: RefCell<Vec<(f64, f64)>> = const { RefCell::new(Vec::new()) };
+    static FIT: RefCell<Option<NssFit>> = const { RefCell::new(None) };
+    static WARNING: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_reset() {
+    INSTRUMENTS.with(|i| i.borrow_mut().clear());
+    CURVE.with(|c| *c.borrow_mut() = None);
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_add_deposit(maturity: f64, rate: f64) {
+    INSTRUMENTS.with(|i| i.borrow_mut().push(Instrument::Deposit { maturity, rate }));
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_add_future(start: f64, end: f64, rate: f64, convexity_bps: f64) {
+    INSTRUMENTS
+        .with(|i| i.borrow_mut().push(Instrument::Future { start, end, rate, convexity_bps }));
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_add_swap(maturity: f64, rate: f64, frequency: f64) {
+    INSTRUMENTS.with(|i| i.borrow_mut().push(Instrument::Swap { maturity, rate, frequency }));
+}
+
+/// Bootstraps. Returns the pin count, or -1 if the instruments do not build.
+#[no_mangle]
+pub extern "C" fn pc_curve_bootstrap() -> i32 {
+    INSTRUMENTS.with(|instruments| {
+        let instruments = instruments.borrow();
+        match curve::bootstrap(&instruments) {
+            Ok(built) => {
+                let pins = built.pins().count() as i32;
+                CURVE.with(|c| *c.borrow_mut() = Some(built));
+                pins
+            }
+            Err(_) => {
+                CURVE.with(|c| *c.borrow_mut() = None);
+                -1
+            }
+        }
+    })
+}
+
+/// Replaces the built curve with a shocked copy.
+///
+/// `shape` is 0 parallel, 1 steepener, 2 flattener, 3 butterfly. `pivot` is the
+/// rotation point or the belly, and is ignored by a parallel shift.
+#[no_mangle]
+pub extern "C" fn pc_curve_shock(shape: i32, bps: f64, pivot: f64) -> i32 {
+    let shock = match shape {
+        1 => CurveShock::steepener(bps, pivot),
+        2 => CurveShock::flattener(bps, pivot),
+        3 => CurveShock::butterfly(bps, pivot),
+        _ => CurveShock::parallel(bps),
+    };
+    CURVE.with(|c| {
+        let mut slot = c.borrow_mut();
+        match slot.as_ref() {
+            Some(built) => {
+                let shocked = shock.apply(built);
+                let pins = shocked.pins().count() as i32;
+                *slot = Some(shocked);
+                pins
+            }
+            None => -1,
+        }
+    })
+}
+
+fn with_curve<F: FnOnce(&Curve) -> f64>(f: F) -> f64 {
+    CURVE.with(|c| match c.borrow().as_ref() {
+        Some(built) => f(built),
+        None => f64::NAN,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_zero(t: f64) -> f64 {
+    with_curve(|c| c.zero_rate(t))
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_discount(t: f64) -> f64 {
+    with_curve(|c| c.discount(t))
+}
+
+#[no_mangle]
+pub extern "C" fn pc_curve_forward(t1: f64, t2: f64) -> f64 {
+    with_curve(|c| c.forward_rate(t1, t2))
+}
+
+/// How far the built curve is from repricing instrument `index` at par.
+///
+/// Exposed rather than asserted: "this curve reprices its own inputs" is a
+/// claim a `CurveNode` should be able to show, not one the analyst takes on
+/// trust.
+#[no_mangle]
+pub extern "C" fn pc_curve_residual(index: i32) -> f64 {
+    INSTRUMENTS.with(|instruments| {
+        let instruments = instruments.borrow();
+        match instruments.get(index.max(0) as usize) {
+            Some(instrument) => with_curve(|c| instrument.par_residual(c)),
+            None => f64::NAN,
+        }
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_reset() {
+    OBSERVED.with(|o| o.borrow_mut().clear());
+    FIT.with(|f| *f.borrow_mut() = None);
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_observe(tenor: f64, zero_rate: f64) {
+    OBSERVED.with(|o| o.borrow_mut().push((tenor, zero_rate)));
+}
+
+/// Fits. Returns 1 on success, 0 if the fit was refused, and -1 if it fitted
+/// but the residuals are too large to present as the curve.
+#[no_mangle]
+pub extern "C" fn pc_nss_fit() -> i32 {
+    OBSERVED.with(|observed| {
+        let observed = observed.borrow();
+        let tenors: Vec<f64> = observed.iter().map(|&(t, _)| t).collect();
+        let zeros: Vec<f64> = observed.iter().map(|&(_, z)| z).collect();
+        match curve::fit_nss(&tenors, &zeros) {
+            Some(fit) => {
+                let code = if fit.warning.is_some() { -1 } else { 1 };
+                WARNING.with(|w| *w.borrow_mut() = fit.warning.clone().unwrap_or_default());
+                FIT.with(|f| *f.borrow_mut() = Some(fit));
+                code
+            }
+            None => {
+                WARNING.with(|w| w.borrow_mut().clear());
+                FIT.with(|f| *f.borrow_mut() = None);
+                0
+            }
+        }
+    })
+}
+
+/// A fitted parameter: 0 beta0, 1 beta1, 2 beta2, 3 beta3, 4 tau1, 5 tau2.
+#[no_mangle]
+pub extern "C" fn pc_nss_param(which: i32) -> f64 {
+    FIT.with(|f| match f.borrow().as_ref() {
+        Some(NssFit { params: Nss { beta0, beta1, beta2, beta3, tau1, tau2 }, .. }) => {
+            match which {
+                0 => *beta0,
+                1 => *beta1,
+                2 => *beta2,
+                3 => *beta3,
+                4 => *tau1,
+                5 => *tau2,
+                _ => f64::NAN,
+            }
+        }
+        None => f64::NAN,
+    })
+}
+
+/// A fit statistic: 0 rmse in bps, 1 worst absolute residual in bps, 2 the
+/// tenor where it is worst.
+#[no_mangle]
+pub extern "C" fn pc_nss_stat(which: i32) -> f64 {
+    FIT.with(|f| match f.borrow().as_ref() {
+        Some(fit) => match which {
+            0 => fit.rmse_bps,
+            1 => fit.max_abs_bps,
+            2 => fit.worst_tenor,
+            _ => f64::NAN,
+        },
+        None => f64::NAN,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_zero(t: f64) -> f64 {
+    FIT.with(|f| match f.borrow().as_ref() {
+        Some(fit) => fit.params.zero_rate(t),
+        None => f64::NAN,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_residual(index: i32) -> f64 {
+    FIT.with(|f| match f.borrow().as_ref() {
+        Some(fit) => fit.residuals.get(index.max(0) as usize).copied().unwrap_or(f64::NAN),
+        None => f64::NAN,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_warning_ptr() -> *const u8 {
+    WARNING.with(|w| w.borrow().as_ptr())
+}
+
+#[no_mangle]
+pub extern "C" fn pc_nss_warning_len() -> i32 {
+    WARNING.with(|w| w.borrow().len() as i32)
+}

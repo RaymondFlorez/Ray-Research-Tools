@@ -53,6 +53,27 @@ export interface PricingExports {
   pc_guard_value(which: number): number;
   pc_guard_badge_ptr(): number;
   pc_guard_badge_len(): number;
+
+  pc_curve_reset(): void;
+  pc_curve_add_deposit(maturity: number, rate: number): void;
+  pc_curve_add_future(start: number, end: number, rate: number, convexityBps: number): void;
+  pc_curve_add_swap(maturity: number, rate: number, frequency: number): void;
+  pc_curve_bootstrap(): number;
+  pc_curve_shock(shape: number, bps: number, pivot: number): number;
+  pc_curve_zero(t: number): number;
+  pc_curve_discount(t: number): number;
+  pc_curve_forward(t1: number, t2: number): number;
+  pc_curve_residual(index: number): number;
+
+  pc_nss_reset(): void;
+  pc_nss_observe(tenor: number, zeroRate: number): void;
+  pc_nss_fit(): number;
+  pc_nss_param(which: number): number;
+  pc_nss_stat(which: number): number;
+  pc_nss_zero(t: number): number;
+  pc_nss_residual(index: number): number;
+  pc_nss_warning_ptr(): number;
+  pc_nss_warning_len(): number;
 }
 
 const REQUIRED: readonly (keyof PricingExports)[] = [
@@ -63,6 +84,11 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_grid_data', 'pc_grid_stride', 'pc_grid_axis_ptr', 'pc_grid_axis_len',
   'pc_guard_value',
   'pc_guard_badge_ptr', 'pc_guard_badge_len',
+  'pc_curve_reset', 'pc_curve_add_deposit', 'pc_curve_add_future', 'pc_curve_add_swap',
+  'pc_curve_bootstrap', 'pc_curve_shock', 'pc_curve_zero', 'pc_curve_discount',
+  'pc_curve_forward', 'pc_curve_residual',
+  'pc_nss_reset', 'pc_nss_observe', 'pc_nss_fit', 'pc_nss_param', 'pc_nss_stat',
+  'pc_nss_zero', 'pc_nss_residual', 'pc_nss_warning_ptr', 'pc_nss_warning_len',
 ];
 
 /**

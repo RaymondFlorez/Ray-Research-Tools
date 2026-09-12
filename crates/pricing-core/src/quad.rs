@@ -179,8 +179,8 @@ mod test {
         let cheb = Chebyshev::new(8);
         let f = |z: f64| 3.0 * z * z * z - z + 0.25;
         let mut values = [0.0; MAX_NODES];
-        for i in 0..cheb.len {
-            values[i] = f(cheb.nodes[i]);
+        for (value, &node) in values.iter_mut().zip(&cheb.nodes).take(cheb.len) {
+            *value = f(node);
         }
         for probe in [-1.0, -0.731, -0.25, 0.0, 0.4, 0.912, 1.0] {
             assert!(libm::fabs(cheb.eval(&values, probe) - f(probe)) < 1e-12, "at {probe}");
@@ -191,8 +191,8 @@ mod test {
     fn chebyshev_returns_node_values_exactly() {
         let cheb = Chebyshev::new(6);
         let mut values = [0.0; MAX_NODES];
-        for i in 0..cheb.len {
-            values[i] = (i as f64) * 0.37;
+        for (i, value) in values.iter_mut().enumerate().take(cheb.len) {
+            *value = (i as f64) * 0.37;
         }
         for i in 0..cheb.len {
             assert_eq!(cheb.eval(&values, cheb.nodes[i]), values[i]);
