@@ -578,3 +578,179 @@ pub extern "C" fn pc_nss_warning_ptr() -> *const u8 {
 pub extern "C" fn pc_nss_warning_len() -> i32 {
     WARNING.with(|w| w.borrow().len() as i32)
 }
+
+// ---------------------------------------------------------------------------
+// Bond analytics and OAS (PRD 5.3).
+
+use crate::bond;
+use crate::hull_white::{HullWhite, Lattice, LatticeBond};
+
+thread_local! {
+    static FLOWS: RefCell<Vec<(f64, f64)>> = const { RefCell::new(Vec::new()) };
+    static LATTICE: RefCell<Option<Lattice>> = const { RefCell::new(None) };
+}
+
+#[no_mangle]
+pub extern "C" fn pc_bond_reset() {
+    FLOWS.with(|f| f.borrow_mut().clear());
+}
+
+#[no_mangle]
+pub extern "C" fn pc_bond_add_flow(time: f64, amount: f64) {
+    FLOWS.with(|f| f.borrow_mut().push((time, amount)));
+}
+
+/// A yield metric: 0 yield, 1 Macaulay, 2 modified, 3 convexity, 4 DV01.
+///
+/// All five come from one yield solve, so they are returned by index rather
+/// than solved five times.
+#[no_mangle]
+pub extern "C" fn pc_bond_metric(which: i32, price: f64, frequency: f64) -> f64 {
+    FLOWS.with(|flows| {
+        let flows = flows.borrow();
+        match bond::yield_metrics(&flows, price, frequency) {
+            Some(m) => match which {
+                0 => m.yield_to_maturity,
+                1 => m.macaulay_duration,
+                2 => m.modified_duration,
+                3 => m.convexity,
+                4 => m.dv01,
+                _ => f64::NAN,
+            },
+            None => f64::NAN,
+        }
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_bond_price_at_yield(y: f64, frequency: f64) -> f64 {
+    FLOWS.with(|flows| bond::price_at_yield(&flows.borrow(), y, frequency))
+}
+
+/// Spread over the curve built by `pc_curve_bootstrap`. NaN if there is none.
+#[no_mangle]
+pub extern "C" fn pc_bond_z_spread(price: f64) -> f64 {
+    FLOWS.with(|flows| {
+        let flows = flows.borrow();
+        CURVE.with(|c| match c.borrow().as_ref() {
+            Some(curve) => bond::z_spread(&flows, curve, price).unwrap_or(f64::NAN),
+            None => f64::NAN,
+        })
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_bond_asset_swap(price: f64, frequency: f64, notional: f64) -> f64 {
+    FLOWS.with(|flows| {
+        let flows = flows.borrow();
+        CURVE.with(|c| match c.borrow().as_ref() {
+            Some(curve) => {
+                bond::asset_swap_spread(&flows, curve, price, frequency, notional)
+                    .unwrap_or(f64::NAN)
+            }
+            None => f64::NAN,
+        })
+    })
+}
+
+/// Calibrates a Hull-White lattice to the built curve. Returns the step count,
+/// or -1 if there is no curve to calibrate to.
+#[no_mangle]
+pub extern "C" fn pc_hw_calibrate(
+    mean_reversion: f64,
+    vol: f64,
+    dt: f64,
+    steps: i32,
+) -> i32 {
+    let steps = steps.max(1) as usize;
+    CURVE.with(|c| match c.borrow().as_ref() {
+        Some(curve) => {
+            let lattice = HullWhite { mean_reversion, vol }.calibrate(curve, dt, steps);
+            let built = lattice.steps() as i32;
+            LATTICE.with(|l| *l.borrow_mut() = Some(lattice));
+            built
+        }
+        None => {
+            LATTICE.with(|l| *l.borrow_mut() = None);
+            -1
+        }
+    })
+}
+
+/// The lattice's own zero-coupon bond to a slice, which should equal the
+/// curve's. The calibration condition, readable from outside.
+#[no_mangle]
+pub extern "C" fn pc_hw_zero_coupon(step: i32) -> f64 {
+    LATTICE.with(|l| match l.borrow().as_ref() {
+        Some(lattice) => lattice.zero_coupon(step.max(0) as usize),
+        None => f64::NAN,
+    })
+}
+
+fn lattice_bond(coupon: f64, redemption: f64, slices: i32, call_from: i32, call_price: f64) -> LatticeBond {
+    let slices = slices.max(1) as usize;
+    let mut bond = LatticeBond::bullet(coupon, redemption, slices);
+    bond.flows[0] = 0.0;
+    if call_from >= 0 {
+        bond = bond.callable_from(call_from as usize, call_price);
+    }
+    bond
+}
+
+/// Prices a bond on the calibrated lattice. `call_from` below zero means no call.
+#[no_mangle]
+pub extern "C" fn pc_hw_bond_price(
+    coupon: f64,
+    redemption: f64,
+    slices: i32,
+    call_from: i32,
+    call_price: f64,
+    spread: f64,
+) -> f64 {
+    LATTICE.with(|l| match l.borrow().as_ref() {
+        Some(lattice) => lattice.bond_price(
+            &lattice_bond(coupon, redemption, slices, call_from, call_price),
+            spread,
+        ),
+        None => f64::NAN,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_hw_oas(
+    coupon: f64,
+    redemption: f64,
+    slices: i32,
+    call_from: i32,
+    call_price: f64,
+    price: f64,
+) -> f64 {
+    LATTICE.with(|l| match l.borrow().as_ref() {
+        Some(lattice) => lattice
+            .option_adjusted_spread(
+                &lattice_bond(coupon, redemption, slices, call_from, call_price),
+                price,
+            )
+            .unwrap_or(f64::NAN),
+        None => f64::NAN,
+    })
+}
+
+/// What the embedded call is worth, in price terms.
+#[no_mangle]
+pub extern "C" fn pc_hw_option_value(
+    coupon: f64,
+    redemption: f64,
+    slices: i32,
+    call_from: i32,
+    call_price: f64,
+    spread: f64,
+) -> f64 {
+    LATTICE.with(|l| match l.borrow().as_ref() {
+        Some(lattice) => lattice.option_value(
+            &lattice_bond(coupon, redemption, slices, call_from, call_price),
+            spread,
+        ),
+        None => f64::NAN,
+    })
+}

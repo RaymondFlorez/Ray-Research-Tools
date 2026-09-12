@@ -11,9 +11,11 @@
 pub mod american;
 pub mod ffi;
 pub mod andersen_lake;
+pub mod bond;
 pub mod bsm;
 pub mod curve;
 pub mod grid;
+pub mod hull_white;
 pub mod implied;
 pub mod normal;
 pub mod quad;

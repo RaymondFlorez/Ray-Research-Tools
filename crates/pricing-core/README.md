@@ -2,10 +2,11 @@
 
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
 exercise by Andersen-Lake, multi-leg grid repricing with the accuracy guard from PRD
-Appendix C.2, and yield curves — bootstrapped, fitted, and shocked.
+Appendix C.2, yield curves — bootstrapped, fitted, and shocked — and bond analytics with
+option-adjusted spreads on a Hull-White lattice.
 
 ```bash
-cargo test --release                              # 64 tests
+cargo test --release                              # 90 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -261,6 +262,46 @@ prove it.
 
 Running to the last bit rather than to a tolerance costs about three times as much and
 stays inside the budget, so precision is the cheaper thing to spend.
+
+## Bonds, and the spread that survives a callable
+
+PRD 5.3's analytics list splits into two questions that are worth keeping apart.
+
+**Yield metrics** compress a bond to one number and then describe its behaviour in that
+number's own terms. Conventional, useful, and blind to the curve's shape: a yield moves
+when the curve steepens even if nothing about the bond changed.
+
+**Spread metrics** keep the curve and ask what has to be added to it. `z_spread` is the
+constant continuous spread that reproduces a price, and it is the number that survives a
+shape change — `the_z_spread_survives_a_shape_change_that_moves_the_yield` puts the same
+bond on a flat curve and a steepened one and gets the same cheapness out of both.
+
+For a **callable** even that question is malformed. Part of the price is a short option, and
+a z-spread charges the whole discount to credit. So the option gets priced explicitly, on a
+Hull-White trinomial lattice fitted to the curve by forward induction, and the OAS is the
+spread that explains what is left.
+
+The test that matters there is `oas_of_a_straight_bond_is_its_z_spread`. A bond with no call
+schedule has no option to adjust for, so its OAS *must* be its z-spread — and the two are
+computed by entirely separate routes: a bisection over a closed-form discounted sum, and a
+bisection over a backward induction on a calibrated tree. They agree to 1e-9, and nothing
+makes them agree except both being right.
+
+Two things the tests caught in this module, both mine:
+
+- The lattice dropped the coupon due on the maturity date. The backward induction starts one
+  slice before the horizon, so the terminal slice has to carry it — and the zero-coupon
+  calibration check passed the whole time, which is what localised it.
+- `effective_risk` shocks continuously compounded zero rates, so it produces the **Macaulay**
+  duration, not the modified one. Comparing it against a semiannual modified duration looks
+  nearly right and is off by `(1 + y/2)` — two percent on a ten-year bond, which is the kind
+  of silent bias a risk system carries for years. There is now a test asserting the two
+  conventions differ, and visibly.
+
+`asset_swap_spread` takes the notional explicitly rather than assuming 100. The annuity is
+per unit of notional and the price is in the flows' own units; guessing would be right for a
+bond quoted per hundred and a factor of a hundred wrong for anything else, silently — which
+is how the first version of it was wrong.
 
 ## Solver honesty
 

@@ -151,10 +151,43 @@ function fmt(value) {
 
 const curves = wasmCurves();
 
+/** Bond analytics and the Hull-White lattice, through WASM. */
+function wasmBonds() {
+  const rows = new Map();
+  w.pc_curve_bootstrap();
+  w.pc_bond_reset();
+  for (let i = 1; i <= 20; i += 1) w.pc_bond_add_flow(0.5 * i, i === 20 ? 102 : 2);
+
+  for (const [which, label] of [
+    [0, 'ytm'], [1, 'macaulay'], [2, 'modified'], [3, 'convexity'], [4, 'dv01'],
+  ]) {
+    for (const price of [92, 100, 107.5]) {
+      rows.set(`bond_${label}(${price})`, w.pc_bond_metric(which, price, 2));
+    }
+  }
+  for (const price of [92, 100, 107.5]) {
+    rows.set(`bond_z(${price})`, w.pc_bond_z_spread(price));
+    rows.set(`bond_asw(${price})`, w.pc_bond_asset_swap(price, 2, 100));
+    rows.set(`bond_pay(${price})`, w.pc_bond_price_at_yield(price / 2000, 2));
+  }
+
+  rows.set('hw_steps', w.pc_hw_calibrate(0.05, 0.011, 0.5, 20));
+  for (let step = 1; step <= 20; step += 1) rows.set(`hw_zc(${step})`, w.pc_hw_zero_coupon(step));
+  for (const [callFrom, callPrice] of [[-1, 0], [6, 100], [4, 102]]) {
+    rows.set(`hw_price(${callFrom})`, w.pc_hw_bond_price(2, 100, 20, callFrom, callPrice, 0.008));
+    rows.set(`hw_oas(${callFrom})`, w.pc_hw_oas(2, 100, 20, callFrom, callPrice, 96.5));
+    rows.set(`hw_opt(${callFrom})`, w.pc_hw_option_value(2, 100, 20, callFrom, callPrice, 0.008));
+  }
+  return rows;
+}
+
+const bonds = wasmBonds();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
   if (grid.has(label)) return grid.get(label);
   if (curves.has(label)) return curves.get(label);
+  if (bonds.has(label)) return bonds.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -197,7 +230,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg 25x15 grid, curve bootstraps and NSS fits` +
+    `a 40-leg 25x15 grid, curves, bond analytics and a Hull-White lattice` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

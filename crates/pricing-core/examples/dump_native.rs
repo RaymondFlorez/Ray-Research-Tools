@@ -141,5 +141,46 @@ fn main() {
         emit(format!("nss_resid({index})"), ffi::pc_nss_residual(index));
     }
 
+    // Bond analytics and OAS. The lattice is a backward induction over a tree
+    // fitted by forward induction, so a single bit out of place anywhere
+    // propagates through every node of both passes.
+    ffi::pc_curve_bootstrap();
+    ffi::pc_bond_reset();
+    for i in 1..=20 {
+        let t = 0.5 * i as f64;
+        ffi::pc_bond_add_flow(t, if i == 20 { 102.0 } else { 2.0 });
+    }
+    for (which, label) in
+        [(0, "ytm"), (1, "macaulay"), (2, "modified"), (3, "convexity"), (4, "dv01")]
+    {
+        for &price in &[92.0, 100.0, 107.5] {
+            emit(format!("bond_{label}({price})"), ffi::pc_bond_metric(which, price, 2.0));
+        }
+    }
+    for &price in &[92.0, 100.0, 107.5] {
+        emit(format!("bond_z({price})"), ffi::pc_bond_z_spread(price));
+        emit(format!("bond_asw({price})"), ffi::pc_bond_asset_swap(price, 2.0, 100.0));
+        emit(format!("bond_pay({price})"), ffi::pc_bond_price_at_yield(price / 2000.0, 2.0));
+    }
+
+    emit("hw_steps".to_string(), ffi::pc_hw_calibrate(0.05, 0.011, 0.5, 20) as f64);
+    for step in 1..=20 {
+        emit(format!("hw_zc({step})"), ffi::pc_hw_zero_coupon(step));
+    }
+    for (call_from, call_price) in [(-1, 0.0), (6, 100.0), (4, 102.0)] {
+        emit(
+            format!("hw_price({call_from})"),
+            ffi::pc_hw_bond_price(2.0, 100.0, 20, call_from, call_price, 0.008),
+        );
+        emit(
+            format!("hw_oas({call_from})"),
+            ffi::pc_hw_oas(2.0, 100.0, 20, call_from, call_price, 96.5),
+        );
+        emit(
+            format!("hw_opt({call_from})"),
+            ffi::pc_hw_option_value(2.0, 100.0, 20, call_from, call_price, 0.008),
+        );
+    }
+
     println!("{}", rows.join("\n"));
 }
