@@ -102,7 +102,11 @@ fn main() {
     // only parameter worth spending on is the iteration count.
     println!("\ncandidates");
     for (l, m, n, q) in [
+        (5, 5, 5, 5),
+        (5, 6, 5, 7),
+        (5, 7, 5, 7),
         (5, 8, 5, 7),
+        (7, 8, 6, 7),
         (5, 8, 6, 9),
         (7, 8, 6, 11),
         (5, 12, 6, 9),

@@ -178,7 +178,7 @@ pub extern "C" fn pc_norm_cdf(x: f64) -> f64 {
 // The state is thread-local and the module is single-threaded, which is what
 // WASM gives us; the native side is only ever driven by the parity harness.
 
-use crate::grid::{self, Cell, GridSpec, GuardConfig, GuardOutcome, Leg, Market, Style};
+use crate::grid::{self, Cell, GridSpec, GuardConfig, GuardOutcome, Leg, Market, Quality, Style};
 use std::cell::RefCell;
 
 /// Floats written per cell: value, delta, gamma, vega, theta, exact flag.
@@ -231,6 +231,11 @@ pub extern "C" fn pc_book_len() -> i32 {
 }
 
 /// Reprices the book over the grid. Returns the cell count, or -1 if empty.
+///
+/// `quality` is 0 draft, 1 standard, 2 exact. Anything else is standard, because
+/// a caller that passes a quality this build does not know about should get the
+/// safe answer rather than the fast one.
+#[allow(clippy::too_many_arguments)]
 #[no_mangle]
 pub extern "C" fn pc_grid_reprice(
     spot: f64,
@@ -241,6 +246,7 @@ pub extern "C" fn pc_grid_reprice(
     vol_steps: i32,
     vol_range: f64,
     decay_days: f64,
+    quality: i32,
 ) -> i32 {
     let market = Market { spot, rate, dividend };
     let mut spec = GridSpec::linear(
@@ -250,6 +256,11 @@ pub extern "C" fn pc_grid_reprice(
         vol_range,
     );
     spec.time_decay_days = decay_days;
+    spec.quality = match quality {
+        0 => Quality::Draft,
+        2 => Quality::Exact,
+        _ => Quality::Standard,
+    };
 
     BOOK.with(|book| {
         let book = book.borrow();

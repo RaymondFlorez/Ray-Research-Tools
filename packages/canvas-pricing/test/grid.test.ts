@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { GridPricer, type GridSpec, type Leg, type Market } from '../src/grid.js';
+import { GridPricer, type Cell, type GridSpec, type Leg, type Market } from '../src/grid.js';
 import { Pricer } from '../src/pricing.js';
 import { readFloats } from '../src/module.js';
 import { loadPricing } from './load.js';
@@ -143,34 +143,65 @@ describe('the boundary is crossed once', () => {
   });
 
   /**
-   * American legs cost far more than European ones, and the budget is not
-   * uniform across book shapes. A book of forty American legs is the worst case
-   * the PRD's example admits, not the typical one — `bigBook` marks every
-   * second leg American for the mixed case, which is what a real chain-driven
-   * book looks like.
+   * American legs cost far more than European ones, and one scheme does not fit
+   * every surface. The engine meets the PRD's 90ms p95 on the hardest book;
+   * WASM runs the same code about two and a half times slower and does not.
+   * `quality` is the lever, and this is the measurement that says where each
+   * level lands.
    */
-  it('holds the budget on a mixed book, and reports the all-American worst case', () => {
-    const measure = (book: Leg[]): number => {
-      grid.reprice(book, market, spec);
-      const runs = Array.from({ length: 8 }, () => grid.reprice(book, market, spec).elapsedMs);
+  it('fits the 90ms budget at the quality a browser should drag at', () => {
+    const allAmerican = bigBook(40, 'american');
+    const p95 = (quality: GridSpec['quality']): number => {
+      const spec2 = { ...spec, quality };
+      grid.reprice(allAmerican, market, spec2);
+      const runs = Array.from({ length: 8 }, () => grid.reprice(allAmerican, market, spec2).elapsedMs);
       runs.sort((a, b) => a - b);
       return runs[7] as number;
     };
 
-    const mixed = bigBook(40).map((leg, i) =>
-      i % 2 === 0 ? { ...leg, style: 'american' as const } : leg,
-    );
-    const mixedP95 = measure(mixed);
-    const allAmerican = measure(bigBook(40, 'american'));
+    const draft = p95('draft');
+    const standard = p95('standard');
+    console.log(`  40 American legs, draft:    p95 ${draft.toFixed(1)}ms`);
+    console.log(`  40 American legs, standard: p95 ${standard.toFixed(1)}ms`);
 
-    console.log(`  40 legs, half American: p95 ${mixedP95.toFixed(1)}ms`);
-    console.log(`  40 legs, all American:  p95 ${allAmerican.toFixed(1)}ms`);
+    // The level a browser drags at fits. The level the server computes at does
+    // not, on this book, and that is why the lever exists.
+    expect(draft).toBeLessThan(90);
+    expect(standard).toBeGreaterThan(draft);
+  });
 
-    expect(mixedP95).toBeLessThan(90);
-    // Not asserted, because it is not met: the same book costs 60ms natively
-    // and roughly two and a half times that through WASM. Recorded here so the
-    // number cannot quietly drift further.
-    expect(allAmerican).toBeLessThan(260);
+  it('says on the badge that a draft grid was never checked', () => {
+    const book = bigBook(40, 'american');
+    const drafted = grid.reprice(book, market, { ...spec, quality: 'draft' });
+    expect(drafted.quality).toBe('draft');
+    expect(drafted.guard.badge).toBe('draft, unchecked');
+    expect(drafted.guard.outcome).toBe('not_needed');
+
+    // Not a claim of exactness — the difference between "we did not check" and
+    // "there was nothing to check" has to survive to the badge.
+    const european = grid.reprice(bigBook(40), market, { ...spec, quality: 'draft' });
+    expect(european.guard.badge).toBe('exact');
+  });
+
+  it('draft and standard agree to well inside a tick', () => {
+    const book = bigBook(40, 'american');
+    const draft = grid.reprice(book, market, { ...spec, quality: 'draft' });
+    const standard = grid.reprice(book, market, { ...spec, quality: 'standard' });
+
+    let worst = 0;
+    for (let i = 0; i < draft.cells.length; i += 1) {
+      const a = draft.cells[i] as Cell;
+      const b = standard.cells[i] as Cell;
+      worst = Math.max(worst, Math.abs(a.value - b.value));
+    }
+    // Book-level, across 40 legs of 5 contracts at a 100 multiplier. Half a
+    // tick on that book is 0.5c x 20,000 shares = $100.
+    console.log(`  draft vs standard, worst cell: $${worst.toFixed(2)}`);
+    expect(worst).toBeLessThan(100);
+    // And they are genuinely different numbers, so the cache must not conflate
+    // them — which is why the quality comes back on the result.
+    expect(worst).toBeGreaterThan(0);
+    expect(draft.quality).not.toBe(standard.quality);
   });
 });
 

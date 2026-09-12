@@ -33,6 +33,24 @@ export interface Market {
   dividend: number;
 }
 
+/**
+ * How much time the grid may spend on American legs.
+ *
+ * The American solver buys accuracy in iterations, and the PRD's 90ms p95 does
+ * not stretch to the same scheme everywhere: the engine meets it comfortably, a
+ * browser on a book of forty American legs does not. Drag at `draft`, settle at
+ * `standard` — the same trade the canvas already makes when it drops detail
+ * while panning.
+ *
+ * A draft cell and a standard cell are different numbers from different code,
+ * so the quality is reported back on the result and belongs in the node's cache
+ * key. Serving a dragged approximation as though the server had confirmed it is
+ * the flickering-tick failure of PRD 7.1 in another costume.
+ */
+export type Quality = 'draft' | 'standard' | 'exact';
+
+const QUALITY_CODE: Record<Quality, number> = { draft: 0, standard: 1, exact: 2 };
+
 export interface GridSpec {
   /** Number of spot levels. The PRD's worked example is 25. */
   spotSteps: number;
@@ -44,6 +62,8 @@ export interface GridSpec {
   volRange: number;
   /** Days of theta decay applied to every leg. */
   decayDays?: number;
+  /** Defaults to `standard`, which is what the server computes. */
+  quality?: Quality;
 }
 
 /** One cell: the book's value and aggregate Greeks under that shock. */
@@ -74,6 +94,8 @@ export interface GuardReport {
 
 export interface GridResult {
   cells: Cell[];
+  /** What the American legs were actually priced at. */
+  quality: Quality;
   spotCount: number;
   volCount: number;
   /** Spot levels each column was priced at, as the engine used them. */
@@ -112,10 +134,11 @@ export class GridPricer {
     }
 
     const started = performance.now();
+    const quality: Quality = spec.quality ?? 'standard';
     const count = w.pc_grid_reprice(
       market.spot, market.rate, market.dividend,
       spec.spotSteps, spec.spotRange, spec.volSteps, spec.volRange,
-      spec.decayDays ?? 0,
+      spec.decayDays ?? 0, QUALITY_CODE[quality],
     );
     const elapsedMs = performance.now() - started;
     if (count < 0) throw new Error('the module reports an empty book');
@@ -142,6 +165,7 @@ export class GridPricer {
 
     return {
       cells,
+      quality,
       spotCount: spotAxis.length,
       volCount,
       spotAxis,

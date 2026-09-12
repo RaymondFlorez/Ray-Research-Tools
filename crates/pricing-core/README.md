@@ -26,12 +26,27 @@ Andersen-Lake pricing every American cell and the guard sampling on top:
 | 120 European legs | 45,000 | 5.59ms | 5.78ms | inside budget |
 | 400 European legs | 150,000 | 18.8ms | 19.2ms | inside budget |
 
-**In the browser it is tighter, and on the hardest case it does not fit.** The same forty
-American legs cost 146ms through WASM against 60ms natively; a book with half its legs
-American — closer to what a chain-driven book looks like — comes in at 74ms. The criterion
-is met by the engine and by the realistic client case, and missed by the client on the
-worst one. The obvious lever is a quality knob on `GridSpec` so a client can drop to a
-coarser scheme, and it is not built yet.
+**In the browser it is tighter, and one scheme does not fit every surface.** WASM runs the
+same code about two and a half times slower, which takes a book of forty American legs to
+172ms. `GridSpec::quality` is the lever:
+
+| quality | 40 American legs, native | in WASM | badge |
+|---|---|---|---|
+| `Draft` | 22.3ms | 55.9ms | `draft, unchecked` |
+| `Standard` | 61.1ms | 171.7ms | `approx, max err 0.0 ticks` |
+| `Exact` | 140.1ms | — | `exact` |
+
+A browser drags at `Draft` and settles at `Standard`, the same trade the canvas already
+makes when it drops detail while panning (PRD 3.6). The two are not far apart: across a
+40-leg book the worst cell differs by $1.41, against a half-tick tolerance on that book of
+$100.
+
+`Draft` does not guard, and says so rather than implying a check it did not run. Its worst
+case over 1,680 cases is 4.4e-3 against a 5e-3 tolerance — inside it, with a measured margin
+of twelve percent, which is a measurement and not a guarantee. The quality is reported on
+`GridResult` because a draft cell and a standard cell are different numbers from different
+code, and a cache key that conflated them would serve a dragged approximation as though the
+server had confirmed it.
 
 ## Bit-identical on client and server
 

@@ -35,21 +35,25 @@ A 40-leg book across a 25x15 grid is 15,000 repricings. The book is pushed leg b
 the grid is repriced in a single call, and the cells are read straight out of WASM
 memory as a typed array. Measured in Chromium on this machine:
 
-| Book | Repricings | Time | Guard |
+| Book | Quality | Time | Guard |
 |---|---|---|---|
-| 40 European legs | 15,000 | 2.3ms | not needed |
-| 40 legs, half American | 15,000+ | 74ms | passed |
-| 40 legs, all American | 15,320 | 146ms | passed |
+| 40 European legs | — | 2.3ms | not needed |
+| 40 American legs | `draft` | 55.9ms | not checked |
+| 40 American legs | `standard` | 171.7ms | passed |
 
-Against a 90ms p95 budget, and the last row misses it. American legs are now priced by
-Andersen-Lake rather than a closed form — two hundred and seventy times more accurate, and
-enough to keep the guard from escalating at all, at four times the cost. Natively the same
-all-American book takes 60ms; WASM runs it about two and a half times slower, and that
-factor is what takes the worst case out of budget.
+Against a 90ms p95 budget. American legs are priced by Andersen-Lake rather than a closed
+form — two hundred and seventy times more accurate, and enough that the guard no longer
+escalates at all — at four times the cost, which takes `standard` out of budget in a
+browser on the hardest book.
 
-The engine meets the criterion and so does the realistic mixed book. A client on a book of
-forty American legs does not, and the lever for it — a quality knob on the grid spec, so a
-browser can choose a coarser scheme — is not built.
+So the grid takes a `quality`. Drag at `draft`, settle at `standard`, the same trade the
+canvas already makes when it drops detail while panning. Across the 40-leg book the two
+differ by $1.41 on the worst cell, against a half-tick tolerance on that book of $100 — far
+below anything a chart can show.
+
+`quality` comes back on the result, and belongs in the node's cache key. A draft cell and a
+standard cell are different numbers from different code, and serving one as the other is
+the flickering tick of PRD 7.1 in another costume.
 
 ## Every read is a copy, and that is not optional
 

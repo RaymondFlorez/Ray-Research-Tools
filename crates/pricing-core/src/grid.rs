@@ -8,7 +8,7 @@
 //! repriced exactly. The badge the node shows says which happened.
 
 use crate::american;
-use crate::andersen_lake::{Boundary, Solver};
+use crate::andersen_lake::{self as al, Boundary, Solver};
 use crate::bsm::{self, Greeks, Inputs, OptionType};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -40,6 +40,50 @@ pub struct Market {
     pub dividend: f64,
 }
 
+/// How much time this grid may spend on American legs.
+///
+/// The accuracy of the American solver is bought in iterations, and the PRD's
+/// 90ms p95 does not stretch to the same scheme on every surface: the engine
+/// meets it comfortably, a browser on a book of forty American legs does not.
+/// This is the lever, and the canvas is expected to drag at `Draft` and settle
+/// at `Standard` the way it already drops detail while panning (PRD 3.6).
+///
+/// **The quality belongs in the cache key.** A draft cell and a standard cell
+/// are different numbers computed by different code, and a cache that confused
+/// them would serve a dragged approximation as though the server had confirmed
+/// it — which is the flickering-tick failure of PRD 7.1 wearing a different
+/// hat. `GridResult::quality` reports what was used so the caller can key on it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Quality {
+    /// For a grid under the cursor. Coarser, and deliberately unchecked.
+    Draft,
+    /// The default, and what the server computes. Guarded.
+    #[default]
+    Standard,
+    /// For a position an analyst pinned. The guard's own reference, so there is
+    /// nothing finer left to check it against.
+    Exact,
+}
+
+impl Quality {
+    fn scheme(self) -> al::Scheme {
+        match self {
+            Quality::Draft => al::DRAFT,
+            Quality::Standard => al::FAST,
+            Quality::Exact => al::ACCURATE,
+        }
+    }
+
+    /// Whether the grid checks itself at this quality.
+    ///
+    /// `Draft` does not, because a guard costs more than the quality level
+    /// saves — and `Exact` does not, because the only thing finer than the
+    /// reference is the reference.
+    fn guarded(self) -> bool {
+        self == Quality::Standard
+    }
+}
+
 /// The axes. The PRD's worked example is 25 spots by 15 vols.
 #[derive(Clone, Debug)]
 pub struct GridSpec {
@@ -49,6 +93,8 @@ pub struct GridSpec {
     pub vol_shifts: Vec<f64>,
     /// Days of time decay applied to every leg.
     pub time_decay_days: f64,
+    /// How much time the American legs may take.
+    pub quality: Quality,
 }
 
 impl GridSpec {
@@ -70,6 +116,7 @@ impl GridSpec {
             spot_shocks: span(spot_steps, spot_range).into_iter().map(|s| 1.0 + s).collect(),
             vol_shifts: span(vol_steps, vol_range),
             time_decay_days: 0.0,
+            quality: Quality::default(),
         }
     }
 }
@@ -114,6 +161,9 @@ pub struct GridResult {
     pub cells: Vec<Cell>,
     pub spot_count: usize,
     pub vol_count: usize,
+    /// What the American legs were priced at. Part of this grid's identity:
+    /// two results with different qualities are not interchangeable.
+    pub quality: Quality,
     pub guard: GuardReport,
     /// Repricings performed, the fast path and any escalation together.
     pub repricings: usize,
@@ -253,7 +303,7 @@ fn fast_greeks(
             let mut g = bsm::greeks(inputs);
             g.price = match boundary {
                 Some((solver, boundary)) => solver.price_with(inputs, boundary),
-                None => crate::andersen_lake::fast_price(inputs),
+                None => al::fast_price(inputs),
             };
             g
         }
@@ -303,7 +353,7 @@ pub fn reprice_grid(
     let vol_count = grid.vol_shifts.len();
     let decay = grid.time_decay_days / 365.0;
 
-    let solver = crate::andersen_lake::fast_solver();
+    let solver = al::solver_for(grid.quality.scheme());
     let cache = BoundaryCache::build(solver, book, market, grid, decay);
 
     let mut cells = Vec::with_capacity(spot_count * vol_count);
@@ -322,19 +372,29 @@ pub fn reprice_grid(
     }
     let mut repricings = cells.len() * book.len();
 
+    // Two ways there is nothing to guard: no American leg to approximate, and no
+    // quality level at which the grid checks itself. They are different
+    // statements and the badge makes the difference visible — "exact" is a
+    // claim, "draft, unchecked" is a warning.
     let has_american = book.iter().any(|leg| leg.style == Style::American);
-    if !has_american {
+    if !has_american || !grid.quality.guarded() {
+        let badge = match (has_american, grid.quality) {
+            (false, _) => "exact",
+            (true, Quality::Draft) => "draft, unchecked",
+            (true, _) => "exact",
+        };
         return GridResult {
             cells,
             spot_count,
             vol_count,
+            quality: grid.quality,
             guard: GuardReport {
                 outcome: GuardOutcome::NotNeeded,
                 sampled_cells: 0,
                 max_error: 0.0,
                 tolerance: 0.0,
                 escalated_cells: 0,
-                badge: "exact".to_string(),
+                badge: badge.to_string(),
             },
             repricings,
         };
@@ -422,6 +482,7 @@ pub fn reprice_grid(
         cells,
         spot_count,
         vol_count,
+        quality: grid.quality,
         guard: GuardReport {
             outcome,
             sampled_cells: sampled,

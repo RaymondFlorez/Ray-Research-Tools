@@ -80,6 +80,16 @@ pub struct Scheme {
 pub const FAST: Scheme =
     Scheme { integration: 7, iterations: 8, collocation: 6, pricing: 11 };
 
+/// For a grid being dragged: mean 3.9e-4, worst 4.4e-3, at 15µs — five eighths
+/// of `FAST`'s cost.
+///
+/// Its worst case is inside the half-tick tolerance, but only just: 4.4e-3
+/// against 5e-3, on 1,680 cases. That is a measured margin of twelve percent
+/// and not a guarantee, which is why the grid does not check itself at this
+/// quality and says so on the badge instead of implying a check it did not run.
+pub const DRAFT: Scheme =
+    Scheme { integration: 5, iterations: 8, collocation: 5, pricing: 7 };
+
 /// The scheme the grid guard checks the fast path against: mean 5.0e-5, worst
 /// 2.3e-3, at 69µs — about two and a half times `FAST`'s cost.
 ///
@@ -423,14 +433,22 @@ pub fn fast_solver() -> &'static Solver {
     cached(FAST)
 }
 
+/// The shared solver for a given scheme, built once per scheme.
+pub fn solver_for(scheme: Scheme) -> &'static Solver {
+    cached(scheme)
+}
+
 /// The cached solver for a scheme that is used over and over.
 fn cached(scheme: Scheme) -> &'static Solver {
     use std::sync::OnceLock;
+    static DRAFT_SOLVER: OnceLock<Solver> = OnceLock::new();
     static FAST_SOLVER: OnceLock<Solver> = OnceLock::new();
     static GUARD_SOLVER: OnceLock<Solver> = OnceLock::new();
     static ACCURATE_SOLVER: OnceLock<Solver> = OnceLock::new();
     if scheme == ACCURATE {
         ACCURATE_SOLVER.get_or_init(|| Solver::new(ACCURATE))
+    } else if scheme == DRAFT {
+        DRAFT_SOLVER.get_or_init(|| Solver::new(DRAFT))
     } else if scheme == GUARD {
         GUARD_SOLVER.get_or_init(|| Solver::new(GUARD))
     } else {

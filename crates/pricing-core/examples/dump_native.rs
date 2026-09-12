@@ -56,7 +56,7 @@ fn main() {
             0.22 + (i % 7) as f64 * 0.02,
         );
     }
-    let cells = ffi::pc_grid_reprice(100.0, 0.045, 0.017, 25, 0.2, 15, 0.1, 7.0);
+    let cells = ffi::pc_grid_reprice(100.0, 0.045, 0.017, 25, 0.2, 15, 0.1, 7.0, 1);
     let stride = ffi::pc_grid_stride() as usize;
     let data = unsafe { std::slice::from_raw_parts(ffi::pc_grid_data(), cells as usize * stride) };
     for (i, value) in data.iter().enumerate() {

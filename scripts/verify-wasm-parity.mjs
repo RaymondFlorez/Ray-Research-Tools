@@ -65,7 +65,7 @@ function wasmGrid() {
       0.22 + (i % 7) * 0.02,
     );
   }
-  const cells = w.pc_grid_reprice(100, 0.045, 0.017, 25, 0.2, 15, 0.1, 7);
+  const cells = w.pc_grid_reprice(100, 0.045, 0.017, 25, 0.2, 15, 0.1, 7, 1);
   const stride = w.pc_grid_stride();
   // Copied before anything else calls in: the view aliases linear memory.
   const data = new Float64Array(w.memory.buffer, w.pc_grid_data(), cells * stride).slice();

@@ -44,7 +44,7 @@ export interface PricingExports {
   pc_grid_reprice(
     spot: number, rate: number, dividend: number,
     spotSteps: number, spotRange: number, volSteps: number, volRange: number,
-    decayDays: number,
+    decayDays: number, quality: number,
   ): number;
   pc_grid_data(): number;
   pc_grid_stride(): number;
