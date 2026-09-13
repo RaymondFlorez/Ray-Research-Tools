@@ -54,6 +54,27 @@ export interface PricingExports {
   pc_guard_badge_ptr(): number;
   pc_guard_badge_len(): number;
 
+  pc_bond_reset(): void;
+  pc_bond_add_flow(time: number, amount: number): void;
+  pc_bond_metric(which: number, price: number, frequency: number): number;
+  pc_bond_price_at_yield(y: number, frequency: number): number;
+  pc_bond_z_spread(price: number): number;
+  pc_bond_asset_swap(price: number, frequency: number, notional: number): number;
+  pc_hw_calibrate(meanReversion: number, vol: number, dt: number, steps: number): number;
+  pc_hw_zero_coupon(step: number): number;
+  pc_hw_bond_price(
+    coupon: number, redemption: number, slices: number,
+    callFrom: number, callPrice: number, spread: number,
+  ): number;
+  pc_hw_oas(
+    coupon: number, redemption: number, slices: number,
+    callFrom: number, callPrice: number, price: number,
+  ): number;
+  pc_hw_option_value(
+    coupon: number, redemption: number, slices: number,
+    callFrom: number, callPrice: number, spread: number,
+  ): number;
+
   pc_curve_reset(): void;
   pc_curve_add_deposit(maturity: number, rate: number): void;
   pc_curve_add_future(start: number, end: number, rate: number, convexityBps: number): void;
@@ -72,6 +93,7 @@ export interface PricingExports {
   pc_nss_stat(which: number): number;
   pc_nss_zero(t: number): number;
   pc_nss_residual(index: number): number;
+  pc_nss_install_curve(): number;
   pc_nss_warning_ptr(): number;
   pc_nss_warning_len(): number;
 }
@@ -84,11 +106,16 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_grid_data', 'pc_grid_stride', 'pc_grid_axis_ptr', 'pc_grid_axis_len',
   'pc_guard_value',
   'pc_guard_badge_ptr', 'pc_guard_badge_len',
+  'pc_bond_reset', 'pc_bond_add_flow', 'pc_bond_metric', 'pc_bond_price_at_yield',
+  'pc_bond_z_spread', 'pc_bond_asset_swap',
+  'pc_hw_calibrate', 'pc_hw_zero_coupon', 'pc_hw_bond_price', 'pc_hw_oas',
+  'pc_hw_option_value',
   'pc_curve_reset', 'pc_curve_add_deposit', 'pc_curve_add_future', 'pc_curve_add_swap',
   'pc_curve_bootstrap', 'pc_curve_shock', 'pc_curve_zero', 'pc_curve_discount',
   'pc_curve_forward', 'pc_curve_residual',
   'pc_nss_reset', 'pc_nss_observe', 'pc_nss_fit', 'pc_nss_param', 'pc_nss_stat',
-  'pc_nss_zero', 'pc_nss_residual', 'pc_nss_warning_ptr', 'pc_nss_warning_len',
+  'pc_nss_zero', 'pc_nss_residual', 'pc_nss_install_curve',
+  'pc_nss_warning_ptr', 'pc_nss_warning_len',
 ];
 
 /**

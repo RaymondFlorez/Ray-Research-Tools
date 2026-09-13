@@ -569,6 +569,29 @@ pub extern "C" fn pc_nss_residual(index: i32) -> f64 {
     })
 }
 
+/// Installs the fitted curve as the current one, so it can be shocked and
+/// discounted against like any other.
+///
+/// Pinned at the tenors that were observed: a fit is a shape, and the honest
+/// place to pin it is where there were quotes to fit to. Returns the pin count,
+/// or -1 if nothing has been fitted.
+#[no_mangle]
+pub extern "C" fn pc_nss_install_curve() -> i32 {
+    FIT.with(|f| match f.borrow().as_ref() {
+        Some(fit) => OBSERVED.with(|observed| {
+            let tenors: Vec<f64> = observed.borrow().iter().map(|&(t, _)| t).collect();
+            if tenors.is_empty() {
+                return -1;
+            }
+            let built = fit.params.to_curve(&tenors);
+            let pins = built.pins().count() as i32;
+            CURVE.with(|c| *c.borrow_mut() = Some(built));
+            pins
+        }),
+        None => -1,
+    })
+}
+
 #[no_mangle]
 pub extern "C" fn pc_nss_warning_ptr() -> *const u8 {
     WARNING.with(|w| w.borrow().as_ptr())

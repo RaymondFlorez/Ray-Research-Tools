@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 47 tests
+npm test --workspace @picasso/canvas-pricing    # 74 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -16,7 +16,10 @@ node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 | `pricing.ts` | One option: price, ten Greeks, both American paths, implied vol |
 | `grid.ts` | A book across a spot-vol grid, in one boundary crossing, with the guard's report |
 | `strategy.ts` | `StrategyNode`: the book in params, the surface out, the badge in runtime state |
-| `curve.ts` | `CurveNode`: bootstrap from deposits, futures and swaps; fit Nelson-Siegel-Svensson; shock |
+| `curve.ts` | Curves: bootstrap from deposits, futures and swaps; fit Nelson-Siegel-Svensson; shock |
+| `bonds.ts` | Yield, duration, convexity, z-spread, asset swap, and OAS on a Hull-White lattice |
+| `curveNode.ts` | `CurveNode` and `RateShockNode`: the curve surface as nodes in the DAG |
+| `transmission.ts` | A rate shock reaching an options book, through estimates that carry their own R² |
 
 ## Nothing here does arithmetic
 
@@ -71,6 +74,49 @@ quietly be a different curve.
 
 A twelve-instrument bootstrap takes 0.35ms in the browser, inside the PRD's sub-millisecond
 claim.
+
+## A curve behaves like a value, and that took work
+
+The module holds one curve at a time, and a scenario needs two — a base and a
+shocked one. The first version handed out two objects that were both thin handles
+onto the same slot, so every rate difference between them came out exactly zero
+and the whole transmission silently did nothing. The test that caught it is
+`moves the discount rate with no model in between`, which expected 50bp and got 0.
+
+A `Curve` now remembers how it was built and puts itself back in the slot if
+something displaced it. Alternating reads between two curves costs a bootstrap
+each time, which is the price of the handles behaving like values. `reads the
+curve it was handed, not whichever one is live` is the regression test.
+
+## The rate shock, and what it is willing to claim
+
+PRD 5.3 has a rate shock emit a `curve` that "any equity, credit, or options node
+can consume, applying its own sensitivity model". So the shock emits a shape and
+does not know what it is shocking; `transmit` lives on the options side.
+
+Three channels, and they are not equally trustworthy:
+
+1. **Direct rho.** The option discounts at the curve, so a shocked curve changes
+   the price with no model in between. Arithmetic.
+2. **Spot, via beta-to-rates.** An empirical regression. An estimate.
+3. **Vol, via the rate-shock-to-vol relationship.** Same, usually worse.
+
+The betas are *estimated from observations* rather than passed in as numbers, and
+every estimate carries its R², its standard error and its sample size. PRD 5.3
+wants the node to say "NVDA's is 0.31 over the trailing two years, AVGO's is 0.11,
+and the node says so plainly rather than pretending both are reliable" — and PRD 9
+sets the threshold at an R² of 0.2, below which a mapping is an assumption. Both
+are in the code as the constant `WEAK_FIT_R_SQUARED` and the line `treat as an
+assumption`.
+
+`transmit` takes the two curves rather than a shock description, and reads what
+actually moved at the tenor the option prices off. A parallel 50bp and a steepener
+that happens to move the one-year point by 50bp transmit identically to a one-year
+option — and a shape the analyst drew with the pen has no nominal size at all.
+
+With no beta estimated, the spot channel is switched **off**, not set to zero: a
+missing estimate is a missing estimate, and pretending it is a measured zero is
+how a scenario quietly understates its own risk.
 
 ## Every read is a copy, and that is not optional
 

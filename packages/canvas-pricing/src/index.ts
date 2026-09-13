@@ -15,4 +15,7 @@ export * from './module.js';
 export * from './pricing.js';
 export * from './grid.js';
 export * from './curve.js';
+export * from './bonds.js';
+export * from './curveNode.js';
+export * from './transmission.js';
 export * from './strategy.js';

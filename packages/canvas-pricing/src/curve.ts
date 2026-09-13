@@ -53,26 +53,42 @@ export interface CurveShock {
  * Reads go straight back into WASM rather than caching a sampled copy here: the
  * curve between pins is piecewise-constant forwards, and a JavaScript
  * re-interpolation of sampled points would quietly be a different curve.
+ *
+ * The module holds one curve at a time, but a `Curve` behaves like a value
+ * anyway: it remembers how it was built, and rebuilds itself if something else
+ * has taken the slot since. Without that, holding a base curve and a shocked
+ * one — which is exactly what a scenario does — would silently give two handles
+ * onto the same numbers, and every rate difference would come out zero.
+ *
+ * The rebuild costs a bootstrap, so alternating reads between two curves is
+ * slower than reading each in turn. Correct either way, which is the part worth
+ * paying for.
  */
 export class Curve {
   constructor(
-    private readonly exports: PricingExports,
+    private readonly engine: CurveEngine,
     readonly pins: number,
     readonly instruments: readonly Instrument[],
     readonly shock?: CurveShock,
   ) {}
 
+  /** Puts this curve back in the module's slot if something displaced it. */
+  private live(): PricingExports {
+    this.engine.makeLive(this);
+    return this.engine.exports;
+  }
+
   /** Continuously compounded zero rate. */
   zero(t: number): number {
-    return this.exports.pc_curve_zero(t);
+    return this.live().pc_curve_zero(t);
   }
 
   discount(t: number): number {
-    return this.exports.pc_curve_discount(t);
+    return this.live().pc_curve_discount(t);
   }
 
   forward(t1: number, t2: number): number {
-    return this.exports.pc_curve_forward(t1, t2);
+    return this.live().pc_curve_forward(t1, t2);
   }
 
   /** Zero rates at the standard buckets, as a curve chart plots them. */
@@ -88,7 +104,8 @@ export class Curve {
    * should be able to check it rather than take it on trust.
    */
   residuals(): number[] {
-    return this.instruments.map((_, i) => this.exports.pc_curve_residual(i));
+    const w = this.live();
+    return this.instruments.map((_, i) => w.pc_curve_residual(i));
   }
 
   /** The worst instrument residual, in basis points of par. */
@@ -123,13 +140,26 @@ export interface NssFit {
  * first before building the second.
  */
 export class CurveEngine {
+  /** Which curve currently occupies the module's single slot. */
+  private current: Curve | undefined;
+
   constructor(readonly exports: PricingExports) {}
 
-  /** Bootstraps a curve that reprices every instrument to par. */
-  bootstrap(instruments: readonly Instrument[]): Curve {
-    if (instruments.length === 0) {
-      throw new Error('cannot bootstrap from no instruments: a curve needs at least one quote');
-    }
+  /**
+   * Rebuilds `curve` into the module's slot unless it is already there.
+   *
+   * Identity, not equality: two curves built from the same quotes are still two
+   * objects, and re-installing one of them is cheap enough not to be worth
+   * comparing instrument lists to avoid.
+   */
+  makeLive(curve: Curve): void {
+    if (this.current === curve) return;
+    this.install(curve.instruments, curve.shock);
+    this.current = curve;
+  }
+
+  /** Builds into the module slot without wrapping the result. */
+  private install(instruments: readonly Instrument[], shock?: CurveShock): number {
     const w = this.exports;
     w.pc_curve_reset();
     for (const instrument of instruments) {
@@ -156,25 +186,52 @@ export class CurveEngine {
         'these instruments do not build a curve — check that maturities increase and rates are sane',
       );
     }
-    return new Curve(w, pins, [...instruments]);
+    if (!shock) return pins;
+    const shocked = w.pc_curve_shock(SHAPE_CODE[shock.shape], shock.bps, shock.pivot ?? 0);
+    if (shocked < 0) throw new Error('no curve to shock');
+    return shocked;
+  }
+
+  /** Bootstraps a curve that reprices every instrument to par. */
+  bootstrap(instruments: readonly Instrument[]): Curve {
+    if (instruments.length === 0) {
+      throw new Error('cannot bootstrap from no instruments: a curve needs at least one quote');
+    }
+    const pins = this.install(instruments);
+    const curve = new Curve(this, pins, [...instruments]);
+    this.current = curve;
+    return curve;
   }
 
   /**
    * Rebuilds and shocks in one step.
    *
-   * Rebuilt rather than shocked in place, because the module holds one curve
-   * and shocking twice would compound: a caller asking for +50bp twice means
-   * two scenarios, not +100bp.
+   * Rebuilt rather than shocked in place, because shocking twice would compound:
+   * a caller asking for +50bp twice means two scenarios, not +100bp.
    */
   shocked(instruments: readonly Instrument[], shock: CurveShock): Curve {
-    const base = this.bootstrap(instruments);
-    const pins = this.exports.pc_curve_shock(
-      SHAPE_CODE[shock.shape],
-      shock.bps,
-      shock.pivot ?? 0,
-    );
-    if (pins < 0) throw new Error('no curve to shock');
-    return new Curve(this.exports, pins, base.instruments, shock);
+    const pins = this.install(instruments, shock);
+    const curve = new Curve(this, pins, [...instruments], shock);
+    this.current = curve;
+    return curve;
+  }
+
+  /**
+   * Turns a fit into a curve that can be shocked and discounted against.
+   *
+   * Pinned at the tenors that were observed, because a fit is a shape and the
+   * honest place to pin it is where there were quotes. Must follow the `fitNss`
+   * call it belongs to — the module holds one fit at a time.
+   */
+  curveFromFit(): Curve {
+    const pins = this.exports.pc_nss_install_curve();
+    if (pins < 0) throw new Error('no fit to install — call fitNss first');
+    // Built from a fit rather than from quotes, so it has no instruments to
+    // rebuild itself from. Reading it after something else takes the slot is a
+    // caller error the engine cannot repair, so it holds the slot until then.
+    const curve = new Curve(this, pins, []);
+    this.current = curve;
+    return curve;
   }
 
   /**
