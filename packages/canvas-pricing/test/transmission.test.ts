@@ -184,7 +184,7 @@ describe('the rate shock reaches the option book', () => {
     const result = transmit(spot, base, after, sensitivity);
     const shiftedBook = book.map((leg) => ({
       ...leg,
-      vol: leg.vol + result.volShiftPoints,
+      vol: leg.vol + result.volShift,
     }));
     const afterGrid = grid.reprice(shiftedBook, result.market, spec);
 
@@ -195,7 +195,7 @@ describe('the rate shock reaches the option book', () => {
     // Every channel did something, and the node can say which.
     expect(result.rateMoveBps).toBeCloseTo(75, 6);
     expect(result.spotMovePct).toBeLessThan(0);
-    expect(result.volShiftPoints).not.toBe(0);
+    expect(result.volShift).not.toBe(0);
     expect(result.assumptions).toHaveLength(2);
   });
 

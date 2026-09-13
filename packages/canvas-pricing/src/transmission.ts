@@ -132,8 +132,12 @@ export function fitSensitivity(input: SensitivityInput): Sensitivity | undefined
 export interface Transmission {
   /** The market to reprice against: shocked rate, shocked spot. */
   market: Market;
-  /** Vol points to add to every leg, for the grid's vol axis. */
-  volShiftPoints: number;
+  /**
+   * Volatility to add to every leg, in the same units a leg carries it —
+   * decimals, so 0.012 is 1.2 vol points. Named for what it is rather than for
+   * how it is quoted, because it is consumed by addition and not by a reader.
+   */
+  volShift: number;
   /** The rate move at the pricing tenor, in basis points. */
   rateMoveBps: number;
   /** The spot move the beta implies, as a fraction. */
@@ -201,15 +205,15 @@ export function transmit(
   }
 
   // Channel three: vol spillover.
-  let volShiftPoints = 0;
+  let volShift = 0;
   if (sensitivity?.vol) {
-    volShiftPoints = sensitivity.vol.slope * rateMoveBps;
+    volShift = sensitivity.vol.slope * rateMoveBps;
     assumptions.push(describe(sensitivity.underlier, 'vol', sensitivity.vol, sensitivity.window));
   }
 
   return {
     market: { ...market, rate, spot: market.spot * (1 + spotMovePct) },
-    volShiftPoints,
+    volShift,
     rateMoveBps,
     spotMovePct,
     assumptions,
@@ -226,13 +230,16 @@ function describe(
   const quality = fit.weak
     ? `R² ${fit.rSquared.toFixed(2)} — below ${WEAK_FIT_R_SQUARED}, treat as an assumption`
     : `R² ${fit.rSquared.toFixed(2)}`;
-  const per100 =
-    channel === 'spot'
-      ? `${(fit.slope * 100 * 100).toFixed(2)}% per 100bp`
-      : `${(fit.slope * 100).toFixed(2)} vol points per 100bp`;
+  // Both slopes are per basis point, in decimals: a return for the spot channel
+  // and a volatility for the vol one. Reading either as "per 100bp, in the unit
+  // people quote" is the same two factors of a hundred — the vol line used to
+  // apply only one, and reported a 1.6-point sensitivity as 0.02.
+  const scaled = fit.slope * 100 * 100;
+  const error = fit.standardError * 100 * 100;
+  const unit = channel === 'spot' ? '%' : ' vol points';
   return (
-    `${underlier} ${channel}-to-rates: ${per100}, ${quality}, ` +
-    `se ${(fit.standardError * 100 * 100).toFixed(2)} over ${fit.observations} days ` +
+    `${underlier} ${channel}-to-rates: ${scaled.toFixed(2)}${unit} per 100bp, ${quality}, ` +
+    `se ${error.toFixed(2)}${unit} over ${fit.observations} days ` +
     `(${window[0]} to ${window[1]})`
   );
 }

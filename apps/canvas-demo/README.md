@@ -113,3 +113,40 @@ Against the PRD's 90ms p95 budget. Cells the guard escalated to the exact lattic
 drawn with a dot, and on the 40-leg book they form three contiguous columns around spot
 88 to 93 — the band where the American puts carry early-exercise value. The guard
 escalates a region, which is what Appendix C.2 says it should.
+
+## Rates
+
+`rates.html` is the rate branch of the PRD's own walkthrough, made runnable. Section 7.4
+describes it in one sentence — the curve is rebuilt, a bear flattener is applied, the move
+is mapped to each underlying by empirical beta-to-rates, then to vol, then forty legs are
+repriced across a 25×15 grid — and every number on the page is computed from that sentence,
+in the browser, through the same Rust the server runs.
+
+Drag the shock. The dashed line is today's curve and the solid one is the shocked curve;
+the dots are the twelve quotes it was bootstrapped from, which are the only places it is
+pinned; the vertical marker is the tenor the options discount at, which is where the
+transmission reads its rate move.
+
+| | |
+|---|---|
+| 50bp bear flattener | +44.9bp at 1y |
+| NVDA | spot −1.97%, vol −0.73pts, book −$472 |
+| AVGO | spot −1.33%, vol −0.32pts, book −$356 |
+| 40 legs, 2 grids | 42ms |
+
+**The two names are deliberately unequal, and that is the point of the page.** The betas are
+regressed from two years of daily observations rather than typed in, and each one reports
+the R² it actually achieved: NVDA's spot-to-rates comes out at 0.35, AVGO's at 0.15. PRD 9
+puts the threshold at 0.2, so AVGO's line is marked *treat as an assumption* and NVDA's is
+not — which is section 5.3's requirement that the node "says so plainly rather than
+pretending both are reliable", visible rather than merely implemented.
+
+The history behind those regressions is synthetic and the page says so. The estimator is
+not: `scripts/rates-shots.mjs` checks that it recovers the betas it was given, that exactly
+one name's spot mapping is flagged, that a rally moves the book the other way from a
+selloff, and that the whole chain stays inside a frame budget for dragging.
+
+That harness also caught a units bug worth recording. The vol channel's assumption line
+applied one factor of a hundred where the spot channel applied two, and reported a
+1.6-point-per-100bp sensitivity as 0.02 — wrong only in the text an analyst reads, which is
+the worst place for it to be wrong.

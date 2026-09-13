@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso rate branch</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #f6f5f2; color: #1c1a17;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      #wrap { display: grid; grid-template-columns: 1fr 380px; height: 100%; }
+      #left { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+      #head { padding: 16px 20px 8px; border-bottom: 1px solid #e6e3dc; }
+      h1 { font-size: 13px; margin: 0 0 4px; letter-spacing: 0.02em; }
+      #curve-badge { font-size: 11px; color: #3d8a5f; }
+      #chart { display: block; width: 100%; height: 100%; }
+      #panel { border-left: 1px solid #c9c6bf; padding: 16px; background: #fbfaf8;
+        display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+      h2 { font-size: 11px; margin: 0 0 6px; color: #6f6a61; font-weight: 500;
+        letter-spacing: 0.06em; text-transform: uppercase; }
+      label { display: flex; justify-content: space-between; font-size: 11px;
+        color: #6f6a61; margin-bottom: 4px; }
+      select, input[type=range] { width: 100%; font: inherit; }
+      #chain { white-space: pre; font-size: 11px; line-height: 1.7; color: #3a362f; }
+      #assumptions { list-style: none; margin: 0; padding: 0;
+        display: flex; flex-direction: column; gap: 8px; }
+      #assumptions { max-height: 210px; overflow-y: auto; padding-right: 2px; }
+      #assumptions li { font-size: 10.5px; line-height: 1.5; color: #3a362f;
+        padding: 7px 9px; border-radius: 4px; border: 1px solid #d8d4cc; background: #fff; }
+      #assumptions li[data-weak] { border-color: #b08234; background: #fdf6e7; }
+      .row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 10px;
+        font-size: 11px; padding: 4px 0; border-bottom: 1px solid #eeebe4;
+        font-variant-numeric: tabular-nums; }
+      .row[data-strong] { font-weight: 600; border-bottom: 0; border-top: 1px solid #c9c6bf;
+        margin-top: 2px; padding-top: 6px; }
+      .up { color: #3d8a5f; } .down { color: #c0392b; }
+      .verdict { margin-top: 10px; padding: 8px 10px; border-radius: 4px; font-size: 12px;
+        border: 1px solid #c9c6bf; background: #fff; }
+      .verdict[data-sign="up"] { border-color: #6a8f5f; background: #f1f7ef; color: #2f6b46; }
+      .verdict[data-sign="down"] { border-color: #c0392b; background: #fdf1ef; color: #96301f; }
+      p.note { margin: 0; font-size: 10.5px; color: #8d8880; line-height: 1.6; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-pricing": "/packages/canvas-pricing/dist/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="wrap">
+      <div id="left">
+        <div id="head">
+          <h1>Rate branch — curve, shock, transmission, book</h1>
+          <span id="curve-badge">—</span>
+        </div>
+        <canvas id="chart"></canvas>
+      </div>
+      <div id="panel">
+        <div>
+          <h2>Shock</h2>
+          <label for="shape"><span>shape</span></label>
+          <select id="shape">
+            <option value="flattener">bear flattener</option>
+            <option value="parallel">parallel</option>
+            <option value="steepener">steepener</option>
+            <option value="butterfly">butterfly</option>
+          </select>
+          <label for="bps"><span>size</span><span id="bps-value">50bp</span></label>
+          <input id="bps" type="range" min="-100" max="100" step="5" value="50" />
+          <label for="pivot"><span>pivot / belly</span><span id="pivot-value">5y</span></label>
+          <input id="pivot" type="range" min="1" max="20" step="1" value="5" />
+        </div>
+
+        <div>
+          <h2>Transmission</h2>
+          <div id="chain"></div>
+        </div>
+
+        <div>
+          <h2>Book</h2>
+          <div id="totals"></div>
+        </div>
+
+        <div id="assumed">
+          <h2>What it assumed</h2>
+          <ul id="assumptions"></ul>
+          <p class="note" style="margin-top:8px">
+            Betas are regressed from two years of daily observations, not typed in.
+            A mapping below an R² of 0.2 is an assumption, and is marked as one.
+            The history here is synthetic; the estimator is not.
+          </p>
+        </div>
+
+
+        <p class="note">
+          Forty legs across two names, each repriced on a 25&times;15 spot-vol grid
+          against its own transmitted market. Curve, regressions and options all
+          run in WebAssembly, in the same Rust the server uses.
+        </p>
+      </div>
+    </div>
+    <script type="module" src="/apps/canvas-demo/dist/rates.js"></script>
+  </body>
+</html>
