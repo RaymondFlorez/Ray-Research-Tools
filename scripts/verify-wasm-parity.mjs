@@ -183,11 +183,33 @@ function wasmBonds() {
 
 const bonds = wasmBonds();
 
+/** Monte Carlo and Sobol, through WASM. */
+function wasmMonteCarlo() {
+  const rows = new Map();
+  for (let dimension = 0; dimension < 6; dimension += 1) {
+    for (const skip of [0, 1, 7, 64, 1000]) {
+      rows.set(`sobol(${dimension}/${skip})`, w.pc_sobol(8, skip, dimension));
+    }
+  }
+  for (let process = 0; process < 4; process += 1) {
+    for (const [sampling, anti] of [[0, 1], [0, 0], [1, 0]]) {
+      rows.set(
+        `mc(${process}/${sampling}/${anti})`,
+        w.pc_mc_european(process, 100, 105, 1, 0.04, 0.015, 0.3, 1, 4096, 16, sampling, anti, 12345),
+      );
+    }
+  }
+  return rows;
+}
+
+const monteCarlo = wasmMonteCarlo();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
   if (grid.has(label)) return grid.get(label);
   if (curves.has(label)) return curves.get(label);
   if (bonds.has(label)) return bonds.get(label);
+  if (monteCarlo.has(label)) return monteCarlo.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -230,7 +252,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg 25x15 grid, curves, bond analytics and a Hull-White lattice` +
+    `a 40-leg grid, curves, bonds, a Hull-White lattice and Monte Carlo` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

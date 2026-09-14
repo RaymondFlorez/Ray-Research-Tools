@@ -2,11 +2,11 @@
 
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
 exercise by Andersen-Lake, multi-leg grid repricing with the accuracy guard from PRD
-Appendix C.2, yield curves — bootstrapped, fitted, and shocked — and bond analytics with
-option-adjusted spreads on a Hull-White lattice.
+Appendix C.2, yield curves — bootstrapped, fitted, and shocked — bond analytics with
+option-adjusted spreads on a Hull-White lattice, and Monte Carlo over four processes.
 
 ```bash
-cargo test --release                              # 90 tests
+cargo test --release                              # 109 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -302,6 +302,54 @@ Two things the tests caught in this module, both mine:
 per unit of notional and the price is in the flows' own units; guessing would be right for a
 bond quoted per hundred and a factor of a hundred wrong for anything else, silently — which
 is how the first version of it was wrong.
+
+## Monte Carlo, and what it is held to
+
+PRD 5.8 asks for GBM, Heston, Merton jump-diffusion and variance gamma, with antithetic
+variates, control variates and "quasi-random Sobol sequences with Brownian bridge
+construction". Every one of those has something to answer to rather than a tolerance
+someone chose:
+
+- **GBM** has a closed form in this crate, so the simulation is held to its own standard
+  error — three of them, a 99.7% interval. A simulation that misses that is not noisy, it
+  is wrong.
+- **Heston** with zero vol-of-vol *is* GBM, and **Merton** without jumps is too. Both limits
+  are tested against the same closed form.
+- **Merton and variance gamma** must keep the forward: the compensator exists precisely so
+  the jumps do not add drift, and a test compares the mean terminal value against
+  `S·exp((r−q)T)`.
+- **Sobol** is checked on its defining property rather than against published values: the
+  first 2^k points put exactly one point in each of the 2^k strata of every dimension.
+
+Three things that broke, all mine:
+
+**Skipping the origin broke the stratification.** Sobol's first point is the origin, which
+maps to zero and then to negative infinity through the inverse normal, and the usual
+shortcut is to skip it. But the stratification holds over `x_0 .. x_{2^k−1}`, so dropping
+the first one duplicates a stratum at every power of two — which the test caught on
+dimension zero immediately. The half-ulp offset already keeps the value off zero, so there
+was nothing left to skip for.
+
+**The antithetic standard error was computed over paths.** Antithetic paths come in
+negatively correlated pairs; the independent observation is the *pair mean*. Computing the
+error over individual paths ignores the correlation the pairing exists to create, and
+reports the variance reduction as though it had not happened. The test showed antithetic
+sampling as very slightly *worse*, which is how the bug surfaced.
+
+**Wilson-Hilferty is wrong where variance gamma lives.** The gamma clock has shape `dt/ν`,
+which for a 32-step year at ν = 0.35 is 0.09 — far below one, where the expansion assumes
+a large shape. Terminal values came out at twice the forward. It is Marsaglia-Tsang with
+the `Gamma(a) = Gamma(a+1)·U^(1/a)` boost now, which is exact at small shapes. That sampler
+is a rejection method, so it consumes an unpredictable number of draws — which is why
+variance gamma cannot be driven by a Sobol point, and why `Process::step` takes the stream.
+
+A quasi-random run reports its standard error as **NaN**, on purpose. A Sobol sequence is
+deterministic, so the spread of its points is not a sampling distribution and a confidence
+interval built from it would have no probability behind it.
+
+**Not built:** "100k paths x 252 steps x 40 assets runs on Ray across the cluster; result
+matrices persist to S3". There is no Ray and no S3 here. What exists is the per-path
+arithmetic those would distribute.
 
 ## Solver honesty
 

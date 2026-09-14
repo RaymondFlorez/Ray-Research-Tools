@@ -17,8 +17,10 @@ pub mod curve;
 pub mod grid;
 pub mod hull_white;
 pub mod implied;
+pub mod mc;
 pub mod normal;
 pub mod quad;
+pub mod rng;
 pub mod solve;
 
 pub use bsm::{Greeks, Inputs, OptionType};

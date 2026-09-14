@@ -182,5 +182,24 @@ fn main() {
         );
     }
 
+    // Monte Carlo and the Sobol sequence. Integer state throughout, so a single
+    // differing bit would send an entire path somewhere else.
+    for dimension in 0..6 {
+        for skip in [0, 1, 7, 64, 1000] {
+            emit(format!("sobol({dimension}/{skip})"), ffi::pc_sobol(8, skip, dimension));
+        }
+    }
+    for process in 0..4 {
+        for &(sampling, anti) in &[(0, 1), (0, 0), (1, 0)] {
+            emit(
+                format!("mc({process}/{sampling}/{anti})"),
+                ffi::pc_mc_european(
+                    process, 100.0, 105.0, 1.0, 0.04, 0.015, 0.3, 1, 4096, 16, sampling, anti,
+                    12345.0,
+                ),
+            );
+        }
+    }
+
     println!("{}", rows.join("\n"));
 }

@@ -777,3 +777,90 @@ pub extern "C" fn pc_hw_option_value(
         None => f64::NAN,
     })
 }
+
+// ---------------------------------------------------------------------------
+// Monte Carlo (PRD 5.8).
+
+use crate::mc::{self, McConfig, Sampling};
+
+/// A European option by Monte Carlo. `process` is 0 GBM, 1 Heston, 2 Merton,
+/// 3 variance gamma; `sampling` is 0 pseudorandom, 1 Sobol.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_mc_european(
+    process: i32,
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    v: f64,
+    is_call: i32,
+    paths: i32,
+    steps: i32,
+    sampling: i32,
+    antithetic: i32,
+    seed: f64,
+) -> f64 {
+    let option = inputs(s, k, t, r, q, v, is_call);
+    let config = McConfig {
+        paths: paths.max(1) as usize,
+        steps: steps.max(1) as usize,
+        sampling: if sampling == 1 { Sampling::Quasi } else { Sampling::Pseudo },
+        antithetic: antithetic != 0,
+        seed: seed as u64,
+    };
+    let variance = v * v;
+    match process {
+        1 => mc::european_mc(
+            &mc::Heston {
+                rate: r,
+                dividend: q,
+                theta: variance,
+                kappa: 2.0,
+                sigma: 0.5,
+                rho: -0.6,
+                initial_variance: variance,
+            },
+            &option,
+            &config,
+            variance,
+            true,
+        ),
+        2 => mc::european_mc(
+            &mc::Merton {
+                rate: r,
+                dividend: q,
+                vol: v * 0.8,
+                intensity: 1.0,
+                jump_mean: -0.08,
+                jump_vol: 0.15,
+            },
+            &option,
+            &config,
+            0.0,
+            true,
+        ),
+        3 => mc::european_mc(
+            &mc::VarianceGamma { rate: r, dividend: q, sigma: v * 0.75, nu: 0.35, theta: -0.25 },
+            &option,
+            &config,
+            0.0,
+            false,
+        ),
+        _ => mc::european_mc(&mc::Gbm { rate: r, dividend: q, vol: v }, &option, &config, 0.0, true),
+    }
+    .mean
+}
+
+/// One Sobol coordinate, so the sequence itself is covered by the parity check.
+#[no_mangle]
+pub extern "C" fn pc_sobol(dimensions: i32, skip: i32, dimension: i32) -> f64 {
+    let dims = dimensions.clamp(1, crate::rng::MAX_SOBOL_DIMENSIONS as i32) as usize;
+    let mut sobol = crate::rng::Sobol::new(dims);
+    let mut point = vec![0.0; dims];
+    for _ in 0..=skip.max(0) {
+        sobol.next_point(&mut point);
+    }
+    point.get(dimension.max(0) as usize).copied().unwrap_or(f64::NAN)
+}
