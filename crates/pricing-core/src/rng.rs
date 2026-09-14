@@ -218,15 +218,12 @@ impl BrownianBridge {
         for k in 1..steps {
             let (mut best_from, mut best_to, mut best_width) = (0usize, 0usize, 0usize);
             let mut start = 0usize;
-            for i in 0..steps {
-                if filled[i] {
-                    if i > start {
-                        let width = i - start;
-                        if width > best_width {
-                            best_width = width;
-                            best_from = start;
-                            best_to = i;
-                        }
+            for (i, &done) in filled.iter().enumerate() {
+                if done {
+                    if i > start && i - start > best_width {
+                        best_width = i - start;
+                        best_from = start;
+                        best_to = i;
                     }
                     start = i + 1;
                 }
@@ -341,17 +338,17 @@ mod test {
 
             for _ in 0..count {
                 sobol.next_point(&mut point);
-                for d in 0..dimensions {
+                for (d, strata) in seen.iter_mut().enumerate() {
                     let bucket = ((point[d] * count as f64) as usize).min(count - 1);
                     assert!(
-                        !seen[d][bucket],
+                        !strata[bucket],
                         "dimension {d} hit stratum {bucket} twice in {count} points",
                     );
-                    seen[d][bucket] = true;
+                    strata[bucket] = true;
                 }
             }
-            for d in 0..dimensions {
-                assert!(seen[d].iter().all(|&hit| hit), "dimension {d} left a gap");
+            for (d, strata) in seen.iter().enumerate() {
+                assert!(strata.iter().all(|&hit| hit), "dimension {d} left a gap");
             }
         }
     }

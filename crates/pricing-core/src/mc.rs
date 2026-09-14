@@ -341,6 +341,9 @@ impl McResult {
     }
 }
 
+/// A variate with a known expectation, used to cancel shared error.
+pub type ControlVariate = (fn(f64) -> f64, f64);
+
 /// Runs a simulation, applying `payoff` to each path's terminal value.
 ///
 /// `control` supplies a variate with a known expectation; supplying one cancels
@@ -355,7 +358,7 @@ pub fn simulate<P: Process>(
     config: &McConfig,
     initial_variance: f64,
     payoff: impl Fn(f64) -> f64,
-    control: Option<(fn(f64) -> f64, f64)>,
+    control: Option<ControlVariate>,
 ) -> McResult {
     let steps = config.steps.max(1);
     let dt = time / steps as f64;
