@@ -1,0 +1,33 @@
+{
+  "name": "@picasso/canvas-guard",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Picasso hardening layer: data classification, tenant isolation, the two egress controls, prompt-injection defenses, the degradation ladder, SLO instrumentation and export bundles",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*",
+    "@picasso/canvas-router": "*",
+    "@picasso/canvas-agents": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}
