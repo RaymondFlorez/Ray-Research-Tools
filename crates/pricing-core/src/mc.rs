@@ -79,6 +79,8 @@ pub struct ProcessState {
     pub variance: f64,
     /// Accumulated jump compensator, for jump models.
     pub time: f64,
+    /// Position in the source series, for resampling processes.
+    pub cursor: usize,
 }
 
 /// Geometric Brownian motion: the model everything else is measured against.
@@ -273,7 +275,7 @@ impl Process for VarianceGamma {
 /// Rejection sampling, so it consumes an unpredictable number of draws. That is
 /// why it takes the stream rather than a slice of pre-drawn normals, and why a
 /// process using it cannot be driven by a Sobol point.
-fn sample_gamma(shape: f64, rng: &mut Rng) -> f64 {
+pub(crate) fn sample_gamma(shape: f64, rng: &mut Rng) -> f64 {
     if shape <= 0.0 {
         return 0.0;
     }
@@ -413,7 +415,7 @@ pub fn simulate<P: Process>(
             let signed: Vec<f64> = normals.iter().map(|z| sign * z).collect();
             bridge.build(&signed, &mut path);
 
-            let mut state = ProcessState { variance: initial_variance, time: 0.0 };
+            let mut state = ProcessState { variance: initial_variance, time: 0.0, cursor: 0 };
             let mut level = spot;
             let mut previous = 0.0;
             let mut step_extras = vec![0.0; extra_dims.max(1)];

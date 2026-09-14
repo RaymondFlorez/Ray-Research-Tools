@@ -13,6 +13,7 @@ pub mod ffi;
 pub mod andersen_lake;
 pub mod bond;
 pub mod bsm;
+pub mod copula;
 pub mod curve;
 pub mod grid;
 pub mod hull_white;
@@ -21,6 +22,8 @@ pub mod mc;
 pub mod normal;
 pub mod quad;
 pub mod rng;
+pub mod resample;
 pub mod solve;
+pub mod special;
 
 pub use bsm::{Greeks, Inputs, OptionType};
