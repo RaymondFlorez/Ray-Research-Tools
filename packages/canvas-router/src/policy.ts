@@ -37,6 +37,17 @@ export type Placement =
 export interface Model {
   id: string;
   vendor: string;
+  /**
+   * Model family within the vendor.
+   *
+   * Appendix C.5's independence ladder has a tier for "same vendor, different
+   * model family", which cannot be evaluated from the vendor alone: two
+   * checkpoints of one family share the failure modes the Critic exists to
+   * avoid, and two families from one vendor do not share them nearly as much.
+   */
+  family?: string;
+  /** Parameter count in billions, where it is known. Open-weight tiers cite it. */
+  paramsB?: number;
   placement: Placement;
   /** Cents per thousand tokens, input and output blended. */
   centsPerKiloToken: number;
@@ -100,6 +111,8 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'local-3b',
       vendor: 'open',
+      family: 'open-small',
+      paramsB: 3,
       placement: 'on_device',
       centsPerKiloToken: 0,
       latencyMsP50: 35,
@@ -111,6 +124,8 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'server-8b',
       vendor: 'open',
+      family: 'open-small',
+      paramsB: 8,
       placement: 'self_hosted',
       centsPerKiloToken: 0.008,
       latencyMsP50: 90,
@@ -126,6 +141,8 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'qwen-coder-32b',
       vendor: 'open',
+      family: 'open-coder',
+      paramsB: 32,
       placement: 'self_hosted',
       centsPerKiloToken: 0.04,
       latencyMsP50: 420,
@@ -143,6 +160,8 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'open-70b',
       vendor: 'open',
+      family: 'open-large',
+      paramsB: 70,
       placement: 'self_hosted',
       centsPerKiloToken: 0.09,
       latencyMsP50: 900,
@@ -161,6 +180,7 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'frontier-a',
       vendor: 'vendor-a',
+      family: 'a-reasoning',
       placement: 'vendor',
       centsPerKiloToken: 0.9,
       latencyMsP50: 1_800,
@@ -181,6 +201,7 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     {
       id: 'frontier-b',
       vendor: 'vendor-b',
+      family: 'b-core',
       placement: 'vendor',
       centsPerKiloToken: 1.1,
       latencyMsP50: 2_100,
