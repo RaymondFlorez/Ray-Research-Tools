@@ -1,0 +1,31 @@
+{
+  "name": "@picasso/canvas-equity",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Picasso equities: earnings subtext with span-level evidence, event studies with three benchmark models, and factor exposures with their diagnostics",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}
