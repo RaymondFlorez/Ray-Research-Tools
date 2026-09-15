@@ -12,3 +12,4 @@ export * from './router.js';
 export * from './cascade.js';
 export * from './budget.js';
 export * from './trace.js';
+export * from './evals.js';

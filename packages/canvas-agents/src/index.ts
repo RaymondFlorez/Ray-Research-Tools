@@ -14,4 +14,5 @@ export * from './reconciler.js';
 export * from './critic.js';
 export * from './coordinator.js';
 export * from './digest.js';
+export * from './query.js';
 export * from './redteam.js';
