@@ -9,3 +9,4 @@ export * from './geometry.js';
 export * from './features.js';
 export * from './recognize.js';
 export * from './stroke.js';
+export * from './semantic.js';
