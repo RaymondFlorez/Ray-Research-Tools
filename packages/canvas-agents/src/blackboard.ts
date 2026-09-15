@@ -32,7 +32,18 @@ export type AgentRole =
   | 'scribe';
 
 export type Provenance =
-  | { kind: 'cell'; nodeId: string; cacheKey: string }
+  /**
+   * A value read off a node's output port.
+   *
+   * `port` is what distinguishes two numbers from one node, and leaving it out
+   * was a real bug rather than a simplification: the PRD's own worked example
+   * has an aggregation node emitting delta *and* vega, and a reconciler that
+   * identifies a reading by `nodeId` alone can only ever check one of them.
+   * The other silently matched its neighbour's reading and came back as a
+   * stale-cache finding on a number that was correct. Optional, because a
+   * single-output node has nothing to disambiguate.
+   */
+  | { kind: 'cell'; nodeId: string; cacheKey: string; port?: string }
   | { kind: 'document'; docId: string; page: number; charStart: number; charEnd: number }
   /** Marked UNVERIFIED. See `provenance.ts` for what that forbids. */
   | { kind: 'model'; traceId: string };

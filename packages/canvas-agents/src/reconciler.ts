@@ -79,10 +79,23 @@ export interface Narrative {
 export interface CellReading {
   nodeId: string;
   cacheKey: string;
+  /**
+   * Which output port this reading came off.
+   *
+   * A node has one cache key and can have several outputs, so the port is what
+   * identifies a reading and the cache key is what dates it. Omit it for a
+   * single-output node.
+   */
+  port?: string;
   label: string;
   value: number;
   unit: string;
   asof: string;
+}
+
+/** Readings are identified by node and port; the cache key dates them. */
+function readingKey(nodeId: string, port: string | undefined): string {
+  return `${nodeId}\u0000${port ?? ''}`;
 }
 
 export type FindingKind =
@@ -170,7 +183,7 @@ function factList(source: readonly Fact[] | Blackboard): readonly Fact[] {
 export function reconcile(input: ReconcileInput): ReconcileResult {
   const { narrative, cells } = input;
   const facts = new Map(factList(input.facts).map((f) => [f.id, f]));
-  const cellFor = new Map(cells.map((c) => [c.nodeId, c]));
+  const cellFor = new Map(cells.map((c) => [readingKey(c.nodeId, c.port), c]));
   const findings: Finding[] = [];
   const corrections: Correction[] = [];
   const waived: Array<{ text: string; start: number }> = [];
@@ -307,9 +320,13 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
       continue;
     }
 
-    const cell = cellFor.get(fact.provenance.nodeId);
+    const cell = cellFor.get(readingKey(fact.provenance.nodeId, fact.provenance.port));
     if (!cell) {
-      add('missing_cell', `${fact.id} cites node ${fact.provenance.nodeId}, which produced no reading`, {
+      const where =
+        fact.provenance.port === undefined
+          ? `node ${fact.provenance.nodeId}`
+          : `${fact.provenance.nodeId}.${fact.provenance.port}`;
+      add('missing_cell', `${fact.id} cites ${where}, which produced no reading`, {
         factId: fact.id,
         span,
       });

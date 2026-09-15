@@ -18,4 +18,5 @@ export * from './curve.js';
 export * from './bonds.js';
 export * from './curveNode.js';
 export * from './transmission.js';
+export * from './scenario.js';
 export * from './strategy.js';

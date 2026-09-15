@@ -1,0 +1,26 @@
+{
+  "name": "@picasso/canvas-integration",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The PRD's worked example, run end to end across every package",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@picasso/canvas-core": "*",
+    "@picasso/canvas-pricing": "*",
+    "@picasso/canvas-router": "*",
+    "@picasso/canvas-agents": "*",
+    "@picasso/canvas-guard": "*",
+    "@picasso/canvas-markets": "*",
+    "@picasso/canvas-equity": "*",
+    "@picasso/canvas-hypothesis": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}
