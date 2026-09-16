@@ -128,6 +128,25 @@ export class SyncedCanvas {
     });
   }
 
+  /**
+   * Records which dataset versions this node reads.
+   *
+   * A mutator rather than a re-add, and it needs one: `provenance` is in the
+   * synced field set and it feeds `deriveCacheKey`, so a snapshot that
+   * advances on one client and never reaches the others leaves them deriving
+   * keys for data they do not have. Re-adding the node would carry the new
+   * value but destroy the params map's CRDT identity, discarding a peer's
+   * concurrent param edit in the process.
+   */
+  setProvenance(id: NodeID, provenance: PicassoNode['provenance']): void {
+    this.withNode(id, (map) => map.set('provenance', provenance));
+  }
+
+  /** Bumps the node implementation version, which is also part of the key. */
+  setNodeVersion(id: NodeID, version: string): void {
+    this.withNode(id, (map) => map.set('nodeVersion', version));
+  }
+
   private withNode(id: NodeID, fn: (map: YNode) => void): void {
     const map = nodesOf(this.doc).get(id);
     if (!map) return;

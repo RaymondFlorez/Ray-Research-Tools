@@ -311,3 +311,47 @@ describe('conflicting intent', () => {
     expect(a.getNode('tile')?.params.ticker).toBe(b.getNode('tile')?.params.ticker);
   });
 });
+
+describe('fields that feed the cache key', () => {
+  // Both are in the synced field set and both feed `deriveCacheKey`, so a
+  // change to either has to reach peers or they derive keys for inputs they do
+  // not have. Found by the integration walkthrough: the schema carried these
+  // fields and nothing could change them after creation.
+  it('update provenance in place, keeping the params map', () => {
+    const { a, b } = pair();
+    a.addNode(
+      node('tile', {
+        kind: 'DataTile',
+        binding: 'bound',
+        params: { symbol: 'NVDA' },
+        provenance: { datasetSnapshots: { prices: 'snap-1' }, asof: '2026-03-11', verified: true },
+      }),
+    );
+    b.setParam('tile', 'frequency', 'daily');
+    a.setProvenance('tile', {
+      datasetSnapshots: { prices: 'snap-2' },
+      asof: '2026-03-12',
+      verified: true,
+    });
+
+    for (const client of [a, b]) {
+      const tile = client.getNode('tile')!;
+      expect(tile.provenance.datasetSnapshots).toEqual({ prices: 'snap-2' });
+      // The concurrent param edit survived, which re-adding the node would not.
+      expect(tile.params).toEqual({ symbol: 'NVDA', frequency: 'daily' });
+    }
+  });
+
+  it('update the node version in place', () => {
+    const { a, b } = pair();
+    a.addNode(node('zscore', { kind: 'TransformNode', nodeVersion: '1' }));
+    a.setNodeVersion('zscore', '2');
+    expect(b.getNode('zscore')?.nodeVersion).toBe('2');
+  });
+
+  it('leave a node that was never given a version without one', () => {
+    const { a } = pair();
+    a.addNode(node('plain'));
+    expect(a.getNode('plain')?.nodeVersion).toBeUndefined();
+  });
+});

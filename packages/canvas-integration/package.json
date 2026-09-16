@@ -16,7 +16,10 @@
     "@picasso/canvas-guard": "*",
     "@picasso/canvas-markets": "*",
     "@picasso/canvas-equity": "*",
-    "@picasso/canvas-hypothesis": "*"
+    "@picasso/canvas-hypothesis": "*",
+    "@picasso/canvas-sync": "*",
+    "@picasso/canvas-ink": "*",
+    "@picasso/canvas-render": "*"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
