@@ -45,6 +45,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `walkthrough.test.ts` | The analytic path: guard → router → pricing → scenario → markets → agents → export. |
 | `collaboration.test.ts` | `canvas-sync` ↔ `canvas-core`: what crosses the wire, and what deliberately does not. |
 | `sketch.test.ts` | `canvas-ink` → `canvas-core` → `canvas-sync` → `canvas-render`: a stroke becoming a node. |
+| `degradation.test.ts` | PRD 7.4's ladder, checked against the packages that would actually carry each rung. |
 
 ## The second bug, found the same way
 
@@ -62,6 +63,31 @@ peer's concurrent `setParam` survives.
 Neither package could have found this alone. `canvas-sync` knows what crosses
 the wire but not what a cache key is made of; `canvas-core` derives cache keys
 but had never seen a document that arrived over a CRDT.
+
+## The ladder, checked rather than listed
+
+`canvas-guard` holds PRD 7.4's six rungs and tests them as data — six entries,
+in order, each with a badge. What nothing checked is whether the rungs are
+**achievable**. Rung 1 says a frontier outage routes to the 70B open-weight
+fleet, and only the router knows whether an open-weight model is actually
+eligible for that work. A ladder whose first rung describes a fallback the
+router cannot produce is a document, not a degradation plan.
+
+Rungs 1–5 now run against the package that would really carry them, and the
+two "do not silently substitute" clauses are tested as **refusals** rather than
+as badges: an on-device-only fleet still classifies, and throws
+`NoEligibleModel` on a codegen request rather than quietly answering it from a
+3B. Rung 1 and Appendix C.5 are also checked against each other — the Critic's
+independence ladder and the routing ladder have to fall to the same model, or
+the Critic would label itself against a fallback the ladder never planned for.
+
+Everything passed on the first run. This suite confirmed the ladder's claims
+rather than refuting one, which is worth saying plainly: it found no bug.
+
+**Rung 6 is not exercised.** There is no Firecracker sandbox and no Pyodide in
+this build, so neither side of that substitution exists. The test asserts the
+rung is present and stops there — a green test around an unimplemented
+fallback would make the ladder look more verified than it is.
 
 ## What is asserted at each seam
 
@@ -81,6 +107,10 @@ but had never seen a document that arrived over a CRDT.
 | sync (computation) | A wired node arriving from a peer carries no cache key and is `stale`; a loose one is `idle`. Removing a node takes its edges atomically, so no peer renders a dangling wire. |
 | ink → core | A hand-drawn box, through the real recognizer, becomes a `bound` node the scheduler picks up and a cache key can be derived from — with the resolved instrument id in the key, not the handwriting. |
 | ink → render | The accepted node draws, with its kind's glyph, nothing culled. |
+| guard → router | A frontier outage still answers every frontier task class, from `open-70b`; an on-device-only fleet classifies but refuses codegen. |
+| guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
+| guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
+| guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |
 
 ## What this does not cover
 
