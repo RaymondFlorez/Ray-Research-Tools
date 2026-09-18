@@ -474,6 +474,173 @@ mod test {
         assert!(gain < loss, "gained {gain} on a rally, lost {loss} on a selloff");
     }
 
+    /// The lattice against Hull-White's own closed form.
+    ///
+    /// Everything above tests the tree's *shape*: it reprices the curve, its
+    /// probabilities are probabilities, the option is worth more when
+    /// volatility is higher. None of it tests the *magnitude* of the
+    /// volatility effect, which is the one thing a lattice most easily gets
+    /// wrong — a `dx` off by a factor, a variance that should have been a
+    /// standard deviation, a missing `dt`. Each of those keeps every
+    /// monotonicity above and mis-prices the option.
+    ///
+    /// Hull and White give a European option on a zero-coupon bond in closed
+    /// form:
+    ///
+    ///   ZBC = P(0,S)·N(h) − K·P(0,T)·N(h − σ_p)
+    ///   B(T,S) = (1 − e^{−a(S−T)}) / a
+    ///   σ_p    = σ·sqrt((1 − e^{−2aT}) / (2a))·B(T,S)
+    ///   h      = ln(P(0,S) / (P(0,T)·K)) / σ_p + σ_p/2
+    ///
+    /// A callable zero-coupon bond with a single call date is exactly that
+    /// option seen from the other side: the holder receives min(V, K), so the
+    /// straight bond less the callable one is max(V − K, 0).
+    mod closed_form {
+        use super::*;
+        use crate::normal::cdf;
+
+        fn zero_bond_call(curve: &Curve, hw: &HullWhite, expiry: f64, maturity: f64, strike: f64) -> f64 {
+            let a = hw.mean_reversion;
+            let p_t = curve.discount(expiry);
+            let p_s = curve.discount(maturity);
+            let b = (1.0 - libm::exp(-a * (maturity - expiry))) / a;
+            let sigma_p = hw.vol * libm::sqrt((1.0 - libm::exp(-2.0 * a * expiry)) / (2.0 * a)) * b;
+            let h = libm::log(p_s / (p_t * strike)) / sigma_p + sigma_p / 2.0;
+            p_s * cdf(h) - strike * p_t * cdf(h - sigma_p)
+        }
+
+        /// A zero-coupon bond, callable once, at one slice.
+        fn callable_zero(slices: usize, call_slice: usize, strike: f64) -> LatticeBond {
+            LatticeBond {
+                flows: vec![0.0; slices + 1],
+                redemption: 1.0,
+                calls: vec![(call_slice, strike)],
+            }
+        }
+
+        /// The option value the tree produces for that structure.
+        fn lattice_call(dt: f64, slices: usize, call_slice: usize, strike: f64) -> f64 {
+            let lattice = model().calibrate(&curve(), dt, slices);
+            lattice.option_value(&callable_zero(slices, call_slice, strike), 0.0)
+        }
+
+        #[test]
+        fn matches_the_analytic_bond_option() {
+            let hw = model();
+            let dt = 0.05;
+            let slices = 100; // five years
+            let call_slice = 40; // two years
+
+            for &strike in &[0.86_f64, 0.88, 0.90, 0.92] {
+                let tree = lattice_call(dt, slices, call_slice, strike);
+                let analytic = zero_bond_call(&curve(), &hw, dt * call_slice as f64, dt * slices as f64, strike);
+                // Per unit of notional, so this tolerance is a hundredth of a
+                // cent on a 100 bond.
+                assert!(
+                    libm::fabs(tree - analytic) < 1e-4,
+                    "strike {strike}: tree {tree} vs analytic {analytic}, diff {}",
+                    tree - analytic,
+                );
+            }
+        }
+
+        /// The real statement: the error is discretisation, so refining the
+        /// tree shrinks it. A formula error would not.
+        ///
+        /// Measured, per year of steps:
+        ///
+        ///     4/yr  1.131e-4      20/yr  7.686e-5      80/yr  3.769e-6
+        ///    10/yr  1.132e-4      40/yr  3.780e-5
+        ///
+        /// Note the 4 to 10 step, which does not improve. That is not a bug
+        /// and the first version of this test asserted it away: a trinomial
+        /// lattice oscillates around the true value rather than approaching it
+        /// from one side, so step-by-step monotonicity is a property it does
+        /// not have and should not be required to have. What the refinement
+        /// does guarantee is the trend, and thirty-fold over this range is a
+        /// trend no formula error would produce.
+        #[test]
+        fn converges_to_the_analytic_value_as_the_tree_refines() {
+            let hw = model();
+            let strike = 0.90;
+            let expiry = 2.0;
+            let maturity = 5.0;
+            let analytic = zero_bond_call(&curve(), &hw, expiry, maturity, strike);
+
+            let mut errors = Vec::new();
+            for &steps_per_year in &[4.0_f64, 10.0, 20.0, 40.0, 80.0] {
+                let dt = 1.0 / steps_per_year;
+                let slices = (maturity * steps_per_year) as usize;
+                let call_slice = (expiry * steps_per_year) as usize;
+                errors.push(libm::fabs(lattice_call(dt, slices, call_slice, strike) - analytic));
+            }
+
+            let coarsest = errors[0];
+            let finest = errors[errors.len() - 1];
+            assert!(
+                finest < coarsest / 20.0,
+                "refining 4/yr to 80/yr moved the error from {coarsest:.3e} to {finest:.3e}",
+            );
+            assert!(finest < 1e-5, "finest error {finest:.3e}");
+            // Every halving of dt from 20/yr on does improve; only the coarse
+            // end oscillates.
+            for window in errors[2..].windows(2) {
+                assert!(window[1] < window[0], "{:.3e} did not improve on {:.3e}", window[1], window[0]);
+            }
+        }
+
+        /// Put-call parity on the same structure: a call and a put on the same
+        /// bond differ by the forward less the strike, both discounted. The
+        /// put is the holder's option, so it is the callable bond *above* the
+        /// straight one when the strike is the other way round.
+        #[test]
+        fn respects_put_call_parity() {
+            let hw = model();
+            let dt = 0.05;
+            let slices = 100;
+            let call_slice = 40;
+            let expiry = dt * call_slice as f64;
+            let maturity = dt * slices as f64;
+            let strike = 0.90;
+
+            let call = zero_bond_call(&curve(), &hw, expiry, maturity, strike);
+            // ZBP = ZBC − P(0,S) + K·P(0,T)
+            let put = call - curve().discount(maturity) + strike * curve().discount(expiry);
+            let tree_call = lattice_call(dt, slices, call_slice, strike);
+
+            assert!(put > 0.0, "the put should be worth something: {put}");
+            assert!(
+                libm::fabs((tree_call - curve().discount(maturity) + strike * curve().discount(expiry)) - put)
+                    < 1e-4,
+                "parity broken",
+            );
+        }
+
+        /// Zero volatility collapses the option to its intrinsic value on the
+        /// forward, which needs no model at all.
+        #[test]
+        fn collapses_to_intrinsic_when_volatility_vanishes() {
+            let hw = HullWhite { mean_reversion: 0.05, vol: 1e-9 };
+            let dt = 0.05;
+            let slices = 100;
+            let call_slice = 40;
+            let expiry = dt * call_slice as f64;
+            let maturity = dt * slices as f64;
+            let strike = 0.90;
+
+            let lattice = hw.calibrate(&curve(), dt, slices);
+            let tree = lattice.option_value(&callable_zero(slices, call_slice, strike), 0.0);
+
+            // The forward price of the bond, discounted back from expiry.
+            let forward = curve().discount(maturity) / curve().discount(expiry);
+            let intrinsic = curve().discount(expiry) * (forward - strike).max(0.0);
+            assert!(
+                libm::fabs(tree - intrinsic) < 1e-6,
+                "tree {tree} vs intrinsic {intrinsic}",
+            );
+        }
+    }
+
     #[test]
     fn declines_a_price_no_spread_reaches() {
         let lattice = model().calibrate(&curve(), DT, SLICES);

@@ -397,6 +397,140 @@ mod test {
         assert!(risk.convexity > 0.0, "{}", risk.convexity);
     }
 
+    /// The derivative identities, checked by finite difference.
+    ///
+    /// Everything above tests behaviour — duration shorter than maturity, a
+    /// Taylor step that roughly predicts a repricing. None of that pins the
+    /// formulas: a convexity missing its `1/f` term, or a modified duration
+    /// dividing by `(1 + y)` instead of `(1 + y/f)`, passes every one of them
+    /// while being wrong by a few percent. These compare the closed forms
+    /// against numerical derivatives of `price_at_yield`, which is the only
+    /// definition either number has.
+    mod derivatives {
+        use super::*;
+
+        /// Central difference, with a step small enough to be accurate and
+        /// large enough not to be swamped by cancellation in f64.
+        fn numeric_first(flows: &CashFlows, y: f64, f: f64) -> f64 {
+            let h = 1e-6;
+            (price_at_yield(flows, y + h, f) - price_at_yield(flows, y - h, f)) / (2.0 * h)
+        }
+
+        fn numeric_second(flows: &CashFlows, y: f64, f: f64) -> f64 {
+            let h = 1e-4;
+            (price_at_yield(flows, y + h, f) - 2.0 * price_at_yield(flows, y, f)
+                + price_at_yield(flows, y - h, f))
+                / (h * h)
+        }
+
+        #[test]
+        fn modified_duration_is_the_first_derivative() {
+            for &(coupon, years, frequency) in
+                &[(0.04, 10.0, 2.0), (0.0, 7.0, 2.0), (0.08, 30.0, 2.0), (0.025, 3.0, 4.0), (0.06, 5.0, 1.0)]
+            {
+                let flows = bond(coupon, years, frequency);
+                let price = price_at_yield(&flows, 0.045, frequency);
+                let m = yield_metrics(&flows, price, frequency).unwrap();
+
+                // modified = -(1/P) dP/dy, by definition.
+                let expected = -numeric_first(&flows, m.yield_to_maturity, frequency) / price;
+                let error = libm::fabs(m.modified_duration - expected) / expected;
+                assert!(
+                    error < 1e-7,
+                    "coupon {coupon} years {years} freq {frequency}: modified {} vs numeric {}",
+                    m.modified_duration,
+                    expected,
+                );
+            }
+        }
+
+        #[test]
+        fn convexity_is_the_second_derivative() {
+            for &(coupon, years, frequency) in
+                &[(0.04, 10.0, 2.0), (0.0, 7.0, 2.0), (0.08, 30.0, 2.0), (0.025, 3.0, 4.0)]
+            {
+                let flows = bond(coupon, years, frequency);
+                let price = price_at_yield(&flows, 0.045, frequency);
+                let m = yield_metrics(&flows, price, frequency).unwrap();
+
+                // convexity = (1/P) d2P/dy2, by definition.
+                let expected = numeric_second(&flows, m.yield_to_maturity, frequency) / price;
+                let error = libm::fabs(m.convexity - expected) / expected;
+                assert!(
+                    error < 1e-5,
+                    "coupon {coupon} years {years} freq {frequency}: convexity {} vs numeric {}",
+                    m.convexity,
+                    expected,
+                );
+            }
+        }
+
+        /// The one case with a closed form that needs no differentiation at
+        /// all: a zero-coupon bond's Macaulay duration is its maturity, to the
+        /// last bit, whatever the yield or the compounding convention.
+        #[test]
+        fn a_zero_coupon_bond_has_macaulay_duration_equal_to_its_maturity() {
+            for &years in &[1.0_f64, 5.0, 7.0, 30.0] {
+                for &frequency in &[1.0_f64, 2.0, 4.0] {
+                    let flows = [(years, 100.0)];
+                    let price = price_at_yield(&flows, 0.045, frequency);
+                    let m = yield_metrics(&flows, price, frequency).unwrap();
+                    assert!(
+                        libm::fabs(m.macaulay_duration - years) < 1e-12,
+                        "{years}y at {frequency}: {}",
+                        m.macaulay_duration,
+                    );
+                }
+            }
+        }
+
+        /// Macaulay and modified differ by exactly the compounding factor.
+        #[test]
+        fn macaulay_is_modified_times_one_plus_y_over_f() {
+            for &frequency in &[1.0_f64, 2.0, 4.0, 12.0] {
+                let flows = bond(0.05, 12.0, frequency);
+                let price = price_at_yield(&flows, 0.041, frequency);
+                let m = yield_metrics(&flows, price, frequency).unwrap();
+                let factor = 1.0 + m.yield_to_maturity / frequency;
+                assert!(
+                    libm::fabs(m.macaulay_duration - m.modified_duration * factor) < 1e-12,
+                    "at frequency {frequency}",
+                );
+            }
+        }
+
+        /// DV01 is the price move for one basis point, so it has to be the
+        /// price move for one basis point.
+        #[test]
+        fn dv01_is_the_price_change_for_a_basis_point() {
+            let flows = bond(0.04, 10.0, 2.0);
+            let price = price_at_yield(&flows, 0.045, 2.0);
+            let m = yield_metrics(&flows, price, 2.0).unwrap();
+
+            let bumped = price_at_yield(&flows, m.yield_to_maturity + 1e-4, 2.0);
+            let actual = price - bumped;
+            // Within a tenth of a percent: the difference is the convexity
+            // term the linear DV01 does not carry, and it is second order.
+            assert!(
+                libm::fabs(m.dv01 - actual) / actual < 1e-3,
+                "dv01 {} vs actual move {}",
+                m.dv01,
+                actual,
+            );
+        }
+
+        /// Duration rises as the yield falls, for every ordinary bond. A sign
+        /// slip in the discounting would invert this and nothing else here
+        /// would notice.
+        #[test]
+        fn duration_lengthens_as_yields_fall() {
+            let flows = bond(0.04, 20.0, 2.0);
+            let high = yield_metrics(&flows, price_at_yield(&flows, 0.08, 2.0), 2.0).unwrap();
+            let low = yield_metrics(&flows, price_at_yield(&flows, 0.02, 2.0), 2.0).unwrap();
+            assert!(low.modified_duration > high.modified_duration);
+        }
+    }
+
     #[test]
     fn declines_to_measure_risk_on_a_worthless_position() {
         assert!(effective_risk(&curve(), 25.0, |_| 0.0).is_none());

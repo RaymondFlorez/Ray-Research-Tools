@@ -98,7 +98,7 @@ node apps/canvas-demo/scripts/collab-shots.mjs  # collab: cuts the link, edits b
 node apps/canvas-demo/scripts/gl-shots.mjs      # webgl: verifies the shaders draw, measures 500..10,000 nodes
 
 # the Rust pricing core
-cd crates/pricing-core && cargo test --release   # 113 tests
+cd crates/pricing-core && cargo test --release   # 123 tests
 cargo run --release --example grid_bench --manifest-path crates/pricing-core/Cargo.toml
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 ```
