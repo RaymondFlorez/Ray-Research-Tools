@@ -43,6 +43,10 @@ suite asserts it.
 
 Recognition runs in well under 1ms per stroke against a 90ms budget.
 
+Phase 5's third number — zero unintended auto-promotions in the red-team session
+set — is a property of a *sequence*, not of anything in this package, so its corpus lives
+in `canvas-integration/test/sessions.ts`: 14 sessions, 0 unintended promotions.
+
 ## Ink to screen
 
 > Ink-to-screen p95 under 12ms — Appendix B, phase 5

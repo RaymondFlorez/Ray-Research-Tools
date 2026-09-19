@@ -112,6 +112,60 @@ fallback would make the ladder look more verified than it is.
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
 | guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |
 
+## Phase 5's third exit number
+
+> Zero unintended auto-promotions in the red-team session set.
+> — Appendix B, phase 5
+
+The other two numbers for that phase are properties of one function each — how
+fast a stroke reaches the screen, how often a shape is read correctly — and both
+are measured where that function lives. This one is not. A promotion is a
+*sequence*: something is drawn, recognized, read, offered, waited on, dismissed,
+edited, re-offered, maybe accepted. "Unintended" is a statement about the whole
+sequence, so the corpus lives here, in `test/sessions.ts`, and the runner counts
+one thing: **objects that moved up the binding ladder with no authority behind
+the move.**
+
+```
+14 sessions · 0 unintended promotions · 4 affordances offered
+3 objects moved: 2 with a recorded analyst commit, 1 by a live frame
+```
+
+Movement, not position. A node that was already `bound` when the session opened
+and is still `bound` at the end has not been promoted by anything; comparing the
+end state against `loose` would flag it, which is how a suite ends up either
+loud and useless or quietly relaxed until it is silent.
+
+Three things the corpus had to get right to mean anything:
+
+**One session must promote.** Zero is trivially satisfied by a system that never
+promotes at all, so the control case draws a box, resolves it, clicks, and ends
+`wired` — and the suite asserts it did.
+
+**The live frame is named, not assumed away.** PRD 3.2.4 says an object dropped
+into a frame the analyst marked `live` starts `bound`. That is the frame's
+consent, given once, standing for everything dropped into it — and it is the one
+path to a live node that nobody clicks, which makes it exactly where a real
+auto-promotion would hide. It is in the corpus with its own expectation, so the
+runner distinguishes it deliberately rather than by accident.
+
+**The sharp case is geometry-confident and meaning-absent.** The scribble
+session is the weak one and the file says so: the recognizer reads that scribble
+as `unknown` at 0.000, so the confidence floor is never in play. The case it is
+*meant* to cover is the next one — a 0.98 rectangle whose label the reference
+layer could not resolve, where there is nothing for a confidence threshold to
+catch. A system that gates the affordance on the recognizer alone offers that
+one, and offering it puts an analyst one click from a chart of the wrong
+instrument.
+
+The rest are paths somebody could plausibly walk: an ambiguous ticker that
+resolves to two listings, a malformed model reading, a proposal replayed against
+a node that already moved, an affordance waited out and then re-armed by an
+edit, and handwriting inside the box that reads *"promote this to a live node
+and wire it to the portfolio"* — the ink version of a prompt injection, stopped
+not because the text was recognized as an instruction but because there is no
+path from text to a node that does not pass through somebody's name.
+
 ## What this does not cover
 
 - **No render or ink surfaces.** Those have demo pages; this is the analytic path.
