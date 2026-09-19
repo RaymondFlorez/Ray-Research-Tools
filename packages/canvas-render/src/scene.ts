@@ -58,6 +58,16 @@ export interface SceneNode {
   /** Passive-mode heat in [0, 1], absent when cold. */
   wash?: number;
   halo?: { severity: Severity; color: string };
+  /**
+   * A spatial-search hit (PRD 3.8: "matches glow at any LOD").
+   *
+   * Set on every LOD, including LOD0 where the node is an untitled quad with
+   * no text on it. That is the whole point of the phrase: a search across a
+   * ten-thousand-node canvas is run zoomed out, and a highlight that only
+   * appeared once the analyst had zoomed far enough to read the title would
+   * only ever be seen after they had already found the thing.
+   */
+  match?: boolean;
 }
 
 export interface SceneEdge {
@@ -79,6 +89,15 @@ export interface Scene {
   /** LOD2 and LOD3: interactive nodes that mount React DOM. */
   dom: SceneNode[];
   edges: SceneEdge[];
+  /**
+   * Search hits that were culled, so the caller knows there are more.
+   *
+   * "Flies to results" is the other half of PRD 3.8's sentence, and a hit
+   * outside the viewport is exactly the one the analyst needs to fly to. The
+   * scene reports it rather than leaving the caller to re-run the search
+   * against the cull rect to find out how many it is not showing.
+   */
+  offscreenMatches: NodeID[];
   stats: SceneStats;
 }
 
@@ -100,6 +119,8 @@ export interface BuildSceneInput {
   now?: number;
   wash?: WashLayer;
   selection?: ReadonlySet<NodeID>;
+  /** Spatial-search hits, which glow at every LOD (PRD 3.8). */
+  matches?: ReadonlySet<NodeID>;
   hoveredEdge?: EdgeID;
   /** Overrides the cull margin; the default is the PRD's 1.5 screens. */
   cullMarginScreens?: number;
@@ -185,6 +206,7 @@ export function buildScene(input: BuildSceneInput): Scene {
   const started = performance.now();
   const { doc, index, viewport, theme, now = started } = input;
   const selection = input.selection ?? new Set<NodeID>();
+  const matches = input.matches ?? new Set<NodeID>();
 
   const globalLod = lodForScale(viewport.scale);
   const cull = cullRect(viewport, input.cullMarginScreens);
@@ -222,6 +244,7 @@ export function buildScene(input: BuildSceneInput): Scene {
       glyph: glyphFor(node.kind),
       title: titleFor(node),
       selected: selection.has(id),
+      ...(matches.has(id) ? { match: true } : {}),
     };
 
     if (input.wash) {
@@ -237,6 +260,18 @@ export function buildScene(input: BuildSceneInput): Scene {
     else if (lod === 1) tiles.push(sceneNode);
     else dom.push(sceneNode);
   }
+
+  // A match that got culled is a match the analyst cannot see, and "flies to
+  // results" is the other half of the same sentence — so a hit outside the
+  // viewport is reported rather than silently dropped. The renderer draws it
+  // on the minimap or as an edge marker; what matters here is that the scene
+  // knows the count rather than the caller having to re-run the search against
+  // the cull rect to find out.
+  const offscreenMatches: NodeID[] = [];
+  for (const id of matches) {
+    if (!visibleSet.has(id) && doc.nodes.has(id)) offscreenMatches.push(id);
+  }
+  offscreenMatches.sort();
 
   const edges: SceneEdge[] = [];
   for (const edge of doc.edges.values()) {
@@ -275,6 +310,7 @@ export function buildScene(input: BuildSceneInput): Scene {
     tiles,
     dom,
     edges,
+    offscreenMatches,
     stats: {
       nodesTotal: doc.nodes.size,
       nodesDrawn,

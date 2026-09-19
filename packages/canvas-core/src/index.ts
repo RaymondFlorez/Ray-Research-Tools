@@ -20,3 +20,4 @@ export * from './cacheKey.js';
 export * from './document.js';
 export * from './template.js';
 export * from './search.js';
+export * from './frame.js';

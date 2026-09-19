@@ -271,3 +271,96 @@ describe('scene assembly cost', () => {
     expect(scene.stats.buildMs).toBeLessThan(4);
   });
 });
+
+// ---------------------------------------------------------------------------
+// PRD 3.8: "matches glow at any LOD"
+// ---------------------------------------------------------------------------
+
+describe('search matches', () => {
+  function withNodes(count: number) {
+    const doc = docWith(
+      Array.from({ length: count }, (_, i) => ({
+        id: `n${i}`,
+        x: (i % 10) * 300,
+        y: Math.floor(i / 10) * 220,
+      })),
+    );
+    return { doc, index: new CanvasIndex(doc) };
+  }
+
+  /** A viewport at the scale that produces each LOD. */
+  const SCALES: Array<[number, number]> = [
+    [0, 0.08],
+    [1, 0.3],
+    [2, 0.9],
+  ];
+
+  // The whole point of the phrase. A search across a ten-thousand-node canvas
+  // is run zoomed out, and a highlight that only appeared once the analyst had
+  // zoomed in far enough to read the title would only ever be seen after they
+  // had already found the thing.
+  it('glow at every LOD, including the one with no text on it', () => {
+    const { doc, index } = withNodes(12);
+    for (const [expectedLod, scale] of SCALES) {
+      const scene = buildScene({
+        doc,
+        index,
+        viewport: { x: -200, y: -200, scale, width: 1600, height: 900 },
+        theme: lightTheme,
+        now: 0,
+        matches: new Set(['n3']),
+      });
+      expect(scene.lod, `scale ${scale}`).toBe(expectedLod);
+      const drawn = [...scene.quads, ...scene.tiles, ...scene.dom];
+      const hit = drawn.find((n) => n.id === 'n3');
+      expect(hit?.match, `lod ${expectedLod}`).toBe(true);
+      expect(drawn.filter((n) => n.match === true).length, `lod ${expectedLod}`).toBe(1);
+    }
+  });
+
+  it('leave every other node unmarked, and are absent when nothing is searched', () => {
+    const { doc, index } = withNodes(8);
+    const viewport = { x: -200, y: -200, scale: 0.9, width: 1600, height: 900 };
+
+    const searched = buildScene({ doc, index, viewport, theme: lightTheme, now: 0, matches: new Set(['n1']) });
+    const others = [...searched.quads, ...searched.tiles, ...searched.dom].filter((n) => n.id !== 'n1');
+    expect(others.every((n) => n.match === undefined)).toBe(true);
+
+    const plain = buildScene({ doc, index, viewport, theme: lightTheme, now: 0 });
+    const all = [...plain.quads, ...plain.tiles, ...plain.dom];
+    expect(all.every((n) => n.match === undefined)).toBe(true);
+    expect(plain.offscreenMatches).toEqual([]);
+  });
+
+  // "Flies to results" is the other half of the sentence, and a hit outside
+  // the viewport is exactly the one worth flying to.
+  it('report the hits that were culled rather than dropping them', () => {
+    const { doc, index } = withNodes(60);
+    const scene = buildScene({
+      doc,
+      index,
+      viewport: { x: -100, y: -100, scale: 1, width: 900, height: 600 },
+      theme: lightTheme,
+      now: 0,
+      matches: new Set(['n0', 'n55', 'n59']),
+    });
+
+    const drawn = new Set([...scene.quads, ...scene.tiles, ...scene.dom].map((n) => n.id));
+    expect(drawn.has('n0')).toBe(true);
+    expect(scene.offscreenMatches).toEqual(['n55', 'n59']);
+    for (const id of scene.offscreenMatches) expect(drawn.has(id)).toBe(false);
+  });
+
+  it('ignore a match id that is not in the document', () => {
+    const { doc, index } = withNodes(4);
+    const scene = buildScene({
+      doc,
+      index,
+      viewport: { x: -200, y: -200, scale: 0.9, width: 1600, height: 900 },
+      theme: lightTheme,
+      now: 0,
+      matches: new Set(['ghost']),
+    });
+    expect(scene.offscreenMatches).toEqual([]);
+  });
+});

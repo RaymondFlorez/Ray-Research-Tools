@@ -18,7 +18,15 @@ npm test --workspace @picasso/canvas-render
 | `wash.ts` | 3.6 | Passive-mode heat with a 20 minute half-life, and anomaly halo severity |
 | `theme.ts` | — | Light and dark token sets |
 
-## Two rules worth stating
+## Three rules worth stating
+
+**A search match glows at every LOD** (PRD 3.8). That includes LOD0, where a node is an
+untitled quad with no text on it, and that is the whole point of the phrase: a search
+across a ten-thousand-node canvas is run zoomed out, and a highlight that only appeared
+once the analyst had zoomed far enough to read the title would only ever be seen after
+they had already found the thing. Hits culled from the viewport come back in
+`offscreenMatches` rather than being dropped — "flies to results" is the other half of the
+same sentence, and the hit outside the viewport is the one worth flying to.
 
 **Binding state is visible at every LOD** (guardrail #2). `signaturesDistinctAt(lod, theme)`
 is that rule as an executable check, and it runs in the test suite for every LOD in both

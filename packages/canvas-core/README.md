@@ -29,6 +29,7 @@ npm run typecheck --workspaces
 | `document.ts` | 3.2.6 | Document CRUD, wiring, and the spatial index over it |
 | `search.ts` | 3.8 | The fuzzy matcher, the command palette ranking, spatial content search, and the fly-to framing |
 | `template.ts` | 3.9 | Canvas templates: keep the structure and the layout, strip the subject |
+| `frame.ts` | 3.8, 3.2.4 | `Cmd G` framing, collapse as a view operation, and the edges that cross a folded boundary |
 
 ## Three rules that are easy to state and easy to get wrong
 
@@ -51,6 +52,18 @@ of it, and names any binding the caller did not supply rather than half-binding 
 
 The layout is kept. The spatial arrangement of a canvas *is* the analysis in a way a list
 of nodes is not, and a template that discarded it would hand back the same graph as a pile.
+
+**Collapsing a frame is a view operation, not a graph one.** An analyst who folds away the
+twelve nodes that produced a number still wants the number, so a collapsed frame's members
+keep computing, keep their cache keys and keep feeding whatever they fed. Treating it as a
+graph operation would mean unfolding recomputed everything inside, which is the opposite of
+why anyone folds one. The case that takes the thought is an edge crossing the boundary:
+`collapseView` reports it with the frame to re-attach it to, because hiding it would remove
+the only sign the frame is wired into anything. An edge with both ends inside is hidden
+with them, and one with both ends outside is untouched.
+
+Framing moves nothing. The frame is fitted around the selection where the selection already
+is, and a node already in a frame is refused rather than silently re-parented.
 
 **A palette that guesses what you meant hides what you wanted.** `searchPalette` ranks node
 types, tickers, existing nodes and templates together and uses kind only as a tiebreak —
