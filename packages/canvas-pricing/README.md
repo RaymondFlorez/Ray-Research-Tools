@@ -88,6 +88,25 @@ dominated by the most expensive quotes, which on an equity surface means the lon
 at-the-money ones, so it lands the wings wherever they fall — and the wings are the entire
 reason anybody fits Heston rather than Black-Scholes.
 
+### Which processes cross the boundary
+
+GBM, Heston and Merton, each with its own entry point carrying only its own parameters —
+one function taking the union of them would have sixteen `f64` arguments where eleven are
+ignored, and nobody calls that correctly twice. A Heston asset takes the parameters a
+surface calibration produces, so the fit can drive the simulation directly; the
+integration suite runs that composition end to end.
+
+Variance gamma is not offered. It is pure jump: it builds its increment from a gamma clock
+and its own normal and never reads the Brownian increment the simulator correlates, so in a
+multi-asset run it receives no cross-asset dependence while looking exactly like an asset
+that did. Measured, a VG pair asked for 0.8 comes back at 0.0062 — the same to the last
+digit as at zero. The engine refuses it, so there is nothing here to expose.
+
+One thing worth knowing about a Heston portfolio: the cross-asset correlation couples the
+*spot* shocks. Each asset's own `rho` couples its variance to its own spot, which is what
+Heston's rho means; variance shocks are not correlated across assets. A cross-asset variance
+correlation is a second matrix nobody calibrates.
+
 ## One call, not fifteen thousand
 
 A 40-leg book across a 25x15 grid is 15,000 repricings. The book is pushed leg by leg,

@@ -767,6 +767,90 @@ mod portfolio_tests {
         );
     }
 
+    /// The implied correlation of two assets' terminal values, off three runs.
+    fn pair_correlation(processes: &[&dyn Process], rho: f64, seed: u64) -> f64 {
+        let factor = Factor::equicorrelated(2, rho).unwrap();
+        let cfg = PortfolioConfig {
+            paths: 60_000,
+            steps: 64,
+            antithetic: false,
+            seed,
+            sample_paths: 0,
+        };
+        let run = |wa: f64, wb: f64| {
+            let specs = [
+                AssetSpec { spot: 100.0, weight: wa, initial_variance: 0.0625 },
+                AssetSpec { spot: 100.0, weight: wb, initial_variance: 0.0625 },
+            ];
+            simulate_portfolio(processes, &specs, &factor, 1.0, &cfg).unwrap().variance
+        };
+        let va = run(1.0, 0.0);
+        let vb = run(0.0, 1.0);
+        let vp = run(0.5, 0.5);
+        2.0 * (vp - 0.25 * va - 0.25 * vb) / (va.sqrt() * vb.sqrt())
+    }
+
+    #[test]
+    fn every_diffusive_process_receives_the_correlation() {
+        let gbm = gbm(0.25);
+        let heston = pricing_core::mc::Heston {
+            rate: 0.03, dividend: 0.0, theta: 0.0625, kappa: 2.0, sigma: 0.5, rho: -0.6,
+            initial_variance: 0.0625,
+        };
+        let merton = pricing_core::mc::Merton {
+            rate: 0.03, dividend: 0.0, vol: 0.22, intensity: 0.5, jump_mean: -0.05, jump_vol: 0.12,
+        };
+
+        // Measured at 0.79, 0.67 and 0.69. Heston and Merton come back below
+        // the requested 0.8 because each carries independent noise of its own —
+        // a variance shock, a jump — that dilutes the terminal correlation.
+        // That is the model, not a defect, so the assertion is that they are
+        // substantially correlated rather than that they hit 0.8.
+        for (label, processes) in [
+            ("gbm", vec![&gbm as &dyn Process, &gbm as &dyn Process]),
+            ("heston", vec![&heston as &dyn Process, &heston as &dyn Process]),
+            ("merton", vec![&merton as &dyn Process, &merton as &dyn Process]),
+        ] {
+            let at_zero = pair_correlation(&processes, 0.0, 0xC0FFEE);
+            let at_high = pair_correlation(&processes, 0.8, 0xC0FFEE);
+            assert!(at_zero.abs() < 0.05, "{label} at rho=0: {at_zero:.4}");
+            assert!(at_high > 0.6, "{label} at rho=0.8: {at_high:.4}");
+        }
+    }
+
+    // The trap this refusal exists for. Variance gamma is pure jump: it builds
+    // its increment from a gamma clock and its own normal and never reads the
+    // Brownian increment the simulator correlates. Before the refusal, a VG
+    // pair asked for 0.8 came back at 0.0062 — the same value to the last digit
+    // as at a requested correlation of zero, because the factor had literally
+    // no effect. A number that looks like a correlated simulation and is not
+    // one is worse than a refusal.
+    #[test]
+    fn a_process_that_ignores_the_brownian_is_refused_rather_than_decorrelated() {
+        let vg = pricing_core::mc::VarianceGamma {
+            rate: 0.03, dividend: 0.0, sigma: 0.25, nu: 0.35, theta: -0.2,
+        };
+        let gbm = gbm(0.25);
+        assert!(!vg.uses_brownian());
+        assert!(gbm.uses_brownian());
+
+        let factor = Factor::equicorrelated(2, 0.8).unwrap();
+        let assets = [spec(100.0, 0.5), spec(100.0, 0.5)];
+
+        // And it names which asset, so a forty-name book says where to look.
+        let processes: Vec<&dyn Process> = vec![&gbm, &vg];
+        assert_eq!(
+            simulate_portfolio(&processes, &assets, &factor, 1.0, &config(100, 8)).err(),
+            Some(PortfolioError::NotDrivenByBrownian { asset: 1 })
+        );
+
+        let processes: Vec<&dyn Process> = vec![&vg, &gbm];
+        assert_eq!(
+            simulate_portfolio(&processes, &assets, &factor, 1.0, &config(100, 8)).err(),
+            Some(PortfolioError::NotDrivenByBrownian { asset: 0 })
+        );
+    }
+
     #[test]
     fn antithetic_pairing_reduces_the_standard_error() {
         let process = gbm(0.3);

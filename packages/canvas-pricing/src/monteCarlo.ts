@@ -27,6 +27,14 @@
  * has moved on. A loud `ResultSuperseded` is the only honest version of a lazy
  * read from a slot somebody else can overwrite.
  *
+ * **Variance gamma is not offered.** It is a pure-jump process: it builds its
+ * increment from a gamma clock and its own normal and never reads the Brownian
+ * increment the simulator correlates, so in a multi-asset run it receives no
+ * cross-asset dependence at all while looking exactly like an asset that did.
+ * Measured, a VG pair asked for a correlation of 0.8 comes back at 0.0062 — the
+ * same value to the last digit as at a requested correlation of zero. The
+ * engine refuses it, so there is nothing to expose.
+ *
  * **What the browser should run at all.** The PRD puts the 100k x 252 x 40
  * shape on a cluster, and single-core native it takes 30 seconds. A browser
  * asking for that shape is asking for a frozen tab, so `estimateCost` reports
@@ -39,17 +47,54 @@
 
 import { readFloats, type PricingExports } from './module.js';
 
-export interface McAsset {
+interface McAssetBase {
   /** For the error message and the output labels. */
   id: string;
   spot: number;
   /** Units held. Negative is short, and the drawdown statistics follow it. */
   weight: number;
-  /** Annualized volatility. */
-  vol: number;
   rate: number;
   dividend: number;
 }
+
+/** Geometric Brownian motion. The default when no process is named. */
+export interface GbmAsset extends McAssetBase {
+  process?: 'gbm';
+  /** Annualized volatility. */
+  vol: number;
+}
+
+/**
+ * Heston, taking the parameters a surface calibration produces.
+ *
+ * The cross-asset `correlation` couples the *spot* shocks. Each asset's own
+ * `rho` couples its variance to its own spot, which is what Heston's rho means;
+ * variance shocks are not correlated across assets. A cross-asset variance
+ * correlation is a second matrix nobody calibrates, and saying so beats letting
+ * a reader assume the one matrix covered both.
+ */
+export interface HestonAsset extends McAssetBase {
+  process: 'heston';
+  v0: number;
+  theta: number;
+  kappa: number;
+  sigma: number;
+  rho: number;
+}
+
+/** Merton jump diffusion. */
+export interface MertonAsset extends McAssetBase {
+  process: 'merton';
+  vol: number;
+  /** Jumps per year. */
+  intensity: number;
+  /** Mean of the log jump size. */
+  jumpMean: number;
+  /** Standard deviation of the log jump size. */
+  jumpVol: number;
+}
+
+export type McAsset = GbmAsset | HestonAsset | MertonAsset;
 
 export type Correlation =
   | { kind: 'independent' }
@@ -213,7 +258,30 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
 
   exports.pc_mc_reset();
   for (const asset of spec.assets) {
-    exports.pc_mc_add_asset(asset.spot, asset.weight, asset.vol, asset.rate, asset.dividend);
+    switch (asset.process) {
+      case 'heston':
+        exports.pc_mc_add_heston(
+          asset.spot, asset.weight, asset.rate, asset.dividend,
+          asset.v0, asset.theta, asset.kappa, asset.sigma, asset.rho,
+        );
+        break;
+      case 'merton':
+        exports.pc_mc_add_merton(
+          asset.spot, asset.weight, asset.rate, asset.dividend,
+          asset.vol, asset.intensity, asset.jumpMean, asset.jumpVol,
+        );
+        break;
+      default:
+        exports.pc_mc_add_asset(asset.spot, asset.weight, asset.vol, asset.rate, asset.dividend);
+    }
+  }
+  // The boundary took what we thought we sent. A mismatch here is a stale
+  // `.wasm` with a narrower asset surface, which would otherwise show up as a
+  // shape error from the engine naming numbers nobody passed.
+  if (exports.pc_mc_asset_count() !== spec.assets.length) {
+    throw new EmptySimulation(
+      `all ${spec.assets.length} assets to reach the engine; ${exports.pc_mc_asset_count()} did`,
+    );
   }
 
   const matrix = correlationMatrix(spec);

@@ -255,6 +255,34 @@ function wasmPortfolio() {
 
 const portfolio = wasmPortfolio();
 
+/** A mixed-process correlated portfolio, through WASM. */
+function wasmMixedPortfolio() {
+  const rows = new Map();
+  w.pc_mc_reset();
+  w.pc_mc_add_asset(100, 100, 0.24, 0.04, 0.01);
+  w.pc_mc_add_heston(80, -150, 0.04, 0.01, 0.0625, 0.09, 1.6, 0.6, -0.65);
+  w.pc_mc_add_merton(120, 100, 0.04, 0.01, 0.2, 1.2, -0.06, 0.14);
+  w.pc_mc_add_heston(60, 200, 0.04, 0.0, 0.16, 0.12, 0.8, 1.1, 0.3);
+  w.pc_mc_corr_equicorrelated(0.4);
+  rows.set('mix_run', w.pc_mc_run(0.75, 512, 40, 1, 909, 3));
+
+  const summary = new Float64Array(w.memory.buffer, w.pc_mc_summary(), 9);
+  for (let which = 0; which < 9; which += 1) {
+    rows.set(`mix_summary(${which})`, summary[which]);
+  }
+  for (const q of [0.01, 0.1, 0.5, 0.9, 0.99]) {
+    rows.set(`mix_pct(${q})`, w.pc_mc_percentile(q));
+    rows.set(`mix_dd(${q})`, w.pc_mc_drawdown_percentile(q));
+  }
+  const sample = new Float64Array(w.memory.buffer, w.pc_mc_sample(), 41);
+  for (let step = 0; step <= 40; step += 1) {
+    rows.set(`mix_path(${step})`, sample[step]);
+  }
+  return rows;
+}
+
+const mixed = wasmMixedPortfolio();
+
 /** Heston closed form and a small calibration, through WASM. */
 function wasmHeston() {
   const rows = new Map();
@@ -309,6 +337,7 @@ function recompute(label) {
   if (monteCarlo.has(label)) return monteCarlo.get(label);
   if (portfolio.has(label)) return portfolio.get(label);
   if (hestonRows.has(label)) return hestonRows.get(label);
+  if (mixed.has(label)) return mixed.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -351,7 +380,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a correlated portfolio ` +
+    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio ` +
     `and Heston with its calibration` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

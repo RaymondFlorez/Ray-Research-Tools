@@ -877,8 +877,30 @@ pub extern "C" fn pc_sobol(dimensions: i32, skip: i32, dimension: i32) -> f64 {
 /// Floats in the summary block.
 pub const MC_SUMMARY_STRIDE: usize = 9;
 
+/// One asset's process, as the C ABI can express it.
+///
+/// An enum rather than a trait object because the boundary has no allocator and
+/// no vtable: each variant is a flat parameter block, and the dispatch back to
+/// `&dyn Process` happens on this side where it costs nothing.
+#[derive(Clone, Copy, Debug)]
+enum McProcess {
+    Gbm(Gbm),
+    Heston(crate::mc::Heston),
+    Merton(crate::mc::Merton),
+}
+
+impl McProcess {
+    fn as_process(&self) -> &dyn Process {
+        match self {
+            McProcess::Gbm(p) => p,
+            McProcess::Heston(p) => p,
+            McProcess::Merton(p) => p,
+        }
+    }
+}
+
 thread_local! {
-    static MC_ASSETS: RefCell<Vec<(AssetSpec, Gbm)>> = const { RefCell::new(Vec::new()) };
+    static MC_ASSETS: RefCell<Vec<(AssetSpec, McProcess)>> = const { RefCell::new(Vec::new()) };
     static MC_CORR: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static MC_RESULT: RefCell<Option<PortfolioResult>> = const { RefCell::new(None) };
     static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
@@ -893,14 +915,14 @@ pub extern "C" fn pc_mc_reset() {
     MC_RESULT.with(|r| *r.borrow_mut() = None);
 }
 
-/// Appends one asset.
+/// Appends one geometric Brownian motion asset.
 ///
-/// The FFI surface takes GBM only, while the native `simulate_portfolio` takes
-/// any `&dyn Process`. That is a deliberate narrowing rather than an oversight:
-/// Heston, Merton and variance-gamma each need a different parameter block, and
-/// a C ABI that accepts the union of them is a function with fourteen `f64`
-/// arguments where eleven are ignored. When a browser needs a stochastic-vol
-/// portfolio, it gets its own entry point with its own parameters.
+/// One entry point per process rather than one taking the union of their
+/// parameters: Heston needs five, Merton six and variance-gamma five, and a
+/// single function with sixteen `f64` arguments where eleven are ignored is a
+/// signature nobody can call correctly twice. Each variant below carries only
+/// what it uses, and `pc_mc_asset_count` is how a caller checks the boundary
+/// took what it thought it sent.
 #[no_mangle]
 pub extern "C" fn pc_mc_add_asset(
     spot: f64,
@@ -912,10 +934,90 @@ pub extern "C" fn pc_mc_add_asset(
     MC_ASSETS.with(|assets| {
         assets.borrow_mut().push((
             AssetSpec { spot, weight, initial_variance: 0.0 },
-            Gbm { rate, dividend, vol },
+            McProcess::Gbm(Gbm { rate, dividend, vol }),
         ));
     });
 }
+
+/// Appends one Heston asset, with the parameters a surface calibration produces.
+///
+/// The cross-asset correlation in `pc_mc_corr_*` couples the *spot* shocks.
+/// Each asset's own `rho` couples its variance to its own spot, which is what
+/// Heston's `rho` means; variance shocks are not correlated across assets. That
+/// is a modelling choice rather than an omission — a cross-asset variance
+/// correlation is a second matrix nobody calibrates — and it is stated because
+/// a reader would otherwise reasonably assume the one matrix covered both.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_mc_add_heston(
+    spot: f64,
+    weight: f64,
+    rate: f64,
+    dividend: f64,
+    v0: f64,
+    theta: f64,
+    kappa: f64,
+    sigma: f64,
+    rho: f64,
+) {
+    MC_ASSETS.with(|assets| {
+        assets.borrow_mut().push((
+            // The initial variance travels on the spec, because that is what
+            // `simulate_portfolio` seeds `ProcessState` from; the copy on the
+            // process is what the drift reads.
+            AssetSpec { spot, weight, initial_variance: v0 },
+            McProcess::Heston(crate::mc::Heston {
+                rate,
+                dividend,
+                theta,
+                kappa,
+                sigma,
+                rho,
+                initial_variance: v0,
+            }),
+        ));
+    });
+}
+
+/// Appends one Merton jump-diffusion asset.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_mc_add_merton(
+    spot: f64,
+    weight: f64,
+    rate: f64,
+    dividend: f64,
+    vol: f64,
+    intensity: f64,
+    jump_mean: f64,
+    jump_vol: f64,
+) {
+    MC_ASSETS.with(|assets| {
+        assets.borrow_mut().push((
+            AssetSpec { spot, weight, initial_variance: 0.0 },
+            McProcess::Merton(crate::mc::Merton {
+                rate,
+                dividend,
+                vol,
+                intensity,
+                jump_mean,
+                jump_vol,
+            }),
+        ));
+    });
+}
+
+/// Variance gamma has no entry point here, deliberately.
+///
+/// It is a pure-jump process: it builds its increment from a gamma clock and
+/// its own normal, and never reads the Brownian increment the portfolio
+/// simulator correlates. In a multi-asset run that means it receives no
+/// cross-asset dependence at all while looking exactly like an asset that did —
+/// measured, a VG pair asked for a correlation of 0.8 comes back at 0.0062, the
+/// same to the last digit as at zero. `simulate_portfolio` refuses it, so an
+/// entry point here could only ever produce that refusal. A single-asset
+/// variance-gamma simulation belongs in `mc::simulate`, which drives it
+/// correctly.
 
 #[no_mangle]
 pub extern "C" fn pc_mc_asset_count() -> i32 {
@@ -998,7 +1100,7 @@ pub extern "C" fn pc_mc_run(
         let assets = assets.borrow();
         let specs: Vec<AssetSpec> = assets.iter().map(|(spec, _)| *spec).collect();
         let processes: Vec<&dyn Process> =
-            assets.iter().map(|(_, process)| process as &dyn Process).collect();
+            assets.iter().map(|(_, process)| process.as_process()).collect();
 
         match simulate_portfolio(&processes, &specs, &factor, time, &config) {
             Ok(result) => {

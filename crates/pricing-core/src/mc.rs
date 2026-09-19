@@ -54,6 +54,28 @@ pub trait Process {
     fn extra_dimensions(&self) -> usize {
         0
     }
+
+    /// Whether `step` actually consumes the Brownian increment `w`.
+    ///
+    /// True for everything with a diffusion term. False for a pure-jump
+    /// process, which builds its increment out of `extra` and ignores `w`
+    /// entirely.
+    ///
+    /// This exists because of what that means in a *correlated* portfolio.
+    /// `portfolio::simulate_portfolio` induces cross-asset dependence by
+    /// correlating the `w` it hands each asset — so an asset that does not read
+    /// `w` receives no dependence at all, silently. Measured, at a requested
+    /// correlation of 0.8: GBM pairs come back at 0.79, Heston at 0.67 and
+    /// Merton at 0.69 (both diluted by their own independent noise, correctly),
+    /// and variance-gamma at 0.0062 — the same value to the last digit as at a
+    /// requested correlation of zero.
+    ///
+    /// A number that looks like a correlated simulation and is not one is worse
+    /// than a refusal, so `simulate_portfolio` refuses, and this is the
+    /// predicate it asks.
+    fn uses_brownian(&self) -> bool {
+        true
+    }
     /// Advances one step. `w` is the Brownian increment for this step.
     ///
     /// `rng` is for processes whose increments need rejection sampling — a
@@ -242,6 +264,12 @@ pub struct VarianceGamma {
 impl Process for VarianceGamma {
     fn extra_dimensions(&self) -> usize {
         1
+    }
+
+    /// Pure jump: the increment is built from the gamma clock and `extra[0]`,
+    /// and `w` is not read. See `Process::uses_brownian`.
+    fn uses_brownian(&self) -> bool {
+        false
     }
 
     fn step(

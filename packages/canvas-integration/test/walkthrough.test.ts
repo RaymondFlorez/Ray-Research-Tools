@@ -14,8 +14,8 @@
  *
  * The flow follows 5.7's own plan for that query, in its order:
  * scope → plan → route → curve → transmit → reprice → scenario grid →
- * Monte Carlo under the shocked regime → tail attribution → weight →
- * reconcile → critique → export.
+ * Monte Carlo under the shocked regime → calibrate the smile and simulate
+ * under it → tail attribution → weight → reconcile → critique → export.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -48,8 +48,12 @@ import {
   evaluateGrid,
   fitSensitivity,
   runMonteCarlo,
+  calibrateHeston,
+  hestonImpliedVol,
   estimateCost,
   DEFAULT_COST_CEILING,
+  type HestonParams,
+  type SurfaceQuote,
   tailContributors,
   transmit,
   type GridAxis,
@@ -427,6 +431,140 @@ describe('4b · the shocked regime becomes a P&L distribution', () => {
       );
     }
   });
+});
+
+/**
+ * The step PRD 5.8 implies and nothing composed until the Monte Carlo boundary
+ * widened past GBM: fit the model to the surface, then simulate under the fit.
+ *
+ * > Calibration: ... or fit to the current option surface (for Heston, via
+ * > differential evolution on the surface fit residual). — PRD 5.8
+ *
+ * Three packages have to agree for this to mean anything. `canvas-pricing`
+ * inverts the quoted smile to a Heston parameter set; the same package hands
+ * that set to the simulator; and the pricer reprices the book at the terminal
+ * spots it produces. What is tested is that the parameters survive the round
+ * trip *and change the answer* — a calibration that fed a simulation which
+ * ignored it would pass every assertion in `4b`.
+ */
+describe('4c · the simulation runs under the model the surface implies', () => {
+  const SHOCK_BPS = 50;
+  const HORIZON = 0.35;
+
+  /**
+   * The desk's view of NVDA's smile, as a surface to fit.
+   *
+   * Generated from a known parameter set so the fit has a right answer — the
+   * same reason `pricing-core`'s own suite round-trips rather than fitting
+   * quotes nobody can check. What this adds is that the fit then has to drive
+   * something.
+   */
+  const DESK_VIEW: HestonParams = {
+    v0: 0.27,
+    theta: 0.30,
+    kappa: 1.4,
+    sigma: 0.85,
+    rho: -0.62,
+  };
+
+  function quotedSurface(exports: Awaited<ReturnType<typeof loadPricing>>): SurfaceQuote[] {
+    const market = { spot: BASE_MARKET.spot, rate: BASE_MARKET.rate, dividend: BASE_MARKET.dividend };
+    const quotes: SurfaceQuote[] = [];
+    for (const time of [0.12, 0.35, 0.6]) {
+      for (const strike of [90, 105, 118.5, 132, 150]) {
+        const kind = strike >= BASE_MARKET.spot ? ('call' as const) : ('put' as const);
+        const vol = hestonImpliedVol(exports, DESK_VIEW, market, { strike, time, kind });
+        if (Number.isFinite(vol)) quotes.push({ strike, time, kind, vol });
+      }
+    }
+    return quotes;
+  }
+
+  it('recovers a parameter set from the quoted smile', async () => {
+    const exports = await loadPricing();
+    const quotes = quotedSurface(exports);
+    expect(quotes.length).toBe(15);
+
+    const fit = calibrateHeston(exports, {
+      market: { spot: BASE_MARKET.spot, rate: BASE_MARKET.rate, dividend: BASE_MARKET.dividend },
+      quotes,
+      population: 50,
+      generations: 120,
+      seed: 0xa11ce,
+      maxEvaluations: 200_000,
+    });
+
+    expect(fit.skipped).toBe(0);
+    expect(fit.rmse).toBeLessThan(1e-4);
+    expect(fit.soundlyConditioned).toBe(true);
+    expect(fit.params.rho).toBeCloseTo(DESK_VIEW.rho, 1);
+    expect(fit.params.v0).toBeCloseTo(DESK_VIEW.v0, 2);
+  }, 180_000);
+
+  it('carries the fit into the simulation and the tail moves because of it', async () => {
+    const exports = await loadPricing();
+    const fit = calibrateHeston(exports, {
+      market: { spot: BASE_MARKET.spot, rate: BASE_MARKET.rate, dividend: BASE_MARKET.dividend },
+      quotes: quotedSurface(exports),
+      population: 50,
+      generations: 120,
+      seed: 0xa11ce,
+      maxEvaluations: 200_000,
+    });
+
+    const shockedRate = BASE_MARKET.rate + SHOCK_BPS / 10_000;
+    const common = {
+      correlation: { kind: 'independent' as const },
+      time: HORIZON,
+      paths: 30_000,
+      steps: 126,
+      seed: 0x5eed,
+      samplePaths: 4,
+    };
+
+    const calibrated = runMonteCarlo(exports, {
+      ...common,
+      assets: [{
+        id: 'NVDA',
+        process: 'heston',
+        spot: BASE_MARKET.spot,
+        weight: 1,
+        rate: shockedRate,
+        dividend: BASE_MARKET.dividend,
+        ...fit.params,
+      }],
+    });
+
+    // The same horizon and the same starting volatility, without the model.
+    const flat = runMonteCarlo(exports, {
+      ...common,
+      assets: [{
+        id: 'NVDA',
+        spot: BASE_MARKET.spot,
+        weight: 1,
+        vol: Math.sqrt(fit.params.v0),
+        rate: shockedRate,
+        dividend: BASE_MARKET.dividend,
+      }],
+    });
+
+    // The fit's negative rho makes a down move raise volatility, so the left
+    // tail is further out than a lognormal started at the same vol. If the
+    // simulation had ignored the parameters these would agree.
+    expect(calibrated.percentiles['0.01']).toBeLessThan(flat.percentiles['0.01'] as number);
+    expect(calibrated.cvar['0.01']).toBeLessThan(flat.cvar['0.01'] as number);
+    expect(calibrated.moments.skewness).not.toBeCloseTo(flat.moments.skewness, 1);
+
+    // And the tail the book actually carries is repriced at that quantile, in
+    // the real engine, so the number the answer would quote is a revaluation
+    // rather than a delta approximation.
+    const base = bookValue(BASE_MARKET, 0).value;
+    const tailSpot = calibrated.percentiles['0.01'] as number;
+    const tailPnl =
+      bookValue({ ...BASE_MARKET, spot: tailSpot, rate: shockedRate }, 0.06).value - base;
+    expect(Number.isFinite(tailPnl)).toBe(true);
+    expect(tailPnl).toBeLessThan(0);
+  }, 180_000);
 });
 
 describe('5 · a market probability becomes a real weight', () => {

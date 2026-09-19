@@ -7,7 +7,7 @@ import {
   SimulationTooLarge,
   estimateCost,
   runMonteCarlo,
-  type McAsset,
+  type GbmAsset,
   type McSpec,
   type PricingExports,
 } from '../src/index.js';
@@ -18,7 +18,8 @@ beforeAll(async () => {
   wasm = await loadPricing();
 });
 
-function asset(overrides: Partial<McAsset> = {}): McAsset {
+/** A GBM asset. The other processes carry different parameters and are built inline. */
+function asset(overrides: Partial<GbmAsset> = {}): GbmAsset {
   return { id: 'a', spot: 100, weight: 1, vol: 0.25, rate: 0.03, dividend: 0, ...overrides };
 }
 
@@ -129,8 +130,8 @@ describe('correlation across assets', () => {
         wasm,
         spec({
           assets: [
-            { ...(two[0] as McAsset), weight: wa },
-            { ...(two[1] as McAsset), weight: wb },
+            { ...(two[0] as GbmAsset), weight: wa },
+            { ...(two[1] as GbmAsset), weight: wb },
           ],
           correlation,
           paths: 40_000,
@@ -266,5 +267,93 @@ describe('the same seed gives the same answer', () => {
     const a = runMonteCarlo(wasm, spec({ paths: 2_000, seed: 1 }));
     const b = runMonteCarlo(wasm, spec({ paths: 2_000, seed: 2 }));
     expect(a.moments.mean).not.toBe(b.moments.mean);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Processes beyond GBM (PRD 5.8's list), and the one that is refused.
+// ---------------------------------------------------------------------------
+
+describe('a calibrated Heston can drive the simulation', () => {
+  // The composition PRD 5.8 implies and nothing exercised until the boundary
+  // widened: fit the surface, then simulate under what the fit produced.
+  const heston = {
+    id: 'nvda',
+    process: 'heston' as const,
+    spot: 100,
+    weight: 1,
+    rate: 0.03,
+    dividend: 0.01,
+    v0: 0.042,
+    theta: 0.058,
+    kappa: 1.8,
+    sigma: 0.55,
+    rho: -0.68,
+  };
+
+  it('produces a fatter left tail than the GBM at the same starting vol', () => {
+    const common = { correlation: { kind: 'independent' as const }, time: 1, paths: 40_000, steps: 64, seed: 0xc0ffee };
+    const stochastic = runMonteCarlo(wasm, { ...common, assets: [heston] });
+    const flat = runMonteCarlo(wasm, {
+      ...common,
+      assets: [asset({ id: 'nvda', spot: 100, vol: Math.sqrt(heston.v0), rate: 0.03, dividend: 0.01 })],
+    });
+
+    // A negative rho makes a down move raise volatility, which is the whole
+    // reason to simulate Heston rather than GBM: the 1% quantile is lower.
+    expect(stochastic.percentiles['0.01']).toBeLessThan(flat.percentiles['0.01'] as number);
+    expect(stochastic.cvar['0.01']).toBeLessThan(flat.cvar['0.01'] as number);
+    // And the means stay close — the skew moves the tails, not the forward.
+    expect(stochastic.moments.mean).toBeCloseTo(flat.moments.mean, 0);
+  });
+
+  it('correlates across assets through the spot shocks', () => {
+    const pair = (rho: number) => {
+      const run = (wa: number, wb: number) =>
+        runMonteCarlo(wasm, {
+          assets: [
+            { ...heston, id: 'a', weight: wa },
+            { ...heston, id: 'b', weight: wb },
+          ],
+          correlation: { kind: 'equicorrelated', rho },
+          time: 1,
+          paths: 20_000,
+          steps: 48,
+          antithetic: false,
+          seed: 0xc0ffee,
+        }).moments.variance;
+      const va = run(1, 0);
+      const vb = run(0, 1);
+      const vp = run(0.5, 0.5);
+      return (2 * (vp - 0.25 * va - 0.25 * vb)) / Math.sqrt(va * vb);
+    };
+
+    expect(Math.abs(pair(0))).toBeLessThan(0.05);
+    // Below the requested 0.8 because each asset carries its own independent
+    // variance shock, which dilutes the terminal correlation. That is the
+    // model, not a defect, so the assertion is on substance rather than target.
+    expect(pair(0.8)).toBeGreaterThan(0.55);
+    // Six Heston runs of twenty thousand paths, which is seconds through WASM.
+  }, 60_000);
+});
+
+describe('Merton jumps', () => {
+  it('fattens both tails relative to its own diffusion', () => {
+    const common = { correlation: { kind: 'independent' as const }, time: 1, paths: 40_000, steps: 128, seed: 0xb0b };
+    const jumpy = runMonteCarlo(wasm, {
+      ...common,
+      assets: [{
+        id: 'x', process: 'merton' as const, spot: 100, weight: 1, rate: 0.03, dividend: 0,
+        vol: 0.22, intensity: 1.5, jumpMean: -0.08, jumpVol: 0.15,
+      }],
+    });
+    const smooth = runMonteCarlo(wasm, {
+      ...common,
+      assets: [asset({ id: 'x', spot: 100, vol: 0.22, rate: 0.03, dividend: 0 })],
+    });
+
+    expect(jumpy.moments.excessKurtosis).toBeGreaterThan(smooth.moments.excessKurtosis);
+    // Downward-mean jumps push the left tail out further than the diffusion.
+    expect(jumpy.percentiles['0.01']).toBeLessThan(smooth.percentiles['0.01'] as number);
   });
 });

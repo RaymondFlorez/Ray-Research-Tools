@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 183 tests
+cargo test --release                              # 185 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -147,6 +147,26 @@ straight line rather than an extrapolation.
 `cube_values` come back on the result so the claim is a number rather than a paragraph.
 
 Two decisions inside it worth stating.
+
+**A process that ignores the Brownian increment is refused, not silently
+decorrelated.** Dependence here is induced by correlating the `w` handed to each asset, so
+a pure-jump process that builds its increment out of `extra` instead receives none of it —
+and the result looks exactly like a correlated simulation. Measured, at a requested
+correlation of 0.8:
+
+| pair | implied correlation |
+|---|---|
+| GBM × GBM | 0.79 |
+| Heston × Heston | 0.67 |
+| Merton × Merton | 0.69 |
+| **variance-gamma × variance-gamma** | **0.0062** |
+
+Heston and Merton come back below 0.8 because each carries independent noise of its own — a
+variance shock, a jump — which dilutes the terminal correlation. That is the model. Variance
+gamma comes back at 0.0062, which is the value it returns at a requested correlation of
+*zero*, to the last digit: the factor has literally no effect on it. `Process` now answers
+`uses_brownian` and `simulate_portfolio` refuses on it, naming the asset. A single-asset
+variance-gamma simulation belongs in `mc::simulate`, which drives it correctly.
 
 **Pseudorandom only, deliberately.** `mc::simulate` offers Sobol with a Brownian bridge and
 it is the right default for one asset. Here the dimension is `steps * assets` — 10,080 at

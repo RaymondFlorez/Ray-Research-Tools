@@ -119,6 +119,14 @@ export interface PricingExports {
 
   pc_mc_reset(): void;
   pc_mc_add_asset(spot: number, weight: number, vol: number, rate: number, dividend: number): void;
+  pc_mc_add_heston(
+    spot: number, weight: number, rate: number, dividend: number,
+    v0: number, theta: number, kappa: number, sigma: number, rho: number,
+  ): void;
+  pc_mc_add_merton(
+    spot: number, weight: number, rate: number, dividend: number,
+    vol: number, intensity: number, jumpMean: number, jumpVol: number,
+  ): void;
   pc_mc_asset_count(): number;
   pc_mc_corr_push(value: number): void;
   pc_mc_corr_equicorrelated(rho: number): void;
@@ -157,7 +165,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_nss_reset', 'pc_nss_observe', 'pc_nss_fit', 'pc_nss_param', 'pc_nss_stat',
   'pc_nss_zero', 'pc_nss_residual', 'pc_nss_install_curve',
   'pc_nss_warning_ptr', 'pc_nss_warning_len',
-  'pc_mc_reset', 'pc_mc_add_asset', 'pc_mc_asset_count',
+  'pc_mc_reset', 'pc_mc_add_asset', 'pc_mc_add_heston', 'pc_mc_add_merton', 'pc_mc_asset_count',
   'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_run',
   'pc_mc_summary', 'pc_mc_terminal', 'pc_mc_drawdown', 'pc_mc_sample',
   'pc_mc_sample_rows', 'pc_mc_percentile', 'pc_mc_drawdown_percentile', 'pc_mc_cvar',

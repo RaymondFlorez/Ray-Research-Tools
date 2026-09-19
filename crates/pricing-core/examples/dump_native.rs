@@ -256,6 +256,30 @@ fn main() {
         }
     }
 
+    // A mixed-process portfolio: GBM, Heston and Merton in one correlated run.
+    // Heston carries a variance state across steps and Merton inverts a Poisson
+    // count, so a single differing bit sends a path somewhere else and stays
+    // there.
+    ffi::pc_mc_reset();
+    ffi::pc_mc_add_asset(100.0, 100.0, 0.24, 0.04, 0.01);
+    ffi::pc_mc_add_heston(80.0, -150.0, 0.04, 0.01, 0.0625, 0.09, 1.6, 0.6, -0.65);
+    ffi::pc_mc_add_merton(120.0, 100.0, 0.04, 0.01, 0.2, 1.2, -0.06, 0.14);
+    ffi::pc_mc_add_heston(60.0, 200.0, 0.04, 0.0, 0.16, 0.12, 0.8, 1.1, 0.3);
+    ffi::pc_mc_corr_equicorrelated(0.4);
+    emit("mix_run".to_string(), ffi::pc_mc_run(0.75, 512, 40, 1, 909.0, 3) as f64);
+    let summary = ffi::pc_mc_summary();
+    for which in 0..ffi::MC_SUMMARY_STRIDE {
+        emit(format!("mix_summary({which})"), unsafe { *summary.add(which) });
+    }
+    for q in [0.01, 0.1, 0.5, 0.9, 0.99] {
+        emit(format!("mix_pct({q})"), ffi::pc_mc_percentile(q));
+        emit(format!("mix_dd({q})"), ffi::pc_mc_drawdown_percentile(q));
+    }
+    let sample = ffi::pc_mc_sample();
+    for step in 0..=40 {
+        emit(format!("mix_path({step})"), unsafe { *sample.add(step) });
+    }
+
     // Heston: a complex characteristic function under a Gauss-Legendre rule,
     // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
     // moves the integrand at every node.
