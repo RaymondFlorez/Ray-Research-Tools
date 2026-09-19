@@ -14,7 +14,41 @@ PRD 7's hardening layer.
 | `slo.ts` | SLO burn, per-node-kind paging, canary promotion, and the automatic-rollback rule. |
 | `audit.ts` | Append-only with no delete path, expressed in the interface rather than in a policy document. |
 | `exportBundle.ts` | Audit appendix, vendor licence redaction, and the refusal to export a figure that cannot be reproduced. |
+| `latency.ts` | PRD 7.1's budget table as data, with the evidence behind each row and the check against an observed distribution. |
 | `redteam.ts` | The suite phase 7 exits on. |
+
+## The latency table, and where it actually stands
+
+> These are contractual, monitored per-interaction, and alerted on. — PRD 7.1
+
+A contractual table that lives only in a document is monitored by whoever
+remembers it. `latency.ts` is the fourteen rows as data, each carrying either
+the harness that measured it and what that measurement does not cover, or the
+reason there is no measurement.
+
+```
+14 budgets · 4 measured · 2 met · 2 missed · 10 unmeasured
+```
+
+**An unmeasured row is never reported as met.** That is the whole reason for a
+third state: a missing measurement and a passing one are different, and
+collapsing them turns a coverage figure into a ceiling on what anyone will look
+at. Ten rows have nothing behind them for structural reasons — no ClickHouse, no
+DuckDB, no models, no market data feed — and naming each gap beats a silent row
+that implies 14/14.
+
+**The two missed rows stay recorded as missed.** A table where every row passes
+is a table whose thresholds were chosen after the measurements.
+
+| Row | Budget p95 | Observed p95 | |
+|---|---|---|---|
+| Pan / zoom frame | 16ms | 18.8ms | 5,000 nodes on SwiftShader, a CPU rasterizer. The p50 is inside at 7.1ms. Real hardware should clear it, but that is an inference. |
+| Options book reprice, 40 legs × 375 cells | 90ms | 171.7ms | Quality-dependent. `draft` reprices in 55.9ms and meets it; `standard` goes through Andersen-Lake and does not. The canvas drags at draft and settles at standard, so the budget holds while the analyst is moving and misses when they stop. The recorded figure is the one that fails — taking the draft number would be choosing the measurement that passes. |
+
+`checkLatency` throws on an interaction name that is not in the table rather
+than passing it. A monitor that silently accepts an unbudgeted name reports
+green for something nobody checked, and a typo in a metric name is how that
+happens in practice.
 
 ## The exit criterion
 

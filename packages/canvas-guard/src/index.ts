@@ -17,6 +17,7 @@ export * from './injection.js';
 export * from './capabilities.js';
 export * from './degradation.js';
 export * from './slo.js';
+export * from './latency.js';
 export * from './audit.js';
 export * from './exportBundle.js';
 export * from './redteam.js';
