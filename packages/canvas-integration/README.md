@@ -99,6 +99,7 @@ fallback would make the ladder look more verified than it is.
 | transmission | Every estimated channel carries an assumption line with its R-squared. |
 | scenario → pricing | Six cells, each a full revaluation in WASM; the unshocked corner is exactly zero P&L; the shocked corner is not the sum of its edges. |
 | scenario → attribution | Tail shares are taken over losses and every contributor is a loser. |
+| pricing → simulation → pricing | The plan's "100k Monte Carlo paths under the shocked regime" runs at the rate from the shocked curve and the vol from the transmission, and its terminal spot quantiles are pushed back through the real engine into a P&L distribution. A simulator produces spots and a pricer produces P&L; neither package can be asked whether the composition is right. |
 | markets → scenario | A probability curve becomes a weight carrying its resolution criteria, and 6% of unmodelled mass is reported rather than normalized away. |
 | pricing → agents | A draft citing the engine's own vega and delta passes the join; one transcribed digit fails it, and the Scribe is handed the number rather than prose. |
 | agents (no models) | The Critic still produces assumptions, base rate and sweep with an empty fleet. |

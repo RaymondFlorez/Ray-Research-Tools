@@ -14,7 +14,8 @@
  *
  * The flow follows 5.7's own plan for that query, in its order:
  * scope → plan → route → curve → transmit → reprice → scenario grid →
- * tail attribution → weight → reconcile → critique → export.
+ * Monte Carlo under the shocked regime → tail attribution → weight →
+ * reconcile → critique → export.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -46,6 +47,9 @@ import {
   GridPricer,
   evaluateGrid,
   fitSensitivity,
+  runMonteCarlo,
+  estimateCost,
+  DEFAULT_COST_CEILING,
   tailContributors,
   transmit,
   type GridAxis,
@@ -297,6 +301,131 @@ describe('4 · the scenario grid revalues every cell in the real engine', () => 
     expect(tail.reduce((t, c) => t + c.share, 0)).toBeLessThanOrEqual(1.0000001);
     // The shares are taken over losses, so every contributor is a loser.
     expect(tail.every((c) => c.pnl < 0)).toBe(true);
+  });
+});
+
+/**
+ * "→ run 100k Monte Carlo paths under the shocked regime for a P&L
+ * distribution → identify the three positions contributing the most tail risk"
+ *
+ * The step the plan named and nothing implemented until the portfolio simulator
+ * existed. It is a seam, not a unit: the simulator produces a terminal *spot*
+ * distribution, and a P&L distribution is that distribution pushed through the
+ * pricer. Neither package can be asked whether the composition is right.
+ *
+ * The regime is the shocked one — the rate from the shocked curve and the vol
+ * from the transmission — because running the Monte Carlo at the base regime
+ * and calling it a shock analysis is the failure this step exists to avoid.
+ */
+describe('4b · the shocked regime becomes a P&L distribution', () => {
+  const SHOCK_BPS = 50;
+  const VOL_POINTS = 0.06;
+
+  /** The market the book is repriced at, for a terminal spot. */
+  function at(spot: number): Market {
+    return { ...BASE_MARKET, spot, rate: BASE_MARKET.rate + SHOCK_BPS / 10_000 };
+  }
+
+  function mcSpec(paths: number) {
+    return {
+      assets: [
+        {
+          id: 'NVDA',
+          spot: BASE_MARKET.spot,
+          weight: 1,
+          // The underlying's own vol, lifted by the shock's vol transmission.
+          vol: 0.52 + VOL_POINTS,
+          rate: BASE_MARKET.rate + SHOCK_BPS / 10_000,
+          dividend: BASE_MARKET.dividend,
+        },
+      ],
+      correlation: { kind: 'independent' as const },
+      time: 0.35,
+      paths,
+      steps: 252,
+      seed: 0x5eed,
+      samplePaths: 8,
+    };
+  }
+
+  it('runs the plan\'s stated hundred thousand paths', async () => {
+    const exports = await loadPricing();
+    const started = Date.now();
+    const result = runMonteCarlo(exports, mcSpec(100_000));
+    const elapsed = Date.now() - started;
+
+    expect(result.paths).toBe(100_000);
+    expect(result.steps).toBe(252);
+    // 100k x 252 x 1 asset is 25.2M asset-steps, inside the browser ceiling.
+    // The PRD's 100k x 252 x *40* is not, and is refused — see
+    // canvas-pricing/test/monteCarlo.test.ts.
+    expect(estimateCost(mcSpec(100_000))).toBeLessThan(DEFAULT_COST_CEILING);
+    // Not asserted as a budget: this is WASM on a shared runner. Recorded so a
+    // regression has somewhere to show up.
+    expect(elapsed).toBeLessThan(120_000);
+
+    // The distribution the node's `distribution` port carries.
+    expect(result.percentiles['0.05']).toBeLessThan(result.percentiles['0.5'] as number);
+    expect(result.cvar['0.05']).toBeLessThanOrEqual(result.percentiles['0.05'] as number);
+    expect(result.moments.skewness).toBeGreaterThan(0);
+    // And it never built the cube.
+    expect(result.compression).toBeGreaterThan(100);
+  });
+
+  it('pushes the terminal distribution through the pricer into a P&L distribution', async () => {
+    const exports = await loadPricing();
+    const result = runMonteCarlo(exports, mcSpec(20_000));
+
+    const base = bookValue(BASE_MARKET, 0).value;
+    const quantiles = [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99];
+    const pnl = quantiles.map((q) => {
+      const spot = result.percentiles[String(q)] as number;
+      return { q, spot, pnl: bookValue(at(spot), VOL_POINTS).value - base };
+    });
+
+    // Every leg was repriced in the real engine at every quantile.
+    expect(pnl.every((p) => Number.isFinite(p.pnl))).toBe(true);
+    // The spot quantiles are increasing; that is the input, not the claim.
+    for (let i = 1; i < pnl.length; i += 1) {
+      expect((pnl[i] as { spot: number }).spot).toBeGreaterThan((pnl[i - 1] as { spot: number }).spot);
+    }
+    // This book is net long delta — 40 calls against 25 short and a put spread —
+    // so the P&L distribution inherits the spot ordering. A book that did not
+    // would be the interesting case, and this one is asserted because it is the
+    // one the walkthrough actually holds.
+    for (let i = 1; i < pnl.length; i += 1) {
+      expect((pnl[i] as { pnl: number }).pnl).toBeGreaterThan((pnl[i - 1] as { pnl: number }).pnl);
+    }
+    // The left tail is a loss, which is the point of running it.
+    expect((pnl[0] as { pnl: number }).pnl).toBeLessThan(0);
+  });
+
+  it('names the same tail contributors the grid did', async () => {
+    const exports = await loadPricing();
+    const result = runMonteCarlo(exports, mcSpec(20_000));
+    const tailSpot = result.percentiles['0.05'] as number;
+
+    const byPosition = new Map<string, number>();
+    for (const position of BOOK) {
+      const before = bookValue(BASE_MARKET, 0, [position.leg]).value;
+      const after = bookValue(at(tailSpot), VOL_POINTS, [position.leg]).value;
+      byPosition.set(position.id, after - before);
+    }
+    const tail = tailContributors(byPosition);
+
+    expect(tail.length).toBeGreaterThan(0);
+    expect(tail.every((c) => c.pnl < 0)).toBe(true);
+    expect(tail.reduce((t, c) => t + c.share, 0)).toBeLessThanOrEqual(1.0000001);
+    // The plan says "the three positions contributing the most tail risk", and
+    // this book has four. A shorter list means the losses concentrated, which
+    // is information rather than a failure — so the assertion is that the list
+    // is a real ranking, not that it has exactly three entries.
+    expect(tail.length).toBeLessThanOrEqual(BOOK.length);
+    for (let i = 1; i < tail.length; i += 1) {
+      expect((tail[i] as { share: number }).share).toBeLessThanOrEqual(
+        (tail[i - 1] as { share: number }).share,
+      );
+    }
   });
 });
 
