@@ -3,18 +3,72 @@
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
 exercise by Andersen-Lake, multi-leg grid repricing with the accuracy guard from PRD
 Appendix C.2, yield curves — bootstrapped, fitted, and shocked — bond analytics with
-option-adjusted spreads on a Hull-White lattice, and Monte Carlo over four processes.
+option-adjusted spreads on a Hull-White lattice, Monte Carlo over four processes, and a
+multi-asset portfolio simulator with copula dependence.
 
 ```bash
-cargo test --release                              # 109 tests
+cargo test --release                              # 157 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
 cargo run --release --example al_sweep            # which scheme parameter actually matters
 cargo run --release --example error_scan          # fast-vs-exact error sweep
 cargo run --release --example lr_steps            # lattice accuracy against cost
+cargo run --release --example portfolio_bench     # the PRD's 100k x 252 x 40 shape, timed
 node ../../scripts/verify-wasm-parity.mjs         # native vs WASM, bit for bit
 ```
+
+## The Monte Carlo shape the PRD names
+
+> Execution: 100k paths x 252 steps x 40 assets runs on Ray across the cluster; result
+> matrices persist to S3 and the node holds a reference plus summary statistics, **so the
+> browser never loads a 4GB array.** — PRD 5.8
+
+The sentence about the 4GB array is the one that decides the design. That cube is 8.06 GB
+of `f64`, and the obvious implementation — march every path, keep the cube, reduce it
+afterwards — cannot run in a browser and is unpleasant anywhere else. The PRD's answer is
+to persist the matrix elsewhere; `portfolio.rs`'s answer is that **the summary statistics
+never needed the cube**.
+
+Everything on the `distribution` port is computable in one pass. Percentiles and CVaR need
+the terminal values, one per path. Moments are sums of powers. A maximum drawdown is a
+running peak and a running worst — two `f64` carried *along* the path, not the path. The
+sample is a fixed number of paths kept in full, which is what a sample is.
+
+```
+   paths  steps  assets    elapsed      steps/s   retained         cube     ratio
+   10000    252      40      3.02s      3.336e7       0.3MB         0.8GB     2785x
+   25000    252      40      7.52s      3.351e7       0.5MB         1.9GB     3807x
+   50000    252      40     14.32s      3.519e7       0.9MB         3.8GB     4338x
+  100000    252      40     30.00s      3.360e7       1.6MB         7.5GB     4663x
+```
+
+**30.00s on one core**, against PRD 7.1's 4.5s p50 / 9s p95 / 30s ceiling — a budget the
+PRD explicitly writes for a cluster. The useful reading is not that a single core misses
+it but that the budget assumes about four cores for this shape, which is a thing worth
+knowing before anyone builds the distribution layer. Throughput is flat at 3.3e7
+asset-steps per second across a 10x range of path counts, so that estimate rests on a
+straight line rather than an extrapolation.
+
+**1.6 MB retained against a 7.5 GB cube**, a factor of 4,663, and `retained_values` and
+`cube_values` come back on the result so the claim is a number rather than a paragraph.
+
+Two decisions inside it worth stating.
+
+**Pseudorandom only, deliberately.** `mc::simulate` offers Sobol with a Brownian bridge and
+it is the right default for one asset. Here the dimension is `steps * assets` — 10,080 at
+this shape — against a `MAX_SOBOL_DIMENSIONS` of 16. A Sobol sequence used far past its
+constructed dimension is worse than pseudorandom, not better, and it converges without a
+standard error to warn anyone. There is no `sampling` field, because offering the option
+would be offering a trap.
+
+**Drawdown is absolute, not fractional,** and that is a correction rather than a
+preference. The first version divided by the running peak, guarded with `if peak > 0.0` so
+it would not divide by zero — which means a portfolio whose peak is zero or negative
+reported a maximum drawdown of *zero*. A net-short book reaches that state routinely, and
+the guard turned "this position lost money all the way down" into "this position never drew
+down". A fraction of a peak that can be negative is not a quantity; peak minus trough
+always is. The test that found it prices a deterministic riser held short.
 
 ## The exit criterion
 

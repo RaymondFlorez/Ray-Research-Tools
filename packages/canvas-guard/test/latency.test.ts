@@ -53,17 +53,18 @@ describe('the report', () => {
   // The figure this repo actually stands behind. It is written here so a change
   // to it has to be deliberate: closing a gap moves this line, and so does
   // quietly downgrading a missed row to unmeasured.
-  it('stands at 4 measured, 2 met, 2 missed, 10 unmeasured', () => {
-    expect(report.measured).toBe(4);
+  it('stands at 5 measured, 2 met, 3 missed, 9 unmeasured', () => {
+    expect(report.measured).toBe(5);
     expect(report.met).toBe(2);
-    expect(report.missed).toBe(2);
-    expect(report.unmeasured).toBe(10);
+    expect(report.missed).toBe(3);
+    expect(report.unmeasured).toBe(9);
   });
 
-  it('names the two that are missed', () => {
+  it('names the three that are missed', () => {
     expect(report.rows.filter((r) => r.status === 'missed').map((r) => r.interaction)).toEqual([
       'Pan / zoom frame',
       'Options book reprice, 40 legs x 375 grid cells',
+      'Monte Carlo 100k x 252 x 40',
     ]);
   });
 

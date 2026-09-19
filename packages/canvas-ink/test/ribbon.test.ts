@@ -120,32 +120,58 @@ describe('the ink ribbon', () => {
  * A renderer that re-tessellates the stroke on every pointer event is fine for
  * the first second of drawing and misses the budget by the tenth, and the
  * failure is invisible in a test that draws twenty points. So the measurement
- * is a ratio: the cost of appending the four-thousandth sample against the cost
- * of appending the fortieth. Constant work means a ratio near one; work
- * proportional to stroke length means a ratio near a hundred.
+ * is a ratio: what a window of appends costs late in a long stroke against what
+ * it cost early. Constant work means a ratio near one; work proportional to
+ * stroke length means a ratio near the length ratio.
  */
 describe('appending costs the same at the end of a stroke as at the start', () => {
-  it('does not grow with the stroke', () => {
-    const ribbon = new InkRibbon(8192);
-    const events = 1000; // 4,000 samples, ~17 seconds of drawing at 60Hz
-    const cost: number[] = [];
-
-    for (let event = 0; event < events; event += 1) {
-      const samples = batch(event * 4, 4, event * 16.6);
+  /**
+   * Windows, not events.
+   *
+   * The first version timed each pointer event and compared means. One append
+   * is about two microseconds, which is close enough to `performance.now()`'s
+   * resolution that a single scheduler pause on a shared runner moves the mean
+   * by a factor of ten — it failed once at 9x with nothing wrong. Timing two
+   * hundred events at a time puts each measurement in the hundreds of
+   * microseconds, and taking medians across windows drops a pause instead of
+   * averaging it in. The regression this is looking for is an order of
+   * magnitude and is not remotely subtle once the noise floor is cleared.
+   */
+  function windowCosts(events: number, per: number): number[] {
+    const ribbon = new InkRibbon(events * 4 + 16);
+    const costs: number[] = [];
+    for (let start = 0; start < events; start += per) {
       const t0 = performance.now();
-      ribbon.append('s1', samples, style);
-      cost.push(performance.now() - t0);
+      for (let event = start; event < start + per; event += 1) {
+        ribbon.append('s1', batch(event * 4, 4, event * 16.6), style);
+      }
+      costs.push(performance.now() - t0);
     }
+    return costs;
+  }
 
-    expect(ribbon.segments).toBe(events * 4);
+  function median(xs: readonly number[]): number {
+    const sorted = [...xs].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 1
+      ? (sorted[mid] as number)
+      : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
+  }
 
-    const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
-    // Skip the first fifty events: they are JIT warm-up, not stroke length.
-    const early = mean(cost.slice(50, 150));
-    const late = mean(cost.slice(events - 100));
-    // Generous, because these are sub-microsecond timings on a shared runner.
-    // The failure this catches is a factor of ten or more, not a factor of two.
-    expect(late).toBeLessThan(Math.max(early, 0.0005) * 6);
+  it('does not grow with the stroke', () => {
+    // 4,000 events is 16,000 samples: over a minute of unbroken drawing at
+    // 240Hz, and forty times the stroke length the early windows see.
+    const costs = windowCosts(4_000, 200);
+    expect(costs.length).toBe(20);
+
+    // Skip the first window: it is JIT warm-up, not stroke length.
+    const early = median(costs.slice(1, 6));
+    const late = median(costs.slice(-5));
+
+    // A path that re-tessellates the stroke on every event lands near 30x here.
+    // Four is loose enough to survive a busy runner and nowhere near enough to
+    // let that through.
+    expect(late).toBeLessThan(Math.max(early, 0.05) * 4);
   });
 
   it('stays inside the per-event share of the 12ms p95 budget', () => {
@@ -153,7 +179,8 @@ describe('appending costs the same at the end of a stroke as at the start', () =
     // measures the tessellation only — the pointer event is already in hand and
     // the GPU submit has not happened — so it is a floor on the real number,
     // not the real number. What it can show is that tessellation is not where
-    // the budget goes.
+    // the budget goes. The end-to-end figure, through a real WebGL context, is
+    // `apps/canvas-demo/scripts/inkgl-shots.mjs`.
     const ribbon = new InkRibbon(8192);
     const cost: number[] = [];
     for (let event = 0; event < 1000; event += 1) {

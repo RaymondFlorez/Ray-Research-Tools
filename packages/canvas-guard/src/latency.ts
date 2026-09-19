@@ -10,16 +10,19 @@
  * argued.
  *
  * The evidence field is the part worth arguing about, and it is deliberately
- * unflattering. Most of these rows have nothing behind them in this repo, for
- * reasons that are structural rather than lazy: there is no ClickHouse here, no
- * DuckDB, and no models at all, so six of the fourteen budgets cannot be
- * measured by any amount of care. Recording that as `unmeasured` with the
- * reason, rather than leaving the row silent, is the difference between a
- * checklist that reports 8/14 and one that reports nothing and implies 14/14.
+ * unflattering. Nine of the fourteen rows have nothing behind them in this
+ * repo, for reasons that are structural rather than lazy: there is no
+ * ClickHouse here, no DuckDB, no market data feed and no models at all.
+ * Recording that as `unmeasured` with the reason, rather than leaving the row
+ * silent, is the difference between a checklist that reports 5/14 and one that
+ * reports nothing and implies 14/14.
  *
- * Two rows are measured and **missed**, and they stay recorded as missed. A
+ * Three rows are measured and **missed**, and they stay recorded as missed. A
  * table where every row passes is a table whose thresholds were chosen after
- * the measurements.
+ * the measurements. Two of the three miss on a software rasterizer or a single
+ * core against a budget the PRD writes for a GPU or a cluster, which the
+ * caveats say — and which is a reason to keep reading, not a reason to round
+ * the row up to a pass.
  */
 
 /** One row of PRD 7.1. */
@@ -211,9 +214,11 @@ export const LATENCY_BUDGETS: readonly BudgetedInteraction[] = [
     p95Ms: 9_000,
     ceilingMs: 30_000,
     evidence: {
-      kind: 'unmeasured',
-      because:
-        'the Monte Carlo path in the Rust core is correctness-tested against closed forms but has never been run at the PRD’s shape — 100,000 paths, 252 steps, 40 assets — and timed.',
+      kind: 'measured',
+      p95Ms: 30_000,
+      where: 'pricing-core, `cargo run --release --example portfolio_bench`, native, one core',
+      caveat:
+        'single-threaded, against a budget the PRD explicitly puts on a cluster ("runs on Ray across the cluster"). 30.00s is 3.3x the 9s p95 and lands exactly on the 30s hard ceiling, which is the useful reading of it: the budget assumes roughly four cores for this shape. Throughput is flat at 3.3e7 asset-steps per second from 10k paths to 100k, so the figure scales linearly and the estimate does not rest on extrapolating a curve.',
     },
   },
   {

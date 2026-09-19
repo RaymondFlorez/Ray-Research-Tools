@@ -473,3 +473,344 @@ fn book_greeks_aggregate_across_legs_and_sign_the_shorts() {
     assert!(long_greeks.delta > 0.0 && short_greeks.delta < 0.0);
     assert!((long_greeks.value + short_greeks.value).abs() < 1e-12);
 }
+
+// ---------------------------------------------------------------------------
+// Multi-asset Monte Carlo (PRD 5.8)
+// ---------------------------------------------------------------------------
+
+mod portfolio_tests {
+    use pricing_core::copula::Factor;
+    use pricing_core::mc::{Gbm, Process};
+    use pricing_core::portfolio::{
+        simulate_portfolio, AssetSpec, PortfolioConfig, PortfolioError,
+    };
+
+    fn gbm(vol: f64) -> Gbm {
+        Gbm { rate: 0.03, dividend: 0.0, vol }
+    }
+
+    fn spec(spot: f64, weight: f64) -> AssetSpec {
+        AssetSpec { spot, weight, initial_variance: 0.0 }
+    }
+
+    fn config(paths: usize, steps: usize) -> PortfolioConfig {
+        PortfolioConfig { paths, steps, antithetic: true, seed: 0xC0FFEE, sample_paths: 8 }
+    }
+
+    /// The correlation the factor actually induced, read off three variances.
+    ///
+    /// The terminal values come back sorted, so the paths cannot be lined up
+    /// pairwise — and correlating two sorted samples gives 1.0 whatever the
+    /// dependence is, which is a Q-Q plot wearing a correlation's name. It is
+    /// also what the first version of this helper did, and it reported 0.99998
+    /// for independent assets without anybody noticing until the independence
+    /// test ran.
+    ///
+    /// Variance does not depend on order. The simulator draws the same normals
+    /// whatever the weights are, so three runs on one seed see the same asset
+    /// paths, and
+    ///
+    /// ```text
+    /// Var(aA + bB) = a^2 Var(A) + b^2 Var(B) + 2ab Cov(A, B)
+    /// ```
+    ///
+    /// recovers the covariance from three sorted samples with nothing lined up.
+    fn terminal_correlation(rho: f64, vol: f64, seed: u64) -> f64 {
+        let a = gbm(vol);
+        let b = gbm(vol);
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let factor = Factor::equicorrelated(2, rho).unwrap();
+        let cfg = PortfolioConfig { seed, antithetic: false, ..config(60_000, 64) };
+
+        let run = |wa: f64, wb: f64| {
+            simulate_portfolio(&processes, &[spec(100.0, wa), spec(100.0, wb)], &factor, 1.0, &cfg)
+                .unwrap()
+                .variance
+        };
+
+        let va = run(1.0, 0.0);
+        let vb = run(0.0, 1.0);
+        let vp = run(0.5, 0.5);
+        let covariance = 2.0 * (vp - 0.25 * va - 0.25 * vb);
+        covariance / (va.sqrt() * vb.sqrt())
+    }
+
+    /// What the correlation of two terminal lognormals *should* be.
+    ///
+    /// Correlating the Brownian increments at `rho` does not make the prices
+    /// correlate at `rho`: the exponential pulls it toward zero, by a factor
+    /// that closed form gives exactly. Asserting against this rather than
+    /// against `rho` is the difference between testing that the correlation is
+    /// induced and testing that it is induced *correctly*.
+    fn lognormal_correlation(rho: f64, s1: f64, s2: f64, t: f64) -> f64 {
+        ((rho * s1 * s2 * t).exp() - 1.0)
+            / (((s1 * s1 * t).exp() - 1.0) * ((s2 * s2 * t).exp() - 1.0)).sqrt()
+    }
+
+    #[test]
+    fn each_asset_keeps_its_own_marginal() {
+        // A one-asset portfolio must reprice like the single-asset engine: the
+        // terminal expectation of a GBM is S0 * exp((r - q) T), whatever else
+        // the correlation machinery is doing around it.
+        let process = gbm(0.2);
+        let processes: Vec<&dyn Process> = vec![&process];
+        let factor = Factor::independent(1);
+        let result =
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &config(40_000, 64))
+                .unwrap();
+
+        let expected = 100.0 * (0.03f64).exp();
+        assert!(
+            (result.mean - expected).abs() < 4.0 * result.standard_error.max(1e-9),
+            "mean {} expected {} se {}",
+            result.mean,
+            expected,
+            result.standard_error
+        );
+    }
+
+    #[test]
+    fn independent_assets_come_back_uncorrelated() {
+        let rho = terminal_correlation(0.0, 0.25, 0x11);
+        assert!(rho.abs() < 0.02, "independent assets correlated at {rho}");
+    }
+
+    #[test]
+    fn the_factor_induces_the_correlation_the_closed_form_predicts() {
+        for rho in [0.8, 0.4, -0.6] {
+            let measured = terminal_correlation(rho, 0.25, 0x22);
+            let expected = lognormal_correlation(rho, 0.25, 0.25, 1.0);
+            assert!(
+                (measured - expected).abs() < 0.02,
+                "rho {rho}: measured {measured}, closed form {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_gap_between_rho_and_the_price_correlation_is_the_exponential() {
+        // Worth pinning, because it is the thing an analyst gets wrong: the
+        // correlation they type is on the returns and the correlation they see
+        // is on the prices, and the two separate as volatility rises.
+        let mild = lognormal_correlation(0.8, 0.1, 0.1, 1.0);
+        let wild = lognormal_correlation(0.8, 0.8, 0.8, 1.0);
+        assert!(mild > 0.79 && mild < 0.801, "low vol should barely move it: {mild}");
+        // 0.7458 at 80 vol. The pull is real and smaller than it feels — worth
+        // pinning the actual figure, because "well below" was my guess and it
+        // was wrong by three points the first time this ran.
+        assert!(wild > 0.74 && wild < 0.75, "80 vol should give about 0.746: {wild}");
+        assert!(wild < mild);
+
+        let measured = terminal_correlation(0.8, 0.8, 0x44);
+        assert!((measured - wild).abs() < 0.03, "measured {measured}, closed form {wild}");
+    }
+
+    #[test]
+    fn a_correlation_matrix_that_is_impossible_is_refused_rather_than_repaired() {
+        // Three assets pairwise correlated at -0.9 cannot exist. The factor
+        // says so and names the block, and the simulator never runs.
+        assert!(Factor::equicorrelated(3, -0.9).is_err());
+    }
+
+    #[test]
+    fn drawdown_is_measured_against_the_running_peak() {
+        // Zero volatility makes the path deterministic. With a positive drift
+        // the portfolio only rises, so the maximum drawdown is exactly zero.
+        let up = Gbm { rate: 0.10, dividend: 0.0, vol: 0.0 };
+        let processes: Vec<&dyn Process> = vec![&up];
+        let factor = Factor::independent(1);
+        let rising =
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &config(64, 32))
+                .unwrap();
+        assert!(rising.drawdown.iter().all(|d| *d < 1e-12));
+
+        // The case that made the drawdown absolute rather than fractional. A
+        // deterministic riser held *short* falls monotonically from -100 to
+        // -110.5, which is a real loss and a peak that is never positive. The
+        // first version divided by the peak behind an `if peak > 0.0` guard and
+        // reported zero for the whole family.
+        let short =
+            simulate_portfolio(&processes, &[spec(100.0, -1.0)], &factor, 1.0, &config(64, 32))
+                .unwrap();
+        let terminal = short.terminal[0];
+        let expected = -100.0 - terminal;
+        assert!(expected > 10.0, "the short position should have lost money: {expected}");
+        assert!(
+            (short.drawdown[0] - expected).abs() < 1e-9,
+            "drawdown {} expected {}",
+            short.drawdown[0],
+            expected
+        );
+    }
+
+    #[test]
+    fn the_drawdown_distribution_is_a_distribution() {
+        let process = gbm(0.4);
+        let processes: Vec<&dyn Process> = vec![&process];
+        let factor = Factor::independent(1);
+        let result =
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &config(8_000, 64))
+                .unwrap();
+
+        assert_eq!(result.drawdown.len(), 8_000);
+        assert!(result.drawdown.windows(2).all(|w| w[0] <= w[1]), "not sorted");
+        assert!(result.drawdown_percentile(0.5) < result.drawdown_percentile(0.95));
+        assert!(result.drawdown.iter().all(|d| *d >= 0.0), "a drawdown is never negative");
+        assert!(result.drawdown.iter().all(|d| d.is_finite()));
+        // Not bounded by the starting value, which is the thing a fractional
+        // drawdown hides: a path that doubles to 200 and falls back to 80 drew
+        // down 120 on a book that started at 100. At 40 vol over a year the
+        // worst path here exceeds the initial value, and that is correct.
+        assert!(
+            *result.drawdown.last().unwrap() > 100.0,
+            "worst drawdown {} should exceed the starting value at 40 vol",
+            result.drawdown.last().unwrap()
+        );
+        assert!(result.drawdown_percentile(0.5) > 10.0);
+    }
+
+    #[test]
+    fn cvar_is_the_mean_of_the_tail_and_sits_below_the_quantile() {
+        let process = gbm(0.3);
+        let processes: Vec<&dyn Process> = vec![&process];
+        let factor = Factor::independent(1);
+        let result =
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &config(20_000, 32))
+                .unwrap();
+
+        for alpha in [0.01, 0.05, 0.10] {
+            assert!(
+                result.cvar(alpha) <= result.percentile(alpha),
+                "cvar({alpha}) {} above the quantile {}",
+                result.cvar(alpha),
+                result.percentile(alpha)
+            );
+        }
+        // Worse tails are worse.
+        assert!(result.cvar(0.01) < result.cvar(0.10));
+        // The whole distribution is the mean.
+        assert!((result.cvar(1.0) - result.mean).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_sample_is_a_path_and_not_a_snapshot() {
+        let process = gbm(0.25);
+        let processes: Vec<&dyn Process> = vec![&process];
+        let factor = Factor::independent(1);
+        let cfg = PortfolioConfig { sample_paths: 5, ..config(100, 16) };
+        let result =
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &cfg).unwrap();
+
+        assert_eq!(result.sample.len(), 5 * 17);
+        for i in 0..5 {
+            let path = result.sample_path(i).expect("a kept path");
+            assert_eq!(path.len(), 17);
+            assert!((path[0] - 100.0).abs() < 1e-12, "every path starts at the portfolio value");
+            assert!(path[1..].iter().any(|v| (v - 100.0).abs() > 1e-9), "path never moved");
+        }
+        assert!(result.sample_path(5).is_none());
+    }
+
+    #[test]
+    fn the_cube_is_never_materialized() {
+        // The property the PRD's "the browser never loads a 4GB array" asks
+        // for, at a shape small enough to run in a test. What is retained is
+        // 2 * paths + sample * (steps + 1); what a cube would hold is
+        // paths * steps * assets.
+        let process = gbm(0.2);
+        let processes: Vec<&dyn Process> = (0..8).map(|_| &process as &dyn Process).collect();
+        let assets: Vec<AssetSpec> = (0..8).map(|i| spec(50.0 + i as f64, 0.125)).collect();
+        let factor = Factor::equicorrelated(8, 0.3).unwrap();
+        let cfg = PortfolioConfig { sample_paths: 16, ..config(5_000, 126) };
+
+        let result = simulate_portfolio(&processes, &assets, &factor, 0.5, &cfg).unwrap();
+
+        assert_eq!(result.cube_values, 5_000 * 126 * 8);
+        assert_eq!(result.retained_values, 2 * 5_000 + 16 * 127);
+        assert!(result.compression() > 400.0, "compression {}", result.compression());
+    }
+
+    #[test]
+    fn a_shape_mismatch_is_an_error_rather_than_a_truncation() {
+        let process = gbm(0.2);
+        let processes: Vec<&dyn Process> = vec![&process, &process];
+        let factor = Factor::independent(2);
+
+        assert_eq!(
+            simulate_portfolio(&processes, &[spec(100.0, 1.0)], &factor, 1.0, &config(10, 4))
+                .err(),
+            Some(PortfolioError::Shape { processes: 2, assets: 1, factor: 2 })
+        );
+
+        let three = Factor::independent(3);
+        assert!(matches!(
+            simulate_portfolio(
+                &processes,
+                &[spec(100.0, 0.5), spec(100.0, 0.5)],
+                &three,
+                1.0,
+                &config(10, 4)
+            ),
+            Err(PortfolioError::Shape { .. })
+        ));
+
+        assert_eq!(
+            simulate_portfolio(
+                &processes,
+                &[spec(100.0, 0.5), spec(100.0, 0.5)],
+                &factor,
+                1.0,
+                &config(0, 4)
+            )
+            .err(),
+            Some(PortfolioError::Empty)
+        );
+    }
+
+    #[test]
+    fn antithetic_pairing_reduces_the_standard_error() {
+        let process = gbm(0.3);
+        let processes: Vec<&dyn Process> = vec![&process];
+        let factor = Factor::independent(1);
+        let assets = [spec(100.0, 1.0)];
+
+        let paired = simulate_portfolio(
+            &processes,
+            &assets,
+            &factor,
+            1.0,
+            &PortfolioConfig { antithetic: true, ..config(20_000, 32) },
+        )
+        .unwrap();
+        let plain = simulate_portfolio(
+            &processes,
+            &assets,
+            &factor,
+            1.0,
+            &PortfolioConfig { antithetic: false, ..config(20_000, 32) },
+        )
+        .unwrap();
+
+        assert!(
+            paired.standard_error < plain.standard_error,
+            "antithetic {} plain {}",
+            paired.standard_error,
+            plain.standard_error
+        );
+    }
+
+    #[test]
+    fn the_same_seed_gives_the_same_answer() {
+        let process = gbm(0.22);
+        let processes: Vec<&dyn Process> = vec![&process, &process];
+        let assets = [spec(100.0, 0.6), spec(80.0, 0.4)];
+        let factor = Factor::equicorrelated(2, 0.5).unwrap();
+        let cfg = config(2_000, 32);
+
+        let a = simulate_portfolio(&processes, &assets, &factor, 1.0, &cfg).unwrap();
+        let b = simulate_portfolio(&processes, &assets, &factor, 1.0, &cfg).unwrap();
+        assert_eq!(a.terminal, b.terminal);
+        assert_eq!(a.drawdown, b.drawdown);
+        assert_eq!(a.sample, b.sample);
+    }
+}

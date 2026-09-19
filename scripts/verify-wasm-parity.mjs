@@ -204,12 +204,64 @@ function wasmMonteCarlo() {
 
 const monteCarlo = wasmMonteCarlo();
 
+/** The multi-asset portfolio simulator, through WASM. */
+function wasmPortfolio() {
+  const rows = new Map();
+  // The last is deliberately impossible — equicorrelation needs
+  // rho > -1/(n-1), so -0.3 across six assets is not a correlation matrix. Both
+  // builds must refuse it identically, and neither may read the result buffers
+  // afterwards: a refused run leaves them null, and reading them is what made
+  // this harness report seventeen differing values the first time it ran.
+  const shapes = [
+    [4, 512, 24, 0.0],
+    [8, 384, 32, 0.55],
+    [6, 256, 16, -0.15],
+    [6, 128, 8, -0.3],
+  ];
+  shapes.forEach(([assets, paths, steps, rho], index) => {
+    w.pc_mc_reset();
+    for (let i = 0; i < assets; i += 1) {
+      w.pc_mc_add_asset(
+        50 + 7 * i,
+        i % 3 === 0 ? -150 : 100,
+        0.18 + 0.03 * (i % 5),
+        0.04,
+        0.01,
+      );
+    }
+    w.pc_mc_corr_equicorrelated(rho);
+    const code = w.pc_mc_run(1, paths, steps, 1, 4242, 4);
+    rows.set(`pf_run(${index})`, code);
+    if (code < 0) return;
+
+    const summary = new Float64Array(w.memory.buffer, w.pc_mc_summary(), 9);
+    for (let which = 0; which < 9; which += 1) {
+      rows.set(`pf_summary(${index}/${which})`, summary[which]);
+    }
+    for (const q of [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99]) {
+      rows.set(`pf_pct(${index}/${q})`, w.pc_mc_percentile(q));
+      rows.set(`pf_dd(${index}/${q})`, w.pc_mc_drawdown_percentile(q));
+    }
+    for (const a of [0.01, 0.05, 0.1]) {
+      rows.set(`pf_cvar(${index}/${a})`, w.pc_mc_cvar(a));
+    }
+    const sample = new Float64Array(w.memory.buffer, w.pc_mc_sample(), steps + 1);
+    for (let step = 0; step <= steps; step += 1) {
+      rows.set(`pf_path(${index}/${step})`, sample[step]);
+    }
+  });
+  return rows;
+}
+
+const portfolio = wasmPortfolio();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
   if (grid.has(label)) return grid.get(label);
   if (curves.has(label)) return curves.get(label);
   if (bonds.has(label)) return bonds.get(label);
   if (monteCarlo.has(label)) return monteCarlo.get(label);
+  if (portfolio.has(label)) return portfolio.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -252,7 +304,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves, bonds, a Hull-White lattice and Monte Carlo` +
+    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo and a correlated portfolio` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

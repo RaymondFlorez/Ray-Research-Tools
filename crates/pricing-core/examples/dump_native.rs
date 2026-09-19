@@ -201,5 +201,60 @@ fn main() {
         }
     }
 
+    // The multi-asset portfolio simulator (PRD 5.8). Correlated normals go
+    // through a Cholesky factor and then through forty exponentials per step,
+    // so a single differing bit in the factorization diverges every path after
+    // it. Two shapes, three correlations, and every statistic the node reads.
+    // The last shape is deliberately impossible: equicorrelation at rho needs
+    // rho > -1/(n-1), so -0.3 across six assets describes no joint
+    // distribution. Both builds must refuse it identically — and nothing below
+    // may read the result buffers for it, because a refused run leaves them
+    // null. That was this harness's own bug on the first run, and it presented
+    // as seventeen differing values rather than as an error.
+    for (index, &(assets, paths, steps, rho)) in [
+        (4usize, 512usize, 24usize, 0.0),
+        (8, 384, 32, 0.55),
+        (6, 256, 16, -0.15),
+        (6, 128, 8, -0.3),
+    ]
+    .iter()
+    .enumerate()
+    {
+        ffi::pc_mc_reset();
+        for i in 0..assets {
+            ffi::pc_mc_add_asset(
+                50.0 + 7.0 * i as f64,
+                if i % 3 == 0 { -150.0 } else { 100.0 },
+                0.18 + 0.03 * (i % 5) as f64,
+                0.04,
+                0.01,
+            );
+        }
+        ffi::pc_mc_corr_equicorrelated(rho);
+        let code = ffi::pc_mc_run(1.0, paths as i32, steps as i32, 1, 4242.0, 4);
+        emit(format!("pf_run({index})"), code as f64);
+        if code < 0 {
+            // A refused run has no buffers. The return code is the comparison.
+            continue;
+        }
+        let summary = ffi::pc_mc_summary();
+        for which in 0..ffi::MC_SUMMARY_STRIDE {
+            emit(format!("pf_summary({index}/{which})"), unsafe { *summary.add(which) });
+        }
+        for q in [0.01, 0.05, 0.25, 0.5, 0.75, 0.95, 0.99] {
+            emit(format!("pf_pct({index}/{q})"), ffi::pc_mc_percentile(q));
+            emit(format!("pf_dd({index}/{q})"), ffi::pc_mc_drawdown_percentile(q));
+        }
+        for a in [0.01, 0.05, 0.1] {
+            emit(format!("pf_cvar({index}/{a})"), ffi::pc_mc_cvar(a));
+        }
+        // A whole sample path, because the statistics above are reductions and
+        // a reduction can agree while the paths underneath do not.
+        let sample = ffi::pc_mc_sample();
+        for step in 0..=steps {
+            emit(format!("pf_path({index}/{step})"), unsafe { *sample.add(step) });
+        }
+    }
+
     println!("{}", rows.join("\n"));
 }

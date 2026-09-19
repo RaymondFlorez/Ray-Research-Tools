@@ -12,7 +12,10 @@
 
 use crate::american;
 use crate::bsm::{self, Inputs, OptionType};
+use crate::copula::Factor;
 use crate::implied;
+use crate::mc::{Gbm, Process};
+use crate::portfolio::{simulate_portfolio, AssetSpec, PortfolioConfig, PortfolioResult};
 
 #[inline]
 fn inputs(s: f64, k: f64, t: f64, r: f64, q: f64, v: f64, is_call: i32) -> Inputs {
@@ -863,4 +866,224 @@ pub extern "C" fn pc_sobol(dimensions: i32, skip: i32, dimension: i32) -> f64 {
         sobol.next_point(&mut point);
     }
     point.get(dimension.max(0) as usize).copied().unwrap_or(f64::NAN)
+}
+
+// ---------------------------------------------------------------------------
+// Multi-asset Monte Carlo (PRD 5.8)
+// ---------------------------------------------------------------------------
+
+/// Floats in the summary block.
+pub const MC_SUMMARY_STRIDE: usize = 9;
+
+thread_local! {
+    static MC_ASSETS: RefCell<Vec<(AssetSpec, Gbm)>> = const { RefCell::new(Vec::new()) };
+    static MC_CORR: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    static MC_RESULT: RefCell<Option<PortfolioResult>> = const { RefCell::new(None) };
+    static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
+        const { RefCell::new([0.0; MC_SUMMARY_STRIDE]) };
+}
+
+/// Clears the asset list, the correlation matrix and the last result.
+#[no_mangle]
+pub extern "C" fn pc_mc_reset() {
+    MC_ASSETS.with(|a| a.borrow_mut().clear());
+    MC_CORR.with(|c| c.borrow_mut().clear());
+    MC_RESULT.with(|r| *r.borrow_mut() = None);
+}
+
+/// Appends one asset.
+///
+/// The FFI surface takes GBM only, while the native `simulate_portfolio` takes
+/// any `&dyn Process`. That is a deliberate narrowing rather than an oversight:
+/// Heston, Merton and variance-gamma each need a different parameter block, and
+/// a C ABI that accepts the union of them is a function with fourteen `f64`
+/// arguments where eleven are ignored. When a browser needs a stochastic-vol
+/// portfolio, it gets its own entry point with its own parameters.
+#[no_mangle]
+pub extern "C" fn pc_mc_add_asset(
+    spot: f64,
+    weight: f64,
+    vol: f64,
+    rate: f64,
+    dividend: f64,
+) {
+    MC_ASSETS.with(|assets| {
+        assets.borrow_mut().push((
+            AssetSpec { spot, weight, initial_variance: 0.0 },
+            Gbm { rate, dividend, vol },
+        ));
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn pc_mc_asset_count() -> i32 {
+    MC_ASSETS.with(|a| a.borrow().len() as i32)
+}
+
+/// Appends one entry of the correlation matrix, row-major.
+///
+/// Pushed one at a time rather than passed as a pointer because the caller has
+/// no allocator on this side of the boundary: the grid book is built the same
+/// way. A 40-asset matrix is 1,600 calls, made once per run rather than once
+/// per path, against 1.008 billion asset-steps.
+#[no_mangle]
+pub extern "C" fn pc_mc_corr_push(value: f64) {
+    MC_CORR.with(|c| c.borrow_mut().push(value));
+}
+
+/// Fills the correlation matrix with a single off-diagonal value.
+#[no_mangle]
+pub extern "C" fn pc_mc_corr_equicorrelated(rho: f64) {
+    let n = MC_ASSETS.with(|a| a.borrow().len());
+    MC_CORR.with(|c| {
+        let mut c = c.borrow_mut();
+        c.clear();
+        c.resize(n * n, rho);
+        for i in 0..n {
+            c[i * n + i] = 1.0;
+        }
+    });
+}
+
+/// Runs the simulation. Returns the path count, or a negative code.
+///
+/// `-1` no assets, `-2` the correlation matrix is the wrong size, `-3` the
+/// matrix is not a valid correlation matrix (not symmetric, diagonal not one,
+/// or not positive definite), `-4` zero paths or steps.
+///
+/// The not-positive-definite case is worth its own code rather than being
+/// folded into a generic failure: it is the one an analyst causes, by
+/// assembling correlations pairwise until they no longer describe any joint
+/// distribution, and the fix is theirs rather than the caller's.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_mc_run(
+    time: f64,
+    paths: i32,
+    steps: i32,
+    antithetic: i32,
+    seed: f64,
+    sample_paths: i32,
+) -> i32 {
+    let n = MC_ASSETS.with(|a| a.borrow().len());
+    if n == 0 {
+        return -1;
+    }
+    let correlation = MC_CORR.with(|c| c.borrow().clone());
+    if correlation.len() != n * n {
+        return -2;
+    }
+    let Ok(factor) = Factor::cholesky(&correlation, n) else {
+        return -3;
+    };
+    if paths <= 0 || steps <= 0 {
+        return -4;
+    }
+
+    let config = PortfolioConfig {
+        paths: paths as usize,
+        steps: steps as usize,
+        antithetic: antithetic != 0,
+        // f64 to u64 because the C ABI here is all f64 and i32; a seed that
+        // arrives as a double keeps 53 bits, which is more than enough entropy
+        // and avoids a 64-bit integer crossing a boundary JavaScript cannot
+        // represent exactly anyway.
+        seed: seed.abs() as u64,
+        sample_paths: sample_paths.max(0) as usize,
+    };
+
+    MC_ASSETS.with(|assets| {
+        let assets = assets.borrow();
+        let specs: Vec<AssetSpec> = assets.iter().map(|(spec, _)| *spec).collect();
+        let processes: Vec<&dyn Process> =
+            assets.iter().map(|(_, process)| process as &dyn Process).collect();
+
+        match simulate_portfolio(&processes, &specs, &factor, time, &config) {
+            Ok(result) => {
+                MC_SUMMARY.with(|summary| {
+                    *summary.borrow_mut() = [
+                        result.mean,
+                        result.variance,
+                        result.skewness,
+                        result.excess_kurtosis,
+                        result.standard_error,
+                        result.paths as f64,
+                        result.steps as f64,
+                        result.retained_values as f64,
+                        result.cube_values as f64,
+                    ];
+                });
+                let count = result.paths as i32;
+                MC_RESULT.with(|slot| *slot.borrow_mut() = Some(result));
+                count
+            }
+            Err(_) => -3,
+        }
+    })
+}
+
+/// Pointer to the summary block: mean, variance, skewness, excess kurtosis,
+/// standard error, paths, steps, retained values, cube values.
+#[no_mangle]
+pub extern "C" fn pc_mc_summary() -> *const f64 {
+    MC_SUMMARY.with(|s| s.borrow().as_ptr())
+}
+
+/// Pointer to the sorted terminal portfolio values, `paths` long.
+///
+/// Null when the last `pc_mc_run` failed, so a caller must check that call's
+/// return code first. A WASM caller that does not reads address zero and gets
+/// zeros; a native caller that does not has undefined behaviour. Both are the
+/// caller's bug, and `pc_mc_sample_rows` returning zero is the cheap way to
+/// notice it — which is how the parity harness found its own misuse of this.
+#[no_mangle]
+pub extern "C" fn pc_mc_terminal() -> *const f64 {
+    MC_RESULT.with(|slot| {
+        slot.borrow().as_ref().map(|r| r.terminal.as_ptr()).unwrap_or(core::ptr::null())
+    })
+}
+
+/// Pointer to the sorted per-path maximum drawdowns, `paths` long.
+#[no_mangle]
+pub extern "C" fn pc_mc_drawdown() -> *const f64 {
+    MC_RESULT.with(|slot| {
+        slot.borrow().as_ref().map(|r| r.drawdown.as_ptr()).unwrap_or(core::ptr::null())
+    })
+}
+
+/// Pointer to the path sample: `sample_paths` rows of `steps + 1` values.
+#[no_mangle]
+pub extern "C" fn pc_mc_sample() -> *const f64 {
+    MC_RESULT.with(|slot| {
+        slot.borrow().as_ref().map(|r| r.sample.as_ptr()).unwrap_or(core::ptr::null())
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_mc_sample_rows() -> i32 {
+    MC_RESULT.with(|slot| {
+        slot.borrow()
+            .as_ref()
+            .map(|r| if r.steps + 1 == 0 { 0 } else { (r.sample.len() / (r.steps + 1)) as i32 })
+            .unwrap_or(0)
+    })
+}
+
+/// Terminal-value percentile, `p` in [0, 1]. NaN with no result.
+#[no_mangle]
+pub extern "C" fn pc_mc_percentile(p: f64) -> f64 {
+    MC_RESULT.with(|slot| slot.borrow().as_ref().map(|r| r.percentile(p)).unwrap_or(f64::NAN))
+}
+
+/// Drawdown percentile, in portfolio currency.
+#[no_mangle]
+pub extern "C" fn pc_mc_drawdown_percentile(p: f64) -> f64 {
+    MC_RESULT
+        .with(|slot| slot.borrow().as_ref().map(|r| r.drawdown_percentile(p)).unwrap_or(f64::NAN))
+}
+
+/// Conditional value at risk on the left tail at `alpha`.
+#[no_mangle]
+pub extern "C" fn pc_mc_cvar(alpha: f64) -> f64 {
+    MC_RESULT.with(|slot| slot.borrow().as_ref().map(|r| r.cvar(alpha)).unwrap_or(f64::NAN))
 }

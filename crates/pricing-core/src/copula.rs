@@ -11,7 +11,9 @@
 //! That is a testable statement, not a preference, and it is the thing this
 //! module is measured on. The tail dependence coefficient
 //!
-//!     lambda = lim_{q -> 0} P(U2 < q | U1 < q)
+//! ```text
+//! lambda = lim_{q -> 0} P(U2 < q | U1 < q)
+//! ```
 //!
 //! is **zero for a Gaussian copula at every correlation below one** and
 //! strictly positive for a t copula. So a portfolio whose names crash together
@@ -122,7 +124,14 @@ impl Factor {
     }
 
     /// `out = L * z`, in place.
-    fn apply(&self, z: &[f64], out: &mut [f64]) {
+    ///
+    /// Turns a vector of independent standard normals into one carrying the
+    /// factor's correlation structure. Public to the crate because the
+    /// multi-asset path simulator needs exactly this and nothing else from a
+    /// copula: it correlates the Brownian increments directly rather than going
+    /// through uniforms and back, which is the same thing for the Gaussian case
+    /// and avoids two round trips through the normal CDF per asset per step.
+    pub(crate) fn apply(&self, z: &[f64], out: &mut [f64]) {
         for i in 0..self.dimension {
             let mut sum = 0.0;
             for k in 0..=i {

@@ -33,6 +33,34 @@ server does. So this package marshals and types; it never computes. There is no
 wasm-bindgen layer either — a plain C ABI, because a marshalling layer is one more place
 a value could be rounded on the way past.
 
+## The Monte Carlo surface, and what it refuses
+
+`monteCarlo.ts` marshals PRD 5.8's `MonteCarloNode` onto the Rust portfolio simulator. Two
+things it is careful about, pulling in opposite directions.
+
+**What crosses the boundary.** The engine already refuses to build the path cube, so the
+4GB array is dealt with before anything reaches JavaScript. But the sorted terminal values
+are one per path, and copying 100,000 doubles out of linear memory for a node that wants
+five percentiles is 800KB of garbage per run. So a result carries the summary, the
+requested percentiles and the path sample, and the full vectors are *functions*.
+
+That laziness is a trap across a one-slot boundary, and it caught its own test. The module
+holds one result; a second run overwrites it, and a `terminal()` called afterwards read the
+**new** run's values and returned them under the old result's name — same length, plausible
+numbers, wrong answer. Every result now carries the run it belongs to and the accessors
+throw `ResultSuperseded` once the module has moved on.
+
+**What the browser should run at all.** The PRD puts 100k × 252 × 40 on a cluster, and
+single-core native it takes 30 seconds. A browser asking for that shape is asking for a
+frozen tab, so `estimateCost` reports the asset-steps before anything runs and
+`runMonteCarlo` refuses past a ceiling the caller sets. The node's job is PRD 7.1's
+optimistic local preview — a smaller path count, answered immediately, replaced by the
+server's authoritative run when it lands — and a preview that hangs is worse than none.
+
+A correlation matrix that is not positive definite is refused with the reason, not
+repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
+and the analyst who assembled them is the one who can fix it.
+
 ## One call, not fifteen thousand
 
 A 40-leg book across a 25x15 grid is 15,000 repricings. The book is pushed leg by leg,

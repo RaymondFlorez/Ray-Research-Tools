@@ -18,8 +18,8 @@ README carries the figure it was measured at and the gaps it does not close.
 |---|---|
 | [`@picasso/canvas-core`](packages/canvas-core) | Spatial model, binding states, port type system, DAG evaluation and cache keys. No runtime dependencies. |
 | [`@picasso/canvas-render`](packages/canvas-render) | Scene assembly: LOD bucketing, DOM mount lifecycle, edge geometry, binding visual signatures, passive-mode wash. |
-| [`@picasso/canvas-gl`](packages/canvas-gl) | The WebGL2 path: a scene becomes two instanced draw calls, so node count stops costing draw calls. |
-| [`@picasso/canvas-ink`](packages/canvas-ink) | Append-only stroke capture, the local model-free shape recognizer, and the semantic pass that proposes a node without ever materializing one. |
+| [`@picasso/canvas-gl`](packages/canvas-gl) | The WebGL2 path: a scene becomes two instanced draw calls, plus one for ink, so neither node count nor stroke length costs draw calls. |
+| [`@picasso/canvas-ink`](packages/canvas-ink) | Append-only stroke capture, incremental SDF ribbon tessellation, the local model-free shape recognizer, and the semantic pass that proposes a node without ever materializing one. |
 | [`@picasso/canvas-sync`](packages/canvas-sync) | Collaboration: the Yjs document schema, offline reconciliation, presence, snapshots and named versions. |
 
 ### Data and analytics
@@ -27,7 +27,7 @@ README carries the figure it was measured at and the gaps it does not close.
 | Package | Description |
 |---|---|
 | [`@picasso/canvas-data`](packages/canvas-data) | Bitemporal point-in-time reads, corporate actions, entitlements and egress, the global time scrub. |
-| [`@picasso/canvas-pricing`](packages/canvas-pricing) | The pricing core on the canvas: curves, bonds, the strategy grid, rate transmission, and the scenario engine. |
+| [`@picasso/canvas-pricing`](packages/canvas-pricing) | The pricing core on the canvas: curves, bonds, the strategy grid, rate transmission, the scenario engine and the Monte Carlo surface. |
 | [`@picasso/canvas-equity`](packages/canvas-equity) | PRD 5.2: earnings subtext with span-level evidence, event studies across three benchmark models, factor exposures with their diagnostics. |
 | [`@picasso/canvas-markets`](packages/canvas-markets) | PRD 5.5–5.6: crypto market and on-chain series, prediction-market de-vigging routed by market type, probability curves, scenario weights. |
 | [`@picasso/canvas-sim`](packages/canvas-sim) | Event-driven backtests with point-in-time views, look-ahead detectors, the shuffle test, deflated Sharpe. |

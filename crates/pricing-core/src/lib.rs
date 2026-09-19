@@ -20,6 +20,7 @@ pub mod hull_white;
 pub mod implied;
 pub mod mc;
 pub mod normal;
+pub mod portfolio;
 pub mod quad;
 pub mod rng;
 pub mod resample;

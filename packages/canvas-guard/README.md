@@ -27,23 +27,24 @@ the harness that measured it and what that measurement does not cover, or the
 reason there is no measurement.
 
 ```
-14 budgets · 4 measured · 2 met · 2 missed · 10 unmeasured
+14 budgets · 5 measured · 2 met · 3 missed · 9 unmeasured
 ```
 
 **An unmeasured row is never reported as met.** That is the whole reason for a
 third state: a missing measurement and a passing one are different, and
 collapsing them turns a coverage figure into a ceiling on what anyone will look
-at. Ten rows have nothing behind them for structural reasons — no ClickHouse, no
+at. Nine rows have nothing behind them for structural reasons — no ClickHouse, no
 DuckDB, no models, no market data feed — and naming each gap beats a silent row
 that implies 14/14.
 
-**The two missed rows stay recorded as missed.** A table where every row passes
-is a table whose thresholds were chosen after the measurements.
+**The three missed rows stay recorded as missed.** A table where every row
+passes is a table whose thresholds were chosen after the measurements.
 
 | Row | Budget p95 | Observed p95 | |
 |---|---|---|---|
 | Pan / zoom frame | 16ms | 18.8ms | 5,000 nodes on SwiftShader, a CPU rasterizer. The p50 is inside at 7.1ms. Real hardware should clear it, but that is an inference. |
 | Options book reprice, 40 legs × 375 cells | 90ms | 171.7ms | Quality-dependent. `draft` reprices in 55.9ms and meets it; `standard` goes through Andersen-Lake and does not. The canvas drags at draft and settles at standard, so the budget holds while the analyst is moving and misses when they stop. The recorded figure is the one that fails — taking the draft number would be choosing the measurement that passes. |
+| Monte Carlo 100k × 252 × 40 | 9s | 30.0s | Single-threaded native, against a budget the PRD explicitly puts on a cluster. 3.3x over, landing exactly on the 30s ceiling, with throughput flat at 3.3e7 asset-steps/s from 10k paths to 100k — so the useful reading is that the budget assumes about four cores. |
 
 `checkLatency` throws on an interaction name that is not in the table rather
 than passing it. A monitor that silently accepts an unbudgeted name reports
