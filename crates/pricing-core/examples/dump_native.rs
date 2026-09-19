@@ -256,5 +256,56 @@ fn main() {
         }
     }
 
+    // Heston: a complex characteristic function under a Gauss-Legendre rule,
+    // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
+    // moves the integrand at every node.
+    let heston_sets = [
+        (0.042f64, 0.058f64, 1.8f64, 0.55f64, -0.68f64),
+        (0.09, 0.09, 0.3, 1.0, -0.5),
+        (0.0025, 0.64, 15.0, 3.0, -0.95),
+        (0.25, 0.25, 0.5, 2.0, 0.0),
+    ];
+    for (index, &(v0, theta, kappa, sigma, rho)) in heston_sets.iter().enumerate() {
+        emit(
+            format!("hst_cond({index})"),
+            ffi::pc_heston_conditioning(v0, theta, kappa, sigma, rho),
+        );
+        for &k in &[70.0, 90.0, 100.0, 110.0, 130.0] {
+            for &t in &[0.08, 0.5, 2.0, 7.0] {
+                for is_call in [0, 1] {
+                    let tag = format!("{index}/{k}/{t}/{is_call}");
+                    emit(
+                        format!("hst_px({tag})"),
+                        ffi::pc_heston_price(100.0, k, t, 0.03, 0.01, is_call, v0, theta, kappa, sigma, rho),
+                    );
+                    emit(
+                        format!("hst_iv({tag})"),
+                        ffi::pc_heston_iv(100.0, k, t, 0.03, 0.01, is_call, v0, theta, kappa, sigma, rho),
+                    );
+                }
+            }
+        }
+    }
+
+    // A small calibration, which exercises the whole differential-evolution
+    // path. Integer RNG throughout, so this must agree bit for bit or the
+    // search visited different points on the two builds.
+    ffi::pc_heston_surface_reset();
+    for &k in &[80.0f64, 90.0, 100.0, 110.0, 125.0] {
+        for &t in &[0.25f64, 1.0, 2.0] {
+            let is_call = if k >= 100.0 { 1 } else { 0 };
+            let vol = ffi::pc_heston_iv(100.0, k, t, 0.03, 0.01, is_call, 0.042, 0.058, 1.8, 0.55, -0.68);
+            ffi::pc_heston_surface_add(k, t, is_call, vol, 1.0);
+        }
+    }
+    emit(
+        "hst_fit_n".to_string(),
+        ffi::pc_heston_calibrate(100.0, 0.03, 0.01, 0, 16, 12, 4242.0) as f64,
+    );
+    let fit = ffi::pc_heston_fit();
+    for which in 0..ffi::HESTON_FIT_STRIDE {
+        emit(format!("hst_fit({which})"), unsafe { *fit.add(which) });
+    }
+
     println!("{}", rows.join("\n"));
 }

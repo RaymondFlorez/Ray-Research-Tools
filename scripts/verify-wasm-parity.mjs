@@ -255,6 +255,52 @@ function wasmPortfolio() {
 
 const portfolio = wasmPortfolio();
 
+/** Heston closed form and a small calibration, through WASM. */
+function wasmHeston() {
+  const rows = new Map();
+  const sets = [
+    [0.042, 0.058, 1.8, 0.55, -0.68],
+    [0.09, 0.09, 0.3, 1.0, -0.5],
+    [0.0025, 0.64, 15.0, 3.0, -0.95],
+    [0.25, 0.25, 0.5, 2.0, 0.0],
+  ];
+  sets.forEach(([v0, theta, kappa, sigma, rho], index) => {
+    rows.set(`hst_cond(${index})`, w.pc_heston_conditioning(v0, theta, kappa, sigma, rho));
+    for (const k of [70, 90, 100, 110, 130]) {
+      for (const t of [0.08, 0.5, 2, 7]) {
+        for (const isCall of [0, 1]) {
+          const tag = `${index}/${k}/${t}/${isCall}`;
+          rows.set(
+            `hst_px(${tag})`,
+            w.pc_heston_price(100, k, t, 0.03, 0.01, isCall, v0, theta, kappa, sigma, rho),
+          );
+          rows.set(
+            `hst_iv(${tag})`,
+            w.pc_heston_iv(100, k, t, 0.03, 0.01, isCall, v0, theta, kappa, sigma, rho),
+          );
+        }
+      }
+    }
+  });
+
+  w.pc_heston_surface_reset();
+  for (const k of [80, 90, 100, 110, 125]) {
+    for (const t of [0.25, 1, 2]) {
+      const isCall = k >= 100 ? 1 : 0;
+      const vol = w.pc_heston_iv(100, k, t, 0.03, 0.01, isCall, 0.042, 0.058, 1.8, 0.55, -0.68);
+      w.pc_heston_surface_add(k, t, isCall, vol, 1);
+    }
+  }
+  rows.set('hst_fit_n', w.pc_heston_calibrate(100, 0.03, 0.01, 0, 16, 12, 4242));
+  const fit = new Float64Array(w.memory.buffer, w.pc_heston_fit(), 11);
+  for (let which = 0; which < 11; which += 1) {
+    rows.set(`hst_fit(${which})`, fit[which]);
+  }
+  return rows;
+}
+
+const hestonRows = wasmHeston();
+
 /** Recomputes one labelled row through the WASM module. */
 function recompute(label) {
   if (grid.has(label)) return grid.get(label);
@@ -262,6 +308,7 @@ function recompute(label) {
   if (bonds.has(label)) return bonds.get(label);
   if (monteCarlo.has(label)) return monteCarlo.get(label);
   if (portfolio.has(label)) return portfolio.get(label);
+  if (hestonRows.has(label)) return hestonRows.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -304,7 +351,8 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo and a correlated portfolio` +
+    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a correlated portfolio ` +
+    `and Heston with its calibration` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

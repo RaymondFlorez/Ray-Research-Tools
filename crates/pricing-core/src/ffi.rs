@@ -14,6 +14,8 @@ use crate::american;
 use crate::bsm::{self, Inputs, OptionType};
 use crate::copula::Factor;
 use crate::implied;
+use crate::de::DeConfig;
+use crate::heston::{self, CalibrationConfig, HestonParams, Quote, Residual, Surface};
 use crate::mc::{Gbm, Process};
 use crate::portfolio::{simulate_portfolio, AssetSpec, PortfolioConfig, PortfolioResult};
 
@@ -1086,4 +1088,191 @@ pub extern "C" fn pc_mc_drawdown_percentile(p: f64) -> f64 {
 #[no_mangle]
 pub extern "C" fn pc_mc_cvar(alpha: f64) -> f64 {
     MC_RESULT.with(|slot| slot.borrow().as_ref().map(|r| r.cvar(alpha)).unwrap_or(f64::NAN))
+}
+
+// ---------------------------------------------------------------------------
+// Heston: closed form and surface calibration (PRD 5.8)
+// ---------------------------------------------------------------------------
+
+/// Floats in the calibration result block.
+pub const HESTON_FIT_STRIDE: usize = 11;
+
+thread_local! {
+    static HESTON_QUOTES: RefCell<Vec<Quote>> = const { RefCell::new(Vec::new()) };
+    static HESTON_FIT: RefCell<[f64; HESTON_FIT_STRIDE]> =
+        const { RefCell::new([0.0; HESTON_FIT_STRIDE]) };
+}
+
+fn heston_params(v0: f64, theta: f64, kappa: f64, sigma: f64, rho: f64) -> HestonParams {
+    HestonParams { v0, theta, kappa, sigma, rho }
+}
+
+/// A European option under Heston, by the Lewis integral.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_heston_price(
+    spot: f64,
+    strike: f64,
+    time: f64,
+    rate: f64,
+    dividend: f64,
+    is_call: i32,
+    v0: f64,
+    theta: f64,
+    kappa: f64,
+    sigma: f64,
+    rho: f64,
+) -> f64 {
+    let inputs = Inputs {
+        spot,
+        strike,
+        time,
+        rate,
+        dividend,
+        vol: 0.2,
+        kind: if is_call != 0 { OptionType::Call } else { OptionType::Put },
+    };
+    heston::price(&heston_params(v0, theta, kappa, sigma, rho), &inputs)
+}
+
+/// The Black-Scholes volatility that reproduces that price. NaN where vega has
+/// collapsed and the inversion carries no information.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_heston_iv(
+    spot: f64,
+    strike: f64,
+    time: f64,
+    rate: f64,
+    dividend: f64,
+    is_call: i32,
+    v0: f64,
+    theta: f64,
+    kappa: f64,
+    sigma: f64,
+    rho: f64,
+) -> f64 {
+    let inputs = Inputs {
+        spot,
+        strike,
+        time,
+        rate,
+        dividend,
+        vol: 0.2,
+        kind: if is_call != 0 { OptionType::Call } else { OptionType::Put },
+    };
+    heston::implied_vol(&heston_params(v0, theta, kappa, sigma, rho), &inputs)
+}
+
+/// `kappa theta / sigma^2`. Past `pc_heston_conditioning_limit` the closed form
+/// is losing digits to cancellation; see `heston.rs`.
+#[no_mangle]
+pub extern "C" fn pc_heston_conditioning(
+    v0: f64,
+    theta: f64,
+    kappa: f64,
+    sigma: f64,
+    rho: f64,
+) -> f64 {
+    heston::conditioning(&heston_params(v0, theta, kappa, sigma, rho))
+}
+
+#[no_mangle]
+pub extern "C" fn pc_heston_conditioning_limit() -> f64 {
+    heston::CONDITIONING_LIMIT
+}
+
+/// Clears the surface. Call before adding quotes.
+#[no_mangle]
+pub extern "C" fn pc_heston_surface_reset() {
+    HESTON_QUOTES.with(|q| q.borrow_mut().clear());
+}
+
+/// Appends one market quote.
+#[no_mangle]
+pub extern "C" fn pc_heston_surface_add(
+    strike: f64,
+    time: f64,
+    is_call: i32,
+    vol: f64,
+    weight: f64,
+) {
+    HESTON_QUOTES.with(|quotes| {
+        quotes.borrow_mut().push(Quote {
+            strike,
+            time,
+            kind: if is_call != 0 { OptionType::Call } else { OptionType::Put },
+            vol,
+            weight,
+        });
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn pc_heston_surface_len() -> i32 {
+    HESTON_QUOTES.with(|q| q.borrow().len() as i32)
+}
+
+/// Fit Heston to the accumulated surface. Returns the quote count, or -1 when
+/// the surface is empty.
+///
+/// `residual` is 0 for implied vol and 1 for price. Anything else is implied
+/// vol, because a caller passing a code this build does not know should get the
+/// residual the PRD's wings depend on rather than the other one.
+///
+/// This is not a browser call. At the default budget it is several seconds of
+/// solid arithmetic on one thread; the TypeScript wrapper states the cost
+/// before running it and refuses past a ceiling.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_heston_calibrate(
+    spot: f64,
+    rate: f64,
+    dividend: f64,
+    residual: i32,
+    population: i32,
+    generations: i32,
+    seed: f64,
+) -> i32 {
+    HESTON_QUOTES.with(|quotes| {
+        let quotes = quotes.borrow();
+        if quotes.is_empty() {
+            return -1;
+        }
+        let surface = Surface { spot, rate, dividend, quotes: &quotes };
+        let config = CalibrationConfig {
+            residual: if residual == 1 { Residual::Price } else { Residual::ImpliedVol },
+            de: DeConfig {
+                population: population.max(4) as usize,
+                generations: generations.max(1) as usize,
+                seed: seed.abs() as u64,
+                ..DeConfig::default()
+            },
+            bounds: heston::DEFAULT_BOUNDS,
+        };
+        let fit = heston::calibrate(&surface, &config);
+        HESTON_FIT.with(|slot| {
+            *slot.borrow_mut() = [
+                fit.params.v0,
+                fit.params.theta,
+                fit.params.kappa,
+                fit.params.sigma,
+                fit.params.rho,
+                fit.rmse,
+                fit.worst,
+                fit.worst_quote as f64,
+                fit.skipped as f64,
+                fit.score_spread,
+                fit.feller,
+            ];
+        });
+        quotes.len() as i32
+    })
+}
+
+/// Pointer to the fit: v0, theta, kappa, sigma, rho, rmse, worst, worst quote,
+/// skipped, score spread, Feller.
+#[no_mangle]
+pub extern "C" fn pc_heston_fit() -> *const f64 {
+    HESTON_FIT.with(|f| f.borrow().as_ptr())
 }

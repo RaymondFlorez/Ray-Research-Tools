@@ -94,6 +94,29 @@ export interface PricingExports {
   pc_nss_zero(t: number): number;
   pc_nss_residual(index: number): number;
   pc_nss_install_curve(): number;
+  pc_heston_price(
+    spot: number, strike: number, time: number, rate: number, dividend: number, isCall: number,
+    v0: number, theta: number, kappa: number, sigma: number, rho: number,
+  ): number;
+  pc_heston_iv(
+    spot: number, strike: number, time: number, rate: number, dividend: number, isCall: number,
+    v0: number, theta: number, kappa: number, sigma: number, rho: number,
+  ): number;
+  pc_heston_conditioning(
+    v0: number, theta: number, kappa: number, sigma: number, rho: number,
+  ): number;
+  pc_heston_conditioning_limit(): number;
+  pc_heston_surface_reset(): void;
+  pc_heston_surface_add(
+    strike: number, time: number, isCall: number, vol: number, weight: number,
+  ): void;
+  pc_heston_surface_len(): number;
+  pc_heston_calibrate(
+    spot: number, rate: number, dividend: number, residual: number,
+    population: number, generations: number, seed: number,
+  ): number;
+  pc_heston_fit(): number;
+
   pc_mc_reset(): void;
   pc_mc_add_asset(spot: number, weight: number, vol: number, rate: number, dividend: number): void;
   pc_mc_asset_count(): number;
@@ -138,6 +161,9 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_run',
   'pc_mc_summary', 'pc_mc_terminal', 'pc_mc_drawdown', 'pc_mc_sample',
   'pc_mc_sample_rows', 'pc_mc_percentile', 'pc_mc_drawdown_percentile', 'pc_mc_cvar',
+  'pc_heston_price', 'pc_heston_iv', 'pc_heston_conditioning',
+  'pc_heston_conditioning_limit', 'pc_heston_surface_reset', 'pc_heston_surface_add',
+  'pc_heston_surface_len', 'pc_heston_calibrate', 'pc_heston_fit',
 ];
 
 /**

@@ -3,11 +3,12 @@
 Black-Scholes-Merton with the full Greek set, a robust implied-vol solver, American
 exercise by Andersen-Lake, multi-leg grid repricing with the accuracy guard from PRD
 Appendix C.2, yield curves — bootstrapped, fitted, and shocked — bond analytics with
-option-adjusted spreads on a Hull-White lattice, Monte Carlo over four processes, and a
-multi-asset portfolio simulator with copula dependence.
+option-adjusted spreads on a Hull-White lattice, Monte Carlo over four processes, a
+multi-asset portfolio simulator with copula dependence, and Heston in closed form with
+surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 157 tests
+cargo test --release                              # 183 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -15,8 +16,100 @@ cargo run --release --example al_sweep            # which scheme parameter actua
 cargo run --release --example error_scan          # fast-vs-exact error sweep
 cargo run --release --example lr_steps            # lattice accuracy against cost
 cargo run --release --example portfolio_bench     # the PRD's 100k x 252 x 40 shape, timed
+cargo run --release --example heston_calibrate    # round-trip recovery, and what noise costs
 node ../../scripts/verify-wasm-parity.mjs         # native vs WASM, bit for bit
 ```
+
+## Heston, and the two things that go wrong
+
+> Calibration: parameters either user-set, fit to history over a chosen window, or fit to
+> the current option surface (for Heston, via **differential evolution on the surface fit
+> residual**). — PRD 5.8
+
+Differential evolution over a Monte Carlo surface is noise fitting noise — a population
+member's score would move more between evaluations than between parameter sets — so
+calibration needs a pricer whose only error is quadrature. That is the characteristic
+function, and it has two well-known ways of being quietly wrong.
+
+**The branch cut.** Heston's 1993 formulation puts a complex logarithm on a branch the
+principal `ln` crosses as maturity grows. The price then jumps *discontinuously*, and a
+calibration walking through that region sees a cliff that is not in the model. Albrecher,
+Mayer, Schoutens and Tistaert named it "the little Heston trap" in 2007 and showed the fix
+is algebraic: writing `g = (kappa - rho sigma iu - d)/(kappa - rho sigma iu + d)` rather
+than its reciprocal keeps `|g| <= 1`, which makes the principal branch correct everywhere.
+`long_maturities_do_not_jump` walks maturity from 0.1 to 15 years in 0.05 steps and
+requires no step to exceed 1.5x its immediate neighbours — compared *locally*, because the
+price legitimately rises fastest at the short end and a comparison against the median of
+the whole range fails on that while saying nothing about branches. That was this test's
+first version.
+
+**The zero-vol-of-vol check is a trap of its own.** The obvious way to verify a Heston
+implementation is to drive `sigma` to zero with `v0 = theta` and compare against
+Black-Scholes at `sqrt(theta)`. But `C(u,T)` carries `kappa theta / sigma^2` multiplying a
+bracket that vanishes with `sigma^2`, and a double runs out of digits to cancel with:
+
+```
+     sigma    |heston - bsm|   kappa theta / sigma^2
+   1.00e-2          1.39e-4            3.2e3
+   1.00e-3          1.39e-6            3.2e5
+   1.00e-4          2.20e-7            3.2e7     <- floor
+   1.00e-5          5.01e-5            3.2e9
+   1.00e-6          5.02e-4            3.2e11
+   1.00e-7          4.63e-1            3.2e13
+```
+
+Down to `1e-4` the gap falls exactly as `sigma^2`, which is the model difference. Below it
+the gap *grows* at the same rate, which is cancellation — and refining the quadrature does
+not touch it, while at realistic parameters four times the nodes over four times the range
+changes nothing to the last bit. So `conditioning()` reports `kappa theta / sigma^2` and
+the Black-Scholes limit is checked at `sigma = 1e-3`, where the method is sound and the
+agreement is 1.4e-6.
+
+The quadrature grid is 120 Gauss-Legendre nodes over five geometric panels to `u = 200`,
+chosen by measuring the worst error at the *corners of the calibration box* — `kappa = 15`,
+`sigma = 3`, `rho = -0.95` — rather than at comfortable parameters:
+
+| nodes | worst error | per price |
+|---|---|---|
+| 192 | 2.07e-8 | 80.6 µs |
+| **120** | **7.13e-8** | **36.6 µs** |
+| 96 | 1.13e-5 | 30.7 µs |
+| 64 | 4.87e-4 | 19.1 µs |
+
+And the closed form is checked against the crate's own Heston Monte Carlo, which shares no
+code with it — a different discretisation of a different representation of the same model.
+
+### What calibration actually recovers
+
+Round trip on a 44-quote surface generated from known parameters, three independent seeds:
+every parameter back to four decimal places, RMSE 8e-7 vol points, converging in 93 to 112
+generations. That is the only honest test of a calibrator, because a fit to real quotes has
+no right answer and "the RMSE is small" is something a fit in the wrong valley says too.
+
+The useful number is what happens when the surface is quoted to a tick. Five noise draws
+per level, relative standard deviation of the recovered parameter:
+
+| quote noise | v0 | theta | kappa | sigma | rho |
+|---|---|---|---|---|---|
+| 0.05 vol pts | 0.1% | 0.3% | 1.1% | 0.2% | 0.1% |
+| 0.2 vol pts | 0.6% | 1.1% | 4.3% | 0.8% | 0.6% |
+| 0.5 vol pts | 1.4% | 2.7% | **10.1%** | 2.1% | 1.4% |
+
+`kappa` is seven times less identified than `v0` or `rho` at every noise level. That is the
+Heston identifiability result, measured here rather than quoted: the surface constrains
+where volatility is now and how skewed it is, and says much less about how fast it reverts.
+A fit that reports `kappa` to three figures is reporting three figures of noise.
+
+### The DE defaults were measured, and the first guess was wrong
+
+`F = 0.7, CR = 0.9` is the textbook starting point and is what this shipped with. On
+Rastrigin in 4D at 300 generations it is the only one of four settings that fails to reach
+the global minimum exactly. On the Heston residual at the default budget it is thirty times
+worse on RMSE and eighty times worse on `kappa` than `F = 0.5, CR = 0.9`, which is now the
+default. The caveat points the other way at small budgets — below a population of about
+forty the ordering reverses, because a smaller `F` needs more members to keep its
+difference vectors alive — so it is a default tuned for the default budget, not a fact
+about DE.
 
 ## The Monte Carlo shape the PRD names
 

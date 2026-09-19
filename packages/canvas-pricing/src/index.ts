@@ -17,6 +17,7 @@ export * from './grid.js';
 export * from './curve.js';
 export * from './bonds.js';
 export * from './monteCarlo.js';
+export * from './heston.js';
 export * from './curveNode.js';
 export * from './transmission.js';
 export * from './scenario.js';

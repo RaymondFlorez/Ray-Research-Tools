@@ -814,3 +814,600 @@ mod portfolio_tests {
         assert_eq!(a.sample, b.sample);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Complex arithmetic, the characteristic function, and calibration (PRD 5.8)
+// ---------------------------------------------------------------------------
+
+mod complex_tests {
+    use pricing_core::complex::Complex;
+
+    #[test]
+    fn division_survives_the_ranges_an_exponential_reaches() {
+        // The naive formula divides by re^2 + im^2, which overflows past about
+        // 1e154 and underflows to zero below about 1e-162. Neither is exotic
+        // inside exp() of a complex number.
+        let huge = Complex::new(1e200, 1e200);
+        let got = huge.div(huge);
+        assert!((got.re - 1.0).abs() < 1e-12 && got.im.abs() < 1e-12, "{got:?}");
+
+        let tiny = Complex::new(1e-200, 1e-200);
+        let got = tiny.div(tiny);
+        assert!((got.re - 1.0).abs() < 1e-12 && got.im.abs() < 1e-12, "{got:?}");
+
+        let mixed = Complex::new(3.0, -4.0).div(Complex::new(1e-180, 2e-180));
+        assert!(mixed.re.is_finite() && mixed.im.is_finite(), "{mixed:?}");
+    }
+
+    #[test]
+    fn multiplication_and_division_invert_each_other() {
+        let a = Complex::new(0.7, -2.3);
+        let b = Complex::new(-1.9, 0.4);
+        let back = a.mul(b).div(b);
+        assert!((back.re - a.re).abs() < 1e-14);
+        assert!((back.im - a.im).abs() < 1e-14);
+    }
+
+    #[test]
+    fn sqrt_takes_the_principal_branch() {
+        // Non-negative real part, and squaring returns the argument.
+        for z in [
+            Complex::new(-4.0, 0.0),
+            Complex::new(-4.0, -1e-15),
+            Complex::new(3.0, 4.0),
+            Complex::new(0.0, -2.0),
+            Complex::new(1e-300, 1e-300),
+        ] {
+            let r = z.sqrt();
+            assert!(r.re >= 0.0, "{z:?} -> {r:?}");
+            let back = r.mul(r);
+            let scale = z.abs().max(1e-300);
+            assert!((back.re - z.re).abs() / scale < 1e-12, "{z:?} -> {back:?}");
+            assert!((back.im - z.im).abs() / scale < 1e-12, "{z:?} -> {back:?}");
+        }
+        assert_eq!(Complex::ZERO.sqrt(), Complex::ZERO);
+    }
+
+    #[test]
+    fn ln_and_exp_invert_each_other_inside_the_principal_strip() {
+        for z in [Complex::new(1.0, 0.5), Complex::new(-2.0, 0.3), Complex::new(0.01, -1.0)] {
+            let back = z.ln().exp();
+            assert!((back.re - z.re).abs() < 1e-13, "{z:?} -> {back:?}");
+            assert!((back.im - z.im).abs() < 1e-13, "{z:?} -> {back:?}");
+        }
+        // Principal branch: the imaginary part of ln stays in (-pi, pi].
+        for z in [Complex::new(-1.0, 1e-18), Complex::new(-1.0, -1e-18)] {
+            assert!(z.ln().im.abs() <= core::f64::consts::PI + 1e-15);
+        }
+    }
+}
+
+mod heston_tests {
+    use pricing_core::bsm::{self, Inputs, OptionType};
+    use pricing_core::complex::Complex;
+    use pricing_core::heston::{self, HestonParams, CONDITIONING_LIMIT};
+    use pricing_core::mc::{self, McConfig, Sampling};
+    use pricing_core::quad::Legendre;
+
+    fn call(strike: f64, time: f64) -> Inputs {
+        Inputs {
+            spot: 100.0, strike, time, rate: 0.03, dividend: 0.01, vol: 0.2,
+            kind: OptionType::Call,
+        }
+    }
+
+    fn realistic() -> HestonParams {
+        HestonParams { v0: 0.042, theta: 0.058, kappa: 1.8, sigma: 0.55, rho: -0.68 }
+    }
+
+    #[test]
+    fn it_collapses_to_black_scholes_as_the_vol_of_vol_vanishes() {
+        // At sigma = 1e-3, not 1e-6. The series coefficient carries a factor of
+        // kappa*theta/sigma^2 against a bracket that vanishes with sigma^2, so
+        // the obvious test point is the one where a double runs out of digits
+        // to cancel with — measured, the error bottoms at sigma = 1e-4 and
+        // *grows* below it. See the module docs.
+        for &vol in &[0.15f64, 0.25, 0.40] {
+            let v = vol * vol;
+            let params = HestonParams { v0: v, theta: v, kappa: 2.0, sigma: 1e-3, rho: 0.0 };
+            assert!(heston::well_conditioned(&params));
+            for &(k, t) in &[(90.0, 0.25), (100.0, 1.0), (120.0, 2.0)] {
+                let mut inputs = call(k, t);
+                inputs.vol = vol;
+                let gap = (heston::price(&params, &inputs) - bsm::price(&inputs)).abs();
+                assert!(gap < 1e-5, "vol {vol} K {k} T {t}: gap {gap:.2e}");
+            }
+        }
+    }
+
+    #[test]
+    fn it_reports_the_conditioning_rather_than_pricing_through_it() {
+        let degenerate = HestonParams { v0: 0.16, theta: 0.16, kappa: 2.0, sigma: 1e-6, rho: 0.0 };
+        assert!(heston::conditioning(&degenerate) > CONDITIONING_LIMIT);
+        assert!(!heston::well_conditioned(&degenerate));
+
+        assert!(heston::well_conditioned(&realistic()));
+        assert!(heston::conditioning(&realistic()) < CONDITIONING_LIMIT);
+
+        // And the report is honest about what it is warning of. At sigma=1e-6
+        // the price really is wrong — 5.0e-4 against Black-Scholes, where the
+        // model difference at that sigma is 1.4e-12 — and by sigma=1e-7 it is
+        // 0.46 on a $16 option. The assertion is on the direction the error
+        // moves, because that is what distinguishes cancellation from the model:
+        // a model difference shrinks with sigma and this grows.
+        let mut inputs = call(120.0, 2.0);
+        inputs.vol = 0.4;
+        let gap = |sigma: f64| {
+            let params = HestonParams { sigma, ..degenerate };
+            (heston::price(&params, &inputs) - bsm::price(&inputs)).abs()
+        };
+        assert!(gap(1e-3) > gap(1e-4), "above the floor the gap is the model, and falls");
+        assert!(gap(1e-5) > gap(1e-4), "below the floor the gap is cancellation, and grows");
+        assert!(gap(1e-6) > gap(1e-5));
+        assert!(gap(1e-7) > 0.1, "by 1e-7 it is not subtle: {:.2e}", gap(1e-7));
+
+        assert_eq!(
+            heston::conditioning(&HestonParams { sigma: 0.0, ..realistic() }),
+            f64::INFINITY
+        );
+    }
+
+    #[test]
+    fn put_call_parity_holds_exactly() {
+        let params = realistic();
+        for &(k, t) in &[(70.0, 0.08), (100.0, 1.0), (130.0, 2.0)] {
+            let c = call(k, t);
+            let p = Inputs { kind: OptionType::Put, ..c };
+            let parity = heston::price(&params, &c) - heston::price(&params, &p);
+            let expected = 100.0 * (-0.01f64 * t).exp() - k * (-0.03f64 * t).exp();
+            assert!((parity - expected).abs() < 1e-12, "K {k} T {t}: {parity} vs {expected}");
+        }
+    }
+
+    /// The Lewis integral at arbitrary resolution, not calling `heston::price`.
+    fn reference_price(params: &HestonParams, inputs: &Inputs, upper: f64, panels: usize, nodes: usize) -> f64 {
+        let x = (inputs.spot / inputs.strike).ln() + (inputs.rate - inputs.dividend) * inputs.time;
+        let rule = Legendre::new(nodes);
+        let mut integral = 0.0;
+        for p in 0..panels {
+            let lo = upper * ((p as f64) / (panels as f64)).powi(3);
+            let hi = upper * (((p + 1) as f64) / (panels as f64)).powi(3);
+            integral += rule.integrate(lo, hi, |u| {
+                let phi = heston::characteristic(params, Complex::new(u, -0.5), inputs.time);
+                Complex::new(0.0, u * x).exp().mul(phi).re / (u * u + 0.25)
+            });
+        }
+        inputs.spot * (-inputs.dividend * inputs.time).exp()
+            - (inputs.spot * inputs.strike).sqrt()
+                * (-(inputs.rate + inputs.dividend) * inputs.time * 0.5).exp()
+                * integral
+                / core::f64::consts::PI
+    }
+
+    #[test]
+    fn the_shipped_quadrature_grid_is_converged_at_the_corners_of_the_search_box() {
+        // Not just at realistic parameters. The calibrator visits the corners,
+        // and a grid converged in the middle and not at the edges produces a
+        // fit that is an artefact of the quadrature.
+        let corners = [
+            realistic(),
+            HestonParams { v0: 0.0025, theta: 0.64, kappa: 15.0, sigma: 3.0, rho: -0.95 },
+            HestonParams { v0: 0.64, theta: 0.0025, kappa: 0.05, sigma: 0.02, rho: 0.95 },
+            HestonParams { v0: 0.25, theta: 0.25, kappa: 0.5, sigma: 2.0, rho: 0.0 },
+        ];
+        let mut worst = 0.0f64;
+        for params in corners {
+            for &(k, t) in &[(70.0, 0.08), (100.0, 0.08), (130.0, 0.08), (70.0, 2.0), (100.0, 2.0), (130.0, 2.0)] {
+                let inputs = call(k, t);
+                let reference = reference_price(&params, &inputs, 400.0, 24, 40);
+                worst = worst.max((heston::price(&params, &inputs) - reference).abs());
+            }
+        }
+        // Measured at 7.13e-8; asserted an order of magnitude looser so a
+        // reordering of the panels does not fail it spuriously, and tight
+        // enough that dropping to 96 nodes (1.13e-5) would.
+        assert!(worst < 1e-6, "worst quadrature error {worst:.2e}");
+    }
+
+    #[test]
+    fn long_maturities_do_not_jump() {
+        // The little Heston trap. The original 1993 formulation puts the
+        // complex logarithm on a branch the principal `ln` crosses as maturity
+        // grows, and the price jumps discontinuously when it does. This walks
+        // maturity finely and requires the price to move smoothly — a branch
+        // crossing shows up as a step between adjacent maturities far larger
+        // than its neighbours.
+        let params = HestonParams { v0: 0.09, theta: 0.09, kappa: 0.3, sigma: 1.0, rho: -0.5 };
+        let mut previous = f64::NAN;
+        let mut steps: Vec<f64> = Vec::new();
+        let mut t = 0.1;
+        while t <= 15.0 {
+            let value = heston::price(&params, &call(100.0, t));
+            assert!(value.is_finite() && value > 0.0, "T {t}: {value}");
+            if previous.is_finite() {
+                steps.push((value - previous).abs());
+            }
+            previous = value;
+            t += 0.05;
+        }
+        // Compared locally, not against the median of the whole range. The
+        // price rises fastest at the short end and flattens, so the largest
+        // step is legitimately the first one — the median comparison this test
+        // started with failed on that and said nothing about branches. A branch
+        // crossing is a *local* anomaly: one step far larger than the steps
+        // immediately either side of it, in a region where nothing else is
+        // moving.
+        let mut worst_ratio = 0.0f64;
+        let mut worst_at = 0usize;
+        for i in 1..steps.len() - 1 {
+            let neighbours = steps[i - 1].max(steps[i + 1]).max(1e-12);
+            let ratio = steps[i] / neighbours;
+            if ratio > worst_ratio {
+                worst_ratio = ratio;
+                worst_at = i;
+            }
+        }
+        // A smooth curve gives a ratio just above one everywhere. The trapped
+        // formulation gives tens to hundreds at the crossing.
+        assert!(
+            worst_ratio < 1.5,
+            "step {worst_at} is {worst_ratio:.2}x its neighbours, which is a branch crossing",
+        );
+    }
+
+    #[test]
+    fn the_price_rises_with_maturity_and_falls_with_strike() {
+        let params = realistic();
+        let mut previous = f64::NEG_INFINITY;
+        for t in [0.08, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0] {
+            let value = heston::price(&params, &call(100.0, t));
+            assert!(value > previous, "T {t}");
+            previous = value;
+        }
+        let mut previous = f64::INFINITY;
+        for k in [60.0, 80.0, 100.0, 120.0, 150.0] {
+            let value = heston::price(&params, &call(k, 1.0));
+            assert!(value < previous, "K {k}");
+            previous = value;
+        }
+    }
+
+    #[test]
+    fn rho_is_the_skew() {
+        // The reason anyone fits Heston rather than Black-Scholes. A negative
+        // correlation makes a down move raise volatility, which fattens the
+        // left tail, which lifts the implied vol of low strikes.
+        let slope = |rho: f64| {
+            let params = HestonParams { v0: 0.04, theta: 0.04, kappa: 2.0, sigma: 0.6, rho };
+            let low = heston::implied_vol(&params, &call(80.0, 1.0));
+            let high = heston::implied_vol(&params, &call(120.0, 1.0));
+            high - low
+        };
+        assert!(slope(-0.8) < -0.05, "a negative rho must slope down: {}", slope(-0.8));
+        assert!(slope(0.8) > 0.05, "a positive rho must slope up: {}", slope(0.8));
+        assert!(slope(-0.8) < slope(0.0) && slope(0.0) < slope(0.8));
+    }
+
+    #[test]
+    fn it_agrees_with_the_crate_s_own_heston_monte_carlo() {
+        // The independent check: the Monte Carlo shares no code with the
+        // characteristic function — a different discretisation of a different
+        // representation of the same model.
+        let params = realistic();
+        let process = mc::Heston {
+            rate: 0.03,
+            dividend: 0.01,
+            theta: params.theta,
+            kappa: params.kappa,
+            sigma: params.sigma,
+            rho: params.rho,
+            initial_variance: params.v0,
+        };
+        let config = McConfig {
+            paths: 120_000, steps: 300, sampling: Sampling::Pseudo, antithetic: true, seed: 0xBEEF,
+        };
+        for &(k, t) in &[(80.0, 1.0), (100.0, 1.0), (120.0, 1.0)] {
+            let closed = heston::price(&params, &call(k, t));
+            let discount = (-0.03f64 * t).exp();
+            let result = mc::simulate(
+                &process, 100.0, t, &config, params.v0,
+                |s| discount * (s - k).max(0.0),
+                None,
+            );
+            // Four standard errors, and a floor: full-truncation Euler biases
+            // the simulated price slightly, so the tolerance has to admit a
+            // discretisation bias that is not an error in either routine.
+            let tolerance = 4.0 * result.standard_error + 0.05;
+            assert!(
+                (closed - result.mean).abs() < tolerance,
+                "K {k} T {t}: closed {closed:.5} mc {:.5} se {:.5}",
+                result.mean, result.standard_error,
+            );
+        }
+    }
+
+    #[test]
+    fn feller_is_reported_rather_than_enforced() {
+        let breaks = HestonParams { v0: 0.04, theta: 0.04, kappa: 1.0, sigma: 0.8, rho: -0.7 };
+        assert!(!breaks.satisfies_feller());
+        assert!(breaks.feller() < 0.0);
+        // And it still prices. Fitted equity surfaces routinely violate Feller,
+        // and a pricer that refused them would refuse most real surfaces.
+        assert!(heston::price(&breaks, &call(100.0, 1.0)) > 0.0);
+
+        let holds = HestonParams { v0: 0.04, theta: 0.09, kappa: 3.0, sigma: 0.5, rho: -0.5 };
+        assert!(holds.satisfies_feller());
+    }
+}
+
+mod de_tests {
+    use pricing_core::de::{minimize, Bound, DeConfig};
+
+    fn config(seed: u64) -> DeConfig {
+        DeConfig { population: 40, generations: 300, seed, ..DeConfig::default() }
+    }
+
+    #[test]
+    fn it_finds_the_minimum_of_a_smooth_bowl() {
+        let bounds = [Bound::new(-5.0, 5.0), Bound::new(-5.0, 5.0), Bound::new(-5.0, 5.0)];
+        let target = [1.5, -2.25, 0.75];
+        let result = minimize(&bounds, &config(1), |x| {
+            x.iter().zip(target).map(|(v, t)| (v - t) * (v - t)).sum()
+        });
+        assert!(result.score < 1e-12, "score {}", result.score);
+        for (got, want) in result.best.iter().zip(target) {
+            assert!((got - want).abs() < 1e-5, "{got} vs {want}");
+        }
+    }
+
+    #[test]
+    fn it_finds_the_global_minimum_of_a_multimodal_one() {
+        // Rastrigin: a bowl with a lattice of local minima on it, one per
+        // integer point. A descent method finds whichever one it started in.
+        // This is the landscape the PRD names DE for.
+        let bounds = [Bound::new(-5.12, 5.12); 4];
+        let result = minimize(&bounds, &config(7), |x| {
+            10.0 * x.len() as f64
+                + x.iter()
+                    .map(|v| v * v - 10.0 * (2.0 * core::f64::consts::PI * v).cos())
+                    .sum::<f64>()
+        });
+        assert!(result.score < 1e-6, "score {} at {:?}", result.score, result.best);
+        for value in &result.best {
+            assert!(value.abs() < 1e-3, "{value} should be at the origin");
+        }
+    }
+
+    #[test]
+    fn it_follows_a_curved_valley() {
+        // Rosenbrock, the other classic: the minimum sits at the end of a long
+        // flat curved trough. Heston's kappa-theta trade-off has the same
+        // shape, which is why it is here.
+        let bounds = [Bound::new(-3.0, 3.0), Bound::new(-3.0, 9.0)];
+        let result = minimize(&bounds, &config(11), |x| {
+            let (a, b) = (x[0], x[1]);
+            (1.0 - a) * (1.0 - a) + 100.0 * (b - a * a) * (b - a * a)
+        });
+        assert!(result.score < 1e-8, "score {}", result.score);
+        assert!((result.best[0] - 1.0).abs() < 1e-3);
+        assert!((result.best[1] - 1.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn every_answer_is_inside_the_box() {
+        let bounds = [Bound::new(-1.0, 2.0), Bound::new(10.0, 11.0)];
+        // A minimum well outside the box, so every trial is pushed at the wall.
+        let result = minimize(&bounds, &config(3), |x| {
+            (x[0] + 50.0) * (x[0] + 50.0) + (x[1] - 900.0) * (x[1] - 900.0)
+        });
+        assert!(result.best[0] >= -1.0 && result.best[0] <= 2.0, "{:?}", result.best);
+        assert!(result.best[1] >= 10.0 && result.best[1] <= 11.0, "{:?}", result.best);
+        // And it lands on the nearest corner, which is the right answer.
+        assert!((result.best[0] + 1.0).abs() < 1e-6);
+        assert!((result.best[1] - 11.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn the_same_seed_gives_the_same_answer_and_a_different_one_does_not() {
+        let bounds = [Bound::new(-5.0, 5.0); 3];
+        let objective = |x: &[f64]| x.iter().map(|v| (v - 1.0) * (v - 1.0)).sum::<f64>() + 0.1;
+        let a = minimize(&bounds, &config(42), objective);
+        let b = minimize(&bounds, &config(42), objective);
+        assert_eq!(a.best, b.best);
+        assert_eq!(a.score, b.score);
+
+        let c = minimize(&bounds, &config(43), objective);
+        assert_ne!(a.best, c.best);
+    }
+
+    #[test]
+    fn a_non_finite_objective_does_not_poison_the_population() {
+        // A parameter set that produces a NaN is a bad member, not a broken
+        // run. Propagating it would make every comparison against it false and
+        // freeze whichever slot it landed in.
+        let bounds = [Bound::new(-5.0, 5.0), Bound::new(-5.0, 5.0)];
+        let result = minimize(&bounds, &config(5), |x| {
+            if x[0] > 0.0 { f64::NAN } else { (x[0] + 2.0).powi(2) + (x[1] - 3.0).powi(2) }
+        });
+        assert!(result.score < 1e-10, "score {}", result.score);
+        assert!((result.best[0] + 2.0).abs() < 1e-4);
+        assert!((result.best[1] - 3.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn the_target_stops_it_early() {
+        let bounds = [Bound::new(-5.0, 5.0); 2];
+        let objective = |x: &[f64]| x.iter().map(|v| v * v).sum::<f64>();
+        let full = minimize(&bounds, &DeConfig { target: 0.0, ..config(9) }, objective);
+        let early = minimize(&bounds, &DeConfig { target: 1e-4, ..config(9) }, objective);
+        assert!(early.generations < full.generations);
+        assert!(early.score <= 1e-4);
+        assert!(early.evaluations < full.evaluations);
+    }
+
+    #[test]
+    fn the_score_spread_reports_whether_it_converged() {
+        let bounds = [Bound::new(-5.12, 5.12); 4];
+        let rastrigin = |x: &[f64]| {
+            10.0 * x.len() as f64
+                + x.iter().map(|v| v * v - 10.0 * (2.0 * core::f64::consts::PI * v).cos()).sum::<f64>()
+        };
+        // Two generations is nowhere near converged, and the spread says so.
+        let stopped = minimize(&bounds, &DeConfig { generations: 2, ..config(7) }, rastrigin);
+        let converged = minimize(&bounds, &config(7), rastrigin);
+        assert!(stopped.score_spread > 1.0, "{}", stopped.score_spread);
+        assert!(converged.score_spread < stopped.score_spread / 10.0);
+    }
+}
+
+mod calibration_tests {
+    use pricing_core::bsm::OptionType;
+    use pricing_core::de::DeConfig;
+    use pricing_core::heston::{
+        self, CalibrationConfig, HestonParams, Quote, Residual, Surface, DEFAULT_BOUNDS,
+    };
+
+    const SPOT: f64 = 100.0;
+    const RATE: f64 = 0.03;
+    const DIVIDEND: f64 = 0.01;
+
+    fn truth() -> HestonParams {
+        HestonParams { v0: 0.042, theta: 0.058, kappa: 1.8, sigma: 0.55, rho: -0.68 }
+    }
+
+    fn surface_quotes(params: &HestonParams) -> Vec<Quote> {
+        let mut quotes = Vec::new();
+        heston::synthetic_surface(
+            params,
+            SPOT,
+            RATE,
+            DIVIDEND,
+            &[80.0, 90.0, 100.0, 110.0, 125.0],
+            &[0.25, 1.0, 2.0],
+            &mut quotes,
+        );
+        quotes
+    }
+
+    fn config(seed: u64) -> CalibrationConfig {
+        CalibrationConfig {
+            residual: Residual::ImpliedVol,
+            // Population 50 rather than 30: the default F of 0.5 needs the
+            // members to keep its difference vectors alive, and at 30 the
+            // ordering of the F/CR settings reverses. See the measurement in
+            // `de.rs`.
+            de: DeConfig { population: 50, generations: 120, seed, ..DeConfig::default() },
+            bounds: DEFAULT_BOUNDS,
+        }
+    }
+
+    #[test]
+    fn the_synthetic_surface_is_a_surface() {
+        let quotes = surface_quotes(&truth());
+        assert_eq!(quotes.len(), 15);
+        for quote in &quotes {
+            assert!(quote.vol > 0.05 && quote.vol < 1.0, "{quote:?}");
+            assert!(quote.weight > 0.0);
+        }
+        // Out-of-the-money on both sides, which is where the skew lives.
+        assert!(quotes.iter().any(|q| q.kind == OptionType::Put));
+        assert!(quotes.iter().any(|q| q.kind == OptionType::Call));
+        // And it carries the skew rho put in it.
+        let short: Vec<&Quote> = quotes.iter().filter(|q| q.time == 0.25).collect();
+        assert!(short[0].vol > short[short.len() - 1].vol, "the smile should slope down");
+    }
+
+    // The only honest test of a calibrator. A fit to real quotes has no right
+    // answer, so "the RMSE is small" is all anybody can say about it — and a
+    // calibrator that lands in the wrong valley says that too.
+    #[test]
+    fn it_recovers_the_parameters_the_surface_was_generated_from() {
+        let want = truth();
+        let quotes = surface_quotes(&want);
+        let surface = Surface { spot: SPOT, rate: RATE, dividend: DIVIDEND, quotes: &quotes };
+
+        // Tolerances an order of magnitude looser than the measured worst of
+        // five seeds (rmse 1.1e-6, |d kappa| 1.3e-4), so a reseeding does not
+        // fail this spuriously — and tight enough that landing in a different
+        // valley, which is what a broken calibrator does, would.
+        for seed in [0xA11CEu64, 0xB0B] {
+            let fit = heston::calibrate(&surface, &config(seed));
+            assert_eq!(fit.skipped, 0, "seed {seed:x}");
+            assert!(fit.rmse < 1e-5, "seed {seed:x}: rmse {:.2e}", fit.rmse);
+            let got = fit.params;
+            assert!((got.v0 - want.v0).abs() < 1e-4, "seed {seed:x}: v0 {}", got.v0);
+            assert!((got.theta - want.theta).abs() < 5e-4, "seed {seed:x}: theta {}", got.theta);
+            assert!((got.kappa - want.kappa).abs() < 5e-3, "seed {seed:x}: kappa {}", got.kappa);
+            assert!((got.sigma - want.sigma).abs() < 5e-3, "seed {seed:x}: sigma {}", got.sigma);
+            assert!((got.rho - want.rho).abs() < 5e-3, "seed {seed:x}: rho {}", got.rho);
+        }
+    }
+
+    #[test]
+    fn it_reports_the_diagnostics_a_fit_should_be_read_with() {
+        let quotes = surface_quotes(&truth());
+        let surface = Surface { spot: SPOT, rate: RATE, dividend: DIVIDEND, quotes: &quotes };
+        let fit = heston::calibrate(&surface, &config(0xA11CE));
+
+        assert!(fit.worst >= fit.rmse, "the worst quote is at least the RMSE");
+        assert!(fit.worst_quote < quotes.len());
+        assert!(fit.evaluations >= fit.generations);
+        assert!(fit.score_spread >= 0.0);
+        // Feller and conditioning are reported at the fit, not at the truth.
+        assert_eq!(fit.feller, fit.params.feller());
+        assert_eq!(fit.conditioning, heston::conditioning(&fit.params));
+        // This truth violates Feller, and the fit should say so rather than
+        // having quietly avoided the region.
+        assert!(!truth().satisfies_feller());
+        assert!(fit.feller < 0.0, "the fit should land where the surface points");
+    }
+
+    #[test]
+    fn quotes_it_cannot_price_are_counted_rather_than_dropped() {
+        // A fit that ignored a third of the surface is a different claim from
+        // one that fitted all of it, and the count is how they are told apart.
+        let mut quotes = surface_quotes(&truth());
+        // Degenerate quotes: zero maturity carries no volatility information.
+        quotes.push(Quote { strike: 100.0, time: 0.0, kind: OptionType::Call, vol: 0.2, weight: 1.0 });
+        quotes.push(Quote { strike: 100.0, time: -1.0, kind: OptionType::Call, vol: 0.2, weight: 1.0 });
+        let surface = Surface { spot: SPOT, rate: RATE, dividend: DIVIDEND, quotes: &quotes };
+
+        let fit = heston::calibrate(&surface, &config(0xB0B));
+        assert_eq!(fit.skipped, 2, "the two degenerate quotes should be counted");
+        // And the rest still fits.
+        assert!(fit.rmse < 5e-4, "rmse {:.2e}", fit.rmse);
+    }
+
+    #[test]
+    fn a_weight_moves_the_fit_toward_the_quote_it_is_on() {
+        // A surface no Heston reproduces exactly, so the weights have something
+        // to trade off: the wings are lifted away from the model's own smile.
+        let mut quotes = surface_quotes(&truth());
+        let wing = 0;
+        quotes[wing].vol += 0.03;
+
+        let even = Surface { spot: SPOT, rate: RATE, dividend: DIVIDEND, quotes: &quotes };
+        let even_fit = heston::calibrate(&even, &config(0xC0FFEE));
+
+        let mut weighted_quotes = quotes.clone();
+        weighted_quotes[wing].weight = 50.0;
+        let weighted = Surface { spot: SPOT, rate: RATE, dividend: DIVIDEND, quotes: &weighted_quotes };
+        let weighted_fit = heston::calibrate(&weighted, &config(0xC0FFEE));
+
+        let residual_at = |params: &HestonParams| {
+            let q = &quotes[wing];
+            let inputs = pricing_core::bsm::Inputs {
+                spot: SPOT, strike: q.strike, time: q.time, rate: RATE, dividend: DIVIDEND,
+                vol: q.vol, kind: q.kind,
+            };
+            (heston::implied_vol(params, &inputs) - q.vol).abs()
+        };
+
+        assert!(
+            residual_at(&weighted_fit.params) < residual_at(&even_fit.params),
+            "weighted {:.2e} should beat even {:.2e} on the quote it weighted",
+            residual_at(&weighted_fit.params),
+            residual_at(&even_fit.params),
+        );
+    }
+}

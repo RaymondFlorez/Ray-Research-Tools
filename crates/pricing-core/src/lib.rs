@@ -9,13 +9,16 @@
 //! this crate does is arithmetic the standard library already has.
 
 pub mod american;
+pub mod de;
 pub mod ffi;
 pub mod andersen_lake;
 pub mod bond;
 pub mod bsm;
+pub mod complex;
 pub mod copula;
 pub mod curve;
 pub mod grid;
+pub mod heston;
 pub mod hull_white;
 pub mod implied;
 pub mod mc;

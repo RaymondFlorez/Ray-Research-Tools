@@ -61,6 +61,33 @@ A correlation matrix that is not positive definite is refused with the reason, n
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
 and the analyst who assembled them is the one who can fix it.
 
+## Heston, and where it belongs
+
+`heston.ts` brings PRD 5.8's closed form and its calibration across the boundary. Two
+operations with very different costs, and the difference is the shape of the file.
+
+**Pricing is interactive.** About 37µs native and roughly twice that through WASM, so a
+fifty-point smile is a couple of milliseconds and a node redraws it while a slider moves.
+
+**Calibration is not.** Differential evolution at the default budget is tens of thousands
+of surface evaluations with no yield point in it — seconds of solid arithmetic on one
+thread. Run on the main thread it freezes the tab, and PRD 7.1's whole argument about
+perceived latency is that Picasso does not do that. So `estimateFitCost` states the cost
+before anything runs and `calibrateHeston` refuses past a ceiling, naming a worker or the
+server as where a full fit belongs.
+
+Three things are passed through rather than hidden, because a Heston fit cannot be read
+without them: the **score spread** of the final population (large means it had not
+converged, whatever the best score says), **Feller** (`2 kappa theta - sigma^2`, routinely
+negative on real equity surfaces and reported rather than enforced), and the
+**conditioning** `kappa theta / sigma^2`, past which the closed form is losing digits to
+cancellation — measured in `pricing-core`'s README, not feared.
+
+The implied-vol residual is the default, and the default matters: a price residual is
+dominated by the most expensive quotes, which on an equity surface means the long-dated
+at-the-money ones, so it lands the wings wherever they fall — and the wings are the entire
+reason anybody fits Heston rather than Black-Scholes.
+
 ## One call, not fifteen thousand
 
 A 40-leg book across a 25x15 grid is 15,000 repricings. The book is pushed leg by leg,

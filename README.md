@@ -27,7 +27,7 @@ README carries the figure it was measured at and the gaps it does not close.
 | Package | Description |
 |---|---|
 | [`@picasso/canvas-data`](packages/canvas-data) | Bitemporal point-in-time reads, corporate actions, entitlements and egress, the global time scrub. |
-| [`@picasso/canvas-pricing`](packages/canvas-pricing) | The pricing core on the canvas: curves, bonds, the strategy grid, rate transmission, the scenario engine and the Monte Carlo surface. |
+| [`@picasso/canvas-pricing`](packages/canvas-pricing) | The pricing core on the canvas: curves, bonds, the strategy grid, rate transmission, the scenario engine, the Monte Carlo surface, and Heston with its calibration. |
 | [`@picasso/canvas-equity`](packages/canvas-equity) | PRD 5.2: earnings subtext with span-level evidence, event studies across three benchmark models, factor exposures with their diagnostics. |
 | [`@picasso/canvas-markets`](packages/canvas-markets) | PRD 5.5–5.6: crypto market and on-chain series, prediction-market de-vigging routed by market type, probability curves, scenario weights. |
 | [`@picasso/canvas-sim`](packages/canvas-sim) | Event-driven backtests with point-in-time views, look-ahead detectors, the shuffle test, deflated Sharpe. |
