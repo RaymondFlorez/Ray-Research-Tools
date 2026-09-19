@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@picasso/canvas-core': fileURLToPath(new URL('../canvas-core/src/index.ts', import.meta.url)),
       '@picasso/canvas-render': fileURLToPath(new URL('../canvas-render/src/index.ts', import.meta.url)),
+      '@picasso/canvas-ink': fileURLToPath(new URL('../canvas-ink/src/index.ts', import.meta.url)),
     },
   },
   test: { include: ['test/**/*.test.ts'], environment: 'node' },

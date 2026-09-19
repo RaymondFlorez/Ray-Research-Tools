@@ -12,6 +12,8 @@ npm test --workspace @picasso/canvas-ink
 | `geometry.ts` | Resampling, RDP simplification, smoothing, corner detection, hulls, principal axes, ellipse fit |
 | `features.ts` | The Rubine-style feature vector every classification is made from |
 | `recognize.ts` | Scores line / rectangle / ellipse / arrow / bracket, or reports `unknown` |
+| `ribbon.ts` | Incremental tessellation into the SDF capsule buffer the GPU path draws |
+| `semantic.ts` | Schema validation of a model's reading, reference resolution, and the proposal nothing may skip |
 
 ## Model-free on purpose
 
@@ -40,6 +42,59 @@ offer on the analyst's canvas. Across 480 scribbles, nothing crosses that line, 
 suite asserts it.
 
 Recognition runs in well under 1ms per stroke against a 90ms budget.
+
+## Ink to screen
+
+> Ink-to-screen p95 under 12ms — Appendix B, phase 5
+> Ink stroke to screen: 6ms p50, 12ms p95, 20ms hard ceiling. *This is the one users feel
+> most.* — PRD 7.1
+
+`ribbon.ts` turns each consecutive pair of samples into one rounded capsule and appends it
+to a `Float32Array` in the layout `canvas-gl`'s ink shader reads. The capsules overlap, and
+**the overlap is the join** — which is the whole reason the PRD specifies an SDF shader
+rather than a triangulated ribbon. A triangulated ribbon has to emit a miter, a bevel or a
+round-join fan at every sample, decide which, and cope with a stroke that doubles back
+inside one segment; at 240Hz, on a hand that shakes, that case is not rare. Overlapping
+capsules have no such case. The cost is overdraw, paid on a GPU that has it to spare.
+
+Appending is O(1) in the samples appended, not in the stroke's length: nothing already
+written is touched. `test/ribbon.test.ts` measures that rather than asserting it — the cost
+of appending the four-thousandth sample against the fortieth, which is where a renderer
+that re-tessellates the stroke each event shows up. That renderer passes every correctness
+test and misses the budget by the tenth second of drawing.
+
+Measured end to end in a real browser by `apps/canvas-demo/scripts/inkgl-shots.mjs`, on
+SwiftShader — a CPU rasterizer, so the rasterization half is a software floor rather than a
+GPU result:
+
+```
+session: 600 pointer events, 2400 samples, 2400 capsules, 3 draw calls
+tessellate      p50 0.000ms   p95 0.000ms
+ink to screen   p50 0.100ms   p95 0.200ms   p99 0.700ms
+
+stroke length sweep, cost of the last hundred events:
+   600 capsules   0.084ms per event   frame p95 0.20ms
+  1200 capsules   0.043ms per event   frame p95 0.10ms
+  2400 capsules   0.048ms per event   frame p95 0.10ms
+  4800 capsules   0.429ms per event   frame p95 0.30ms
+  9600 capsules   1.579ms per event   frame p95 1.60ms
+```
+
+Two things that number does not say. It covers tessellation, upload, the draw call and
+`gl.finish()`; it does not cover the browser delivering the pointer event or the compositor
+presenting the frame, neither of which is reachable from script. So it is a floor on
+ink-to-screen and a ceiling on the part Picasso wrote.
+
+And the per-event cost is flat to roughly 2,400 capsules and **linear above it**. That is
+the upload and the draw, not the tessellation: a frame draws what is on screen, the same
+way it is linear in the nodes on screen. What bounds it is that a live stroke ends at
+pen-lift — 2,400 capsules is ten seconds of unbroken drawing at 240Hz — and committed ink
+moves to a ribbon that is not re-uploaded until it changes. At 9,600 capsules, forty
+seconds without lifting the pen, it is still 1.6ms against a 12ms budget.
+
+The harness also probes a point inside the instance quad and outside the capsule. That is
+the check worth having: a fragment shader that fills its quad instead of solving the
+distance draws a perfectly convincing stroke and fails only there.
 
 ## Three things the measurements changed
 

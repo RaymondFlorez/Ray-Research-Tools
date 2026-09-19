@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "serve": "node ../../scripts/serve.mjs",
     "shots": "node scripts/screenshot.mjs",
-    "payoff-shots": "node scripts/payoff-shots.mjs"
+    "payoff-shots": "node scripts/payoff-shots.mjs",
+    "inkgl-shots": "node scripts/inkgl-shots.mjs"
   },
   "dependencies": {
     "@picasso/canvas-core": "*",

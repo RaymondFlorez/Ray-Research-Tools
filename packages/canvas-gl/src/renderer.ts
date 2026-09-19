@@ -10,6 +10,7 @@
 
 import type { Scene } from '@picasso/canvas-render';
 import type { Theme } from '@picasso/canvas-render';
+import { INK_STRIDE } from '@picasso/canvas-ink';
 import {
   EDGE_STRIDE,
   NODE_STRIDE,
@@ -22,15 +23,19 @@ import {
   EDGE_FRAGMENT,
   EDGE_SEGMENTS,
   EDGE_VERTEX,
+  INK_FRAGMENT,
+  INK_VERTEX,
   NODE_FRAGMENT,
   NODE_VERTEX,
 } from './shaders.js';
 
 export interface FrameStats {
-  /** Instanced draws issued. Two, whatever the scene holds. */
+  /** Instanced draws issued: two, plus one more when there is ink on the canvas. */
   drawCalls: number;
   nodeInstances: number;
   edgeInstances: number;
+  /** Stroke segments drawn. One capsule each. */
+  inkInstances: number;
   /** CPU time packing the instance buffers. */
   packMs: number;
   /** CPU time issuing the frame, upload included. GPU time is not measurable here. */
@@ -94,6 +99,19 @@ const EDGE_ATTRIBUTES: Array<[number, number, number]> = [
   [4, 2, 10],  // a_style
 ];
 
+/**
+ * Ink, in the layout `canvas-ink` tessellates into.
+ *
+ * The stride is imported rather than restated. Two copies of an instance layout
+ * agree until one of them is edited, and the symptom of their disagreeing is a
+ * frame of garbage geometry with nothing in the type system to catch it.
+ */
+const INK_ATTRIBUTES: Array<[number, number, number]> = [
+  [0, 4, 0],  // a_seg
+  [1, 2, 4],  // a_width
+  [2, 4, 6],  // a_color
+];
+
 function bindInstanced(
   gl: WebGL2RenderingContext,
   buffer: WebGLBuffer,
@@ -117,10 +135,13 @@ export class GLRenderer {
   private readonly gl: WebGL2RenderingContext;
   private readonly nodeProgram: WebGLProgram;
   private readonly edgeProgram: WebGLProgram;
+  private readonly inkProgram: WebGLProgram;
   private readonly nodeVao: WebGLVertexArrayObject;
   private readonly edgeVao: WebGLVertexArrayObject;
+  private readonly inkVao: WebGLVertexArrayObject;
   private readonly nodeBuffer: WebGLBuffer;
   private readonly edgeBuffer: WebGLBuffer;
+  private readonly inkBuffer: WebGLBuffer;
   private readonly edgeSegments: number;
 
   /** Reused across frames so a steady-state frame allocates nothing. */
@@ -131,6 +152,7 @@ export class GLRenderer {
     drawCalls: 0,
     nodeInstances: 0,
     edgeInstances: 0,
+    inkInstances: 0,
     packMs: 0,
     cpuMs: 0,
     uploadedBytes: 0,
@@ -142,23 +164,30 @@ export class GLRenderer {
 
     this.nodeProgram = link(gl, NODE_VERTEX, NODE_FRAGMENT);
     this.edgeProgram = link(gl, EDGE_VERTEX, EDGE_FRAGMENT);
+    this.inkProgram = link(gl, INK_VERTEX, INK_FRAGMENT);
 
     const nodeVao = gl.createVertexArray();
     const edgeVao = gl.createVertexArray();
+    const inkVao = gl.createVertexArray();
     const nodeBuffer = gl.createBuffer();
     const edgeBuffer = gl.createBuffer();
-    if (!nodeVao || !edgeVao || !nodeBuffer || !edgeBuffer) {
+    const inkBuffer = gl.createBuffer();
+    if (!nodeVao || !edgeVao || !inkVao || !nodeBuffer || !edgeBuffer || !inkBuffer) {
       throw new ShaderError('allocate', 'could not create VAOs or buffers');
     }
     this.nodeVao = nodeVao;
     this.edgeVao = edgeVao;
+    this.inkVao = inkVao;
     this.nodeBuffer = nodeBuffer;
     this.edgeBuffer = edgeBuffer;
+    this.inkBuffer = inkBuffer;
 
     gl.bindVertexArray(this.nodeVao);
     bindInstanced(gl, this.nodeBuffer, NODE_STRIDE, NODE_ATTRIBUTES);
     gl.bindVertexArray(this.edgeVao);
     bindInstanced(gl, this.edgeBuffer, EDGE_STRIDE, EDGE_ATTRIBUTES);
+    gl.bindVertexArray(this.inkVao);
+    bindInstanced(gl, this.inkBuffer, INK_STRIDE, INK_ATTRIBUTES);
     gl.bindVertexArray(null);
 
     // Premultiplied alpha: the shaders emit rgb * a, so this is the correct
@@ -172,8 +201,17 @@ export class GLRenderer {
     return this.lastStats;
   }
 
-  /** Draws one frame. Two instanced draws, whatever the scene holds. */
-  render(scene: Scene, theme: Theme): FrameStats {
+  /**
+   * Draws one frame. Two instanced draws, whatever the scene holds, plus one
+   * for ink when there is any.
+   *
+   * `ink` is the tessellated capsule buffer from `canvas-ink`'s `InkRibbon` —
+   * `ribbon.view()`, passed straight through. It is taken as a plain
+   * `Float32Array` rather than as a ribbon so the live stroke and the committed
+   * strokes can be uploaded from one array or two without this file caring
+   * which, and so a caller with its own buffer is not forced through an object.
+   */
+  render(scene: Scene, theme: Theme, ink?: Float32Array): FrameStats {
     const gl = this.gl;
     const started = performance.now();
 
@@ -225,12 +263,28 @@ export class GLRenderer {
       uploadedBytes += bytes;
     }
 
+    // Ink last, over everything. A stroke is an annotation on the canvas, and
+    // an annotation that a node can cover is one the analyst will redraw.
+    const inkInstances = ink === undefined ? 0 : Math.floor(ink.length / INK_STRIDE);
+    if (ink !== undefined && inkInstances > 0) {
+      const bytes = inkInstances * INK_STRIDE * 4;
+      gl.useProgram(this.inkProgram);
+      gl.bindVertexArray(this.inkVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.inkBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, ink, gl.DYNAMIC_DRAW, 0, inkInstances * INK_STRIDE);
+      this.setVec2(this.inkProgram, 'u_resolution', width, height);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, inkInstances);
+      drawCalls += 1;
+      uploadedBytes += bytes;
+    }
+
     gl.bindVertexArray(null);
 
     this.lastStats = {
       drawCalls,
       nodeInstances: packedNodes.count,
       edgeInstances: packedEdges.count,
+      inkInstances,
       packMs,
       cpuMs: performance.now() - started,
       uploadedBytes,
@@ -260,10 +314,13 @@ export class GLRenderer {
     const gl = this.gl;
     gl.deleteProgram(this.nodeProgram);
     gl.deleteProgram(this.edgeProgram);
+    gl.deleteProgram(this.inkProgram);
     gl.deleteVertexArray(this.nodeVao);
     gl.deleteVertexArray(this.edgeVao);
+    gl.deleteVertexArray(this.inkVao);
     gl.deleteBuffer(this.nodeBuffer);
     gl.deleteBuffer(this.edgeBuffer);
+    gl.deleteBuffer(this.inkBuffer);
   }
 }
 

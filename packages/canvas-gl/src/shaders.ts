@@ -189,3 +189,97 @@ void main() {
   outColor = vec4(v_color.rgb * a, a);
 }
 `;
+
+/**
+ * Ink: one rounded capsule per stroke segment (PRD 7.3, "SDF shader, pure
+ * WebGL, no ML").
+ *
+ * The capsules overlap, and the overlap is the join. That is what an SDF buys
+ * here and it is not a stylistic preference: a triangulated ribbon has to emit
+ * a miter, a bevel or a round-join fan at every sample, decide which, and cope
+ * with a stroke that doubles back inside one segment — at 240Hz, on a hand that
+ * shakes, that case is not rare. Overlapping capsules have no such case. The
+ * cost is overdraw, paid on a GPU that has it to spare, in exchange for a CPU
+ * path that is a store into a Float32Array.
+ *
+ * Alpha is handled by drawing the ribbon into the frame with straight
+ * source-over and letting the capsules blend. Ink that is opaque looks right
+ * either way; ink drawn with alpha shows the overlaps, which is what real ink
+ * does too.
+ */
+export const INK_VERTEX = `#version 300 es
+precision highp float;
+
+// Per instance: the segment's two ends and their widths, plus colour.
+layout(location = 0) in vec4 a_seg;    // x0, y0, x1, y1 in screen pixels
+layout(location = 1) in vec2 a_width;  // w0, w1 in pixels
+layout(location = 2) in vec4 a_color;
+
+uniform vec2 u_resolution;
+
+out vec2 v_pixel;
+out vec4 v_seg;
+out vec2 v_width;
+out vec4 v_color;
+
+void main() {
+  // The instance's own bounding quad, padded by the fattest end plus a pixel of
+  // antialiasing. Padding by the segment's own width rather than a global
+  // maximum keeps a thin stroke's fragments down to what it covers.
+  vec2 a = a_seg.xy;
+  vec2 b = a_seg.zw;
+  float pad = max(a_width.x, a_width.y) * 0.5 + 2.0;
+
+  vec2 lo = min(a, b) - pad;
+  vec2 hi = max(a, b) + pad;
+
+  vec2 corner = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1));
+  vec2 pixel = mix(lo, hi, corner);
+
+  v_pixel = pixel;
+  v_seg = a_seg;
+  v_width = a_width;
+  v_color = a_color;
+
+  vec2 clip = (pixel / u_resolution) * 2.0 - 1.0;
+  gl_Position = vec4(clip.x, -clip.y, 0.0, 1.0);
+}
+`;
+
+export const INK_FRAGMENT = `#version 300 es
+precision highp float;
+
+in vec2 v_pixel;
+in vec4 v_seg;
+in vec2 v_width;
+in vec4 v_color;
+
+out vec4 outColor;
+
+void main() {
+  vec2 a = v_seg.xy;
+  vec2 b = v_seg.zw;
+  vec2 ba = b - a;
+  vec2 pa = v_pixel - a;
+
+  // Projection onto the segment, clamped to its ends — which is what rounds
+  // them. The guard is for the degenerate segment a single tap writes, where
+  // ba is zero and h collapses to the start point: a disc, correctly.
+  float h = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-6), 0.0, 1.0);
+
+  // The radius is interpolated along the segment rather than solved for
+  // exactly. The exact figure is a round cone SDF, and it differs from this
+  // one only where the radius changes fast relative to the segment's length.
+  // Between two consecutive stylus samples 0.2 pixels apart, pressure has not
+  // moved enough for the difference to reach a pixel, and the branchless
+  // version is the one that holds the frame budget.
+  float radius = mix(v_width.x, v_width.y, h) * 0.5;
+  float dist = length(pa - ba * h) - radius;
+
+  float coverage = 1.0 - smoothstep(-1.0, 1.0, dist);
+  if (coverage < 0.004) discard;
+
+  float alpha = v_color.a * coverage;
+  outColor = vec4(v_color.rgb * alpha, alpha);
+}
+`;

@@ -2,18 +2,32 @@
 
 The WebGL2 path. A `Scene` draw list becomes two instanced draw calls, so node count stops
 costing draw calls — the property the PRD's "5,000 empty nodes at 60fps" exit criterion
-rests on, and the one the DOM path cannot have past a few hundred nodes.
+rests on, and the one the DOM path cannot have past a few hundred nodes. Ink is a third
+call when there is any, and its segment count does not cost draw calls either.
 
 ```bash
 npm test --workspace @picasso/canvas-gl
-node apps/canvas-demo/scripts/gl-shots.mjs   # browser verification and measurement
+node apps/canvas-demo/scripts/gl-shots.mjs      # nodes: browser verification and measurement
+node apps/canvas-demo/scripts/inkgl-shots.mjs   # ink: the same, against the 12ms budget
 ```
 
 | Module | What it does |
 |---|---|
 | `instances.ts` | Packs a scene into two `Float32Array`s. No GL objects, so it is testable and can move to a worker. |
-| `shaders.ts` | GLSL for the node quads (rounded-rect SDF) and the edge ribbons (quadratic bezier walked in the vertex shader). |
-| `renderer.ts` | Programs, VAOs, buffers, and the two draw calls. |
+| `shaders.ts` | GLSL for the node quads (rounded-rect SDF), the edge ribbons (quadratic bezier walked in the vertex shader), and the ink capsules. |
+| `renderer.ts` | Programs, VAOs, buffers, and the draw calls. |
+
+## Ink is a third batch, and its buffer is not packed here
+
+`render(scene, theme, ink)` takes the capsule buffer `canvas-ink` tessellated, straight
+through — no repacking, because the tessellation already writes the instance layout. The
+stride is *imported* from `canvas-ink` rather than restated next to `NODE_STRIDE` and
+`EDGE_STRIDE`: two copies of an instance layout agree until one of them is edited, and the
+symptom of their disagreeing is a frame of garbage geometry with nothing in the type system
+to catch it.
+
+Ink draws over everything. A stroke is an annotation on the canvas, and an annotation a
+node can cover is one the analyst will redraw.
 
 ## Why it is two draw calls and not five
 
@@ -49,6 +63,21 @@ Against the Canvas2D reference painter, same machine, same 5,000-node scene:
 |---|---|---|
 | Canvas2D | 17.8ms | 73.7ms |
 | WebGL (SwiftShader) | 7.1ms | 18.8ms |
+
+### The ink shader, and the check that actually tests it
+
+The fragment shader solves the distance to a capsule with a radius interpolated along the
+segment, so pressure varies the nib without a second primitive. Probing a pixel *on* a
+stroke proves almost nothing — a shader that simply fills its instance quad passes that,
+and draws a convincing stroke. So the harness probes a point **inside the instance quad and
+outside the capsule**, which only a shader solving the distance leaves untouched. The quad
+is padded by radius + 2; at a 60px nib it reaches 32px past the end while the capsule
+reaches 30, and the probe sits 33.9px out along the diagonal.
+
+The radius is interpolated rather than solved exactly — the exact figure is a round-cone
+SDF, and it differs from this one only where the radius changes fast relative to the
+segment's length. Between two stylus samples a fraction of a pixel apart, pressure has not
+moved enough for the difference to reach a pixel.
 
 ## Where Phase 0's exit criterion actually stands
 
