@@ -134,3 +134,109 @@ describe('blurring', () => {
     expect(blurNumber(0, 2)).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions from the security review.
+// ---------------------------------------------------------------------------
+
+describe('blurring a value that is not a number', () => {
+  // The blur branch transformed numbers and passed strings through untouched,
+  // while stamping both `redaction: { rule: 'blur' }`. So `"12,450.38"` left at
+  // full precision under a label asserting it had been reduced to two
+  // significant digits: the licence breached and the audit record saying it
+  // had not been.
+  it('does not pass a numeric string through at full precision', () => {
+    const [out] = bundle([
+      cell({ value: '12,450.38', vendor: 'vendor-indicative', classification: 'licensed' }),
+    ]).cells;
+    expect(out?.value).not.toBe('12,450.38');
+    expect(out?.value).toBe('12000');
+  });
+
+  it('keeps the decoration around the number', () => {
+    const cases: Array<[string, string]> = [
+      ['$12,450.38', '$12000'],
+      // Math.round breaks the half toward +Infinity, so -3.75 goes to -3.7.
+      ['-3.75%', '-3.7%'],
+      ['12450 bp', '12000 bp'],
+      ['  4,187  ', '4200'],
+    ];
+    for (const [input, expected] of cases) {
+      const [out] = bundle([
+        cell({ value: input, vendor: 'vendor-indicative', classification: 'licensed' }),
+      ]).cells;
+      expect(out?.value, input).toBe(expected);
+      expect(out?.redaction?.rule, input).toBe('blur');
+    }
+  });
+
+  it('withholds a value it cannot reduce, rather than labelling it blurred', () => {
+    for (const value of [
+      'up sharply on the print',
+      '2026-03-11',
+      '12450 and 3318',
+      // A number wearing more than a unit is free text, not a figure.
+      'NVDA Jan 1400 C',
+      '12450 shares of common stock',
+    ]) {
+      const [out] = bundle([
+        cell({ value, vendor: 'vendor-indicative', classification: 'licensed' }),
+      ]).cells;
+      expect(out?.value, value).toBe('withheld');
+      expect(out?.redaction?.rule, value).toBe('strip');
+    }
+  });
+
+  // The invariant behind both: a redaction record is a claim about what
+  // happened to the value, so only the branch that did it writes one.
+  it('never claims a transform that did not happen', () => {
+    const cells = ['12,450.38', 'up sharply', -3870, 0].map((value) =>
+      cell({ value, vendor: 'vendor-indicative', classification: 'licensed' }),
+    );
+    for (const out of bundle(cells).cells) {
+      if (out.redaction?.rule === 'blur') expect(out.value).not.toBe('withheld');
+      if (out.redaction?.rule === 'strip') expect(out.value).toBe('withheld');
+    }
+  });
+});
+
+describe('a licensed cell whose policy does not resolve', () => {
+  // The mirror of the entitlement hole: `licensed` says redistribution is
+  // governed by someone's terms, and an unresolved policy means we do not know
+  // whose. Omitting a vendor from `vendorPolicies` — or from the cell — was a
+  // way to export exactly the data the policies exist to hold back.
+  it('is withheld when the cell names no vendor', () => {
+    const [out] = bundle([cell({ classification: 'licensed' })]).cells;
+    expect(out?.value).toBe('withheld');
+    expect(out?.redaction?.rule).toBe('strip');
+  });
+
+  it('is withheld when no policy was supplied for its vendor', () => {
+    const [out] = bundle([
+      cell({ classification: 'licensed', vendor: 'vendor-nobody-configured' }),
+    ]).cells;
+    expect(out?.value).toBe('withheld');
+    expect(out?.redaction?.rule).toBe('strip');
+  });
+
+  it('says so in the notices', () => {
+    const notices = bundle([
+      cell({ classification: 'licensed', vendor: 'vendor-nobody-configured' }),
+    ]).notices;
+    expect(notices.some((n) => /no redistribution policy/i.test(n))).toBe(true);
+  });
+
+  it('leaves a public cell with no vendor alone', () => {
+    const [out] = bundle([cell({ classification: 'public' })]).cells;
+    expect(out?.value).toBe(-3870);
+    expect(out?.redaction).toBeUndefined();
+  });
+
+  it('leaves a licensed cell with a redistributable policy alone', () => {
+    const [out] = bundle([
+      cell({ classification: 'licensed', vendor: 'vendor-open' }),
+    ]).cells;
+    expect(out?.value).toBe(-3870);
+    expect(out?.redaction).toBeUndefined();
+  });
+});

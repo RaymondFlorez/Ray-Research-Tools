@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FINGERPRINT_GAP,
   checkEgress,
   checkEntitlement,
   classifyPayload,
@@ -198,5 +199,132 @@ describe('the two controls are independent', () => {
       now: 5,
     });
     expect(result.audit.allowed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the security review.
+// ---------------------------------------------------------------------------
+
+describe('the fingerprint scanner survives reformatting', () => {
+  // The scanner normalized by stripping a *list* of punctuation, and the list
+  // omitted every separator a serializer actually emits. Each of these payloads
+  // states a holding and each one walked straight through the control that
+  // exists to survive a wrong classification stamp.
+  const holding: Fingerprint[] = [{ label: 'nvda-position', value: 'NVDA 12,450' }];
+
+  const reformatted = [
+    'NVDA 12,450',
+    '{"symbol":"NVDA","qty":12450}',
+    '| NVDA | 12,450 |',
+    'NVDA: 12,450 shares',
+    'NVDA/12450',
+    'NVDA\t12450',
+    'symbol=NVDA;qty=12450',
+    '<td>NVDA</td><td>12450</td>',
+    '{"instrument":{"symbol":"NVDA"},"position":{"quantity":12450}}',
+    'quantity 12450 of symbol NVDA',
+    'N.V.D.A.  12_450',
+  ];
+
+  for (const payload of reformatted) {
+    it(`matches ${JSON.stringify(payload)}`, () => {
+      const scan = scanForFingerprints(payload, holding);
+      expect(scan.clean).toBe(false);
+      expect(scan.matched).toEqual(['nvda-position']);
+    });
+  }
+
+  it('still does not match an unrelated payload', () => {
+    expect(scanForFingerprints('AAPL closed up 1.2% on volume of 51m', holding).clean).toBe(true);
+  });
+
+  // The normalization is an allowlist of kept characters, so a separator nobody
+  // thought of cannot open the hole again. This asserts the property rather
+  // than the cases above, which is the part that does not rot.
+  it('matches under an arbitrary separator', () => {
+    for (const sep of ['~', '^', '§', '​', '\\', '::', ' ']) {
+      expect(scanForFingerprints(`NVDA${sep}12450`, holding).clean).toBe(false);
+    }
+  });
+
+  // The windowing is what closes the alphanumeric gaps, and it is the part that
+  // could loosen the control into uselessness if the window were unbounded.
+  // These pin the other side: the two halves of a fingerprint have to be near
+  // each other, and neither half alone is a match.
+  it('does not match the ticker alone', () => {
+    expect(scanForFingerprints('NVDA rallied into the print', holding).clean).toBe(true);
+  });
+
+  it('does not match the quantity alone', () => {
+    expect(scanForFingerprints('12,450 contracts traded on the tape', holding).clean).toBe(true);
+  });
+
+  it('does not match the two halves a page apart', () => {
+    const apart = `NVDA${'x'.repeat(FINGERPRINT_GAP + 20)}12450`;
+    expect(scanForFingerprints(apart, holding).clean).toBe(true);
+  });
+
+  it('matches right up to the gap and not past it', () => {
+    const at = `NVDA${'x'.repeat(FINGERPRINT_GAP)}12450`;
+    const past = `NVDA${'x'.repeat(FINGERPRINT_GAP + 1)}12450`;
+    expect(scanForFingerprints(at, holding).clean).toBe(false);
+    expect(scanForFingerprints(past, holding).clean).toBe(true);
+  });
+
+  it('does not match a filing that happens to contain both far apart', () => {
+    const filing = [
+      'Item 7A. Quantitative and Qualitative Disclosures About Market Risk.',
+      'NVDA was among the largest contributors to sector performance in the period,',
+      'as discussed at length in the preceding section and in our prior filings,',
+      'and the registrant reported 12,450 full-time employees as of the record date.',
+    ].join(' ');
+    expect(scanForFingerprints(filing, holding).clean).toBe(true);
+  });
+});
+
+describe('licensed data with no vendor', () => {
+  const user: Entitlements = {
+    userId: 'u1',
+    tenantId: 'a',
+    vendors: new Set(['vendor-x']),
+    positions: false,
+    mnpi: false,
+  };
+
+  // `licensed` means redistribution is governed by someone's terms. A missing
+  // vendor means we do not know whose, which is a denial: the check that cannot
+  // be performed must not be assumed passed. Dropping the field was otherwise a
+  // way to read every licensed record in the tenant.
+  it('is denied rather than allowed', () => {
+    const record: ClassifiedRecord = { id: 'r1', dataClass: 'licensed' };
+    const decision = checkEntitlement(record, user);
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toBe('no_vendor_licence');
+    expect(decision.message).toMatch(/no vendor/i);
+  });
+
+  it('is denied even to a user licensed for every vendor there is', () => {
+    const everything: Entitlements = { ...user, vendors: new Set(['vendor-x', 'vendor-y']) };
+    expect(checkEntitlement({ id: 'r1', dataClass: 'licensed' }, everything).allowed).toBe(false);
+  });
+
+  it('does not take a licensed record with a vendor down with it', () => {
+    expect(
+      checkEntitlement({ id: 'r2', dataClass: 'licensed', vendor: 'vendor-x' }, user).allowed,
+    ).toBe(true);
+  });
+
+  it('is filtered out in bulk', () => {
+    const { allowed, blocked } = filterEntitled(
+      [
+        { id: 'a', dataClass: 'licensed', vendor: 'vendor-x' },
+        { id: 'b', dataClass: 'licensed' },
+        { id: 'c', dataClass: 'public' },
+      ],
+      user,
+    );
+    expect(allowed.map((r) => r.id)).toEqual(['a', 'c']);
+    expect(blocked.map((b) => b.record.id)).toEqual(['b']);
   });
 });

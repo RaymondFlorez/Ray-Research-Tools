@@ -100,3 +100,94 @@ describe('the audit log', () => {
     expect(second.digest()).not.toBe(first);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Regressions from the security review.
+// ---------------------------------------------------------------------------
+
+describe('the detail of a record', () => {
+  function withDetail(detail: Record<string, string | number | boolean>): AuditLog {
+    const audit = new AuditLog();
+    audit.write({
+      at: 1,
+      tenantId: 'a',
+      actor: 'maya',
+      action: 'override.approve',
+      resource: 'node/vega',
+      purpose: 'desk head signed off on the model figure',
+      traceId: 't-1',
+      detail,
+    });
+    return audit;
+  }
+
+  // `{ ...record }` copies the reference to `detail`, not the object. A holder
+  // of the record returned by `write` could reach through it and rewrite the
+  // detail of an entry already in the append-only log — the exact edit the
+  // class exists to prevent, arriving through the copy meant to prevent it.
+  it('cannot be rewritten through the record write returns', () => {
+    const audit = withDetail({ approver: 'desk-head', model: 'frontier-a' });
+    const returned = audit.write({
+      at: 2,
+      tenantId: 'a',
+      actor: 'maya',
+      action: 'ai.dispatch',
+      resource: 'open-70b',
+      purpose: 'draft',
+      detail: { model: 'open-70b' },
+    });
+    returned.detail!.model = 'frontier-a';
+    expect(audit.records()[1]?.detail).toEqual({ model: 'open-70b' });
+  });
+
+  // Same hole through the other door.
+  it('cannot be rewritten through the records read back', () => {
+    const audit = withDetail({ approver: 'desk-head' });
+    audit.records()[0]!.detail!.approver = 'nobody';
+    expect(audit.records()[0]?.detail).toEqual({ approver: 'desk-head' });
+  });
+
+  it('cannot be rewritten through the object handed to write', () => {
+    const detail = { approver: 'desk-head' };
+    const audit = withDetail(detail);
+    detail.approver = 'nobody';
+    expect(audit.records()[0]?.detail).toEqual({ approver: 'desk-head' });
+  });
+
+  // The digest hashed seven fields and skipped `traceId` and `detail`, so a
+  // store that rewrote the override reason, the matched fingerprint, or the
+  // model a dispatch actually went to produced the digest it had before. A
+  // tamper check that does not cover the field most worth tampering with is a
+  // check in name only.
+  it('is covered by the digest', () => {
+    expect(withDetail({ approver: 'desk-head' }).digest()).not.toBe(
+      withDetail({ approver: 'nobody' }).digest(),
+    );
+    expect(withDetail({ approver: 'desk-head' }).digest()).not.toBe(
+      withDetail({ approver: 'desk-head', model: 'frontier-a' }).digest(),
+    );
+    expect(withDetail({ approver: 'desk-head' }).digest()).not.toBe(new AuditLog().digest());
+  });
+
+  it('digests the same content the same way whatever order it arrived in', () => {
+    const a = withDetail({ approver: 'desk-head', model: 'frontier-a' });
+    const b = withDetail({ model: 'frontier-a', approver: 'desk-head' });
+    expect(a.digest()).toBe(b.digest());
+  });
+
+  it('covers the trace id too', () => {
+    const base = {
+      at: 1,
+      tenantId: 'a',
+      actor: 'maya',
+      action: 'ai.dispatch' as const,
+      resource: 'open-70b',
+      purpose: 'draft',
+    };
+    const one = new AuditLog();
+    one.write({ ...base, traceId: 't-1' });
+    const two = new AuditLog();
+    two.write({ ...base, traceId: 't-2' });
+    expect(one.digest()).not.toBe(two.digest());
+  });
+});

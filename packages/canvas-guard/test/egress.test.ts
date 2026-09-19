@@ -6,6 +6,7 @@ import {
   checkEgress,
   isDistinctive,
   routerGate,
+  type DispatchRequest,
   type Position,
 } from '../src/egress.js';
 import { EGRESS_CASES, TENANT_POSITIONS, runEgressFamily } from '../src/redteam.js';
@@ -174,5 +175,91 @@ describe('the two controls are independent', () => {
     );
     expect(decision.allowed).toBe(false);
     if (!decision.allowed) expect(decision.control).toBe('router');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Regressions from the security review.
+// ---------------------------------------------------------------------------
+
+describe('the proxy scan folds case', () => {
+  // The constructor upper-cases on ingest and the scan matched `[A-Z]{1,6}`,
+  // so an all-lowercase dump produced no symbols at all and the scan returned
+  // before the number pass ever ran. Re-casing a position dump is the cheapest
+  // evasion there is.
+  const dump = TENANT_POSITIONS.slice(0, 3)
+    .map((p) => `${p.symbol} ${Math.abs(p.quantity).toLocaleString('en-US')}`)
+    .join(' / ');
+
+  for (const [name, payload] of [
+    ['as written', dump],
+    ['lower-cased', dump.toLowerCase()],
+    ['title-cased', dump.replace(/\b[A-Z]+\b/g, (s) => s[0] + s.slice(1).toLowerCase())],
+  ] as const) {
+    it(`blocks the dump ${name}`, () => {
+      expect(check(payload).allowed).toBe(false);
+    });
+  }
+
+  it('reports the symbols in the tenant casing, not the payload casing', () => {
+    const decision = check(dump.toLowerCase());
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) {
+      for (const line of decision.detail ?? []) expect(line).toBe(line.toUpperCase());
+    }
+  });
+
+  it('still passes prose that names no quantity', () => {
+    expect(check('it was all on the key day, and on balance we were long').allowed).toBe(true);
+  });
+});
+
+describe('the router gate allowlists what is inside the boundary', () => {
+  // The gate asked `placement !== 'vendor'` and allowed everything else, so a
+  // placement that is neither — a new deployment mode, a stale record, a field
+  // from a service built against a different version of the enum — was treated
+  // as on-premises. Allow-by-negation says yes to everything nobody has
+  // enumerated yet.
+  const positions = {
+    modelId: 'unknown-placement',
+    contextClasses: ['positions'] as const,
+    tenantId: 'tenant-a',
+  };
+
+  it('refuses an unrecognized placement', () => {
+    const decision = routerGate({
+      ...positions,
+      placement: 'partner_cloud' as unknown as DispatchRequest['placement'],
+    });
+    expect(decision.allowed).toBe(false);
+    if (!decision.allowed) expect(decision.control).toBe('router');
+  });
+
+  it('refuses an absent placement', () => {
+    expect(
+      routerGate({
+        ...positions,
+        placement: undefined as unknown as DispatchRequest['placement'],
+      }).allowed,
+    ).toBe(false);
+  });
+
+  it('still allows the two placements that are actually inside', () => {
+    for (const placement of ['on_device', 'self_hosted'] as const) {
+      expect(routerGate({ ...positions, placement }).allowed).toBe(true);
+    }
+  });
+
+  it('still allows public context to an unrecognized placement', () => {
+    // The gate is about tenant-bound content, not about unknown placements as
+    // such; a public prompt is not blocked by either version of the rule.
+    expect(
+      routerGate({
+        modelId: 'unknown-placement',
+        placement: 'partner_cloud' as unknown as DispatchRequest['placement'],
+        contextClasses: ['public'],
+        tenantId: 'tenant-a',
+      }).allowed,
+    ).toBe(true);
   });
 });

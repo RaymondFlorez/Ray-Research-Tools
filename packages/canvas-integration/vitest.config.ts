@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@picasso/canvas-core': pkg('canvas-core'),
+      '@picasso/canvas-data': pkg('canvas-data'),
       '@picasso/canvas-pricing': pkg('canvas-pricing'),
       '@picasso/canvas-router': pkg('canvas-router'),
       '@picasso/canvas-agents': pkg('canvas-agents'),

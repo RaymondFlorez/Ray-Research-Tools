@@ -94,3 +94,36 @@ position data whose text matches nothing.
 
 Matched fingerprints are logged by *label*, never by value. An audit log that records what
 leaked is a second copy of the leak.
+
+### The first two versions of that match were both wrong
+
+Worth writing down, because the second bug was invisible behind the first.
+
+The original normalized by stripping a *list* of punctuation — whitespace, comma, period,
+underscore, quote, parens, hyphen. The list was the bug: it omitted `:`, `|`, `/` and
+braces, every separator a serializer actually emits, so `| NVDA | 12,450 |` and
+`NVDA: 12,450` walked straight through. Replacing the denylist with an allowlist of kept
+characters closed that, and a denylist of stripped characters can always be missing one.
+
+It did not close `{"symbol":"NVDA","qty":12450}`, which normalizes to `symbolnvdaqty12450`
+— and that does not contain `nvda12450`, because the thing between the ticker and the
+quantity is not punctuation. `<td>NVDA</td><td>12450</td>` fails the same way on the tag
+names. Normalization cannot fix a gap made of letters.
+
+So the match is now in two stages: normalize to letters and digits, then cut the
+fingerprint into its letter-runs and digit-runs and locate each one independently,
+requiring all of them inside one window of `FINGERPRINT_GAP` (48) characters per join.
+Order is not required — a serializer that writes the quantity first states the holding
+just as plainly. The cut is made on the normalized form, so a dotted `N.V.D.A.` is still
+one segment and the earlier behaviour is preserved.
+
+What it still does not catch is an encoded payload. A scanner that sees base64 sees
+nothing, and no normalization changes that; the classification stamp is what covers it,
+which is the entire reason both controls run and neither reads the other's inputs.
+
+`canvas-guard` ships a second implementation of this control, `PositionFingerprints`,
+which is handed the position book rather than opaque strings and can therefore tell a
+round lot from a fingerprint. The two are checked against each other in
+`canvas-integration/test/egress-parity.test.ts`: nothing the guard proxy blocks may be
+passed here. They are allowed to differ in the other direction, and they do on exactly one
+case — see that file for why it cannot be resolved.

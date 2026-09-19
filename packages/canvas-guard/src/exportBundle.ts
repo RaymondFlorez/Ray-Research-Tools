@@ -148,7 +148,27 @@ function redact(
   notices: string[],
 ): RedactedCell {
   const policy = cell.vendor === undefined ? undefined : policies.get(cell.vendor);
-  if (!policy || policy.rule === 'redistributable') return { ...cell };
+
+  // A cell stamped `licensed` whose policy did not resolve — no vendor on the
+  // cell, or a vendor the caller passed no policy for — is withheld, not
+  // passed through. The stamp says redistribution is governed by terms; an
+  // unresolved policy means we do not know which terms, and the export leaves
+  // the building either way. Omitting a vendor from `vendorPolicies` was
+  // otherwise a way to export exactly the data the policies exist to hold back.
+  if (!policy) {
+    if (cell.classification === 'licensed') {
+      const who = cell.vendor ?? 'an unrecorded vendor';
+      notices.push(`Data from ${who} is withheld: no redistribution policy was supplied for it.`);
+      return {
+        ...cell,
+        value: 'withheld',
+        redaction: { rule: 'strip', note: `${who}: no redistribution policy on file` },
+      };
+    }
+    return { ...cell };
+  }
+
+  if (policy.rule === 'redistributable') return { ...cell };
 
   if (policy.rule === 'strip') {
     notices.push(`${policy.vendor} data is withheld: the licence does not permit redistribution.`);
@@ -164,17 +184,71 @@ function redact(
 
   // blur
   const precision = policy.precision ?? 2;
+  const blurred = blurValue(cell.value, precision);
+
+  // A value that could not be blurred is stripped. The first version passed a
+  // string through untouched and still attached `redaction: { rule: 'blur' }`
+  // to it, so `"12,450.38"` left at full precision under a label asserting it
+  // had been reduced to two significant digits — the licence breached and the
+  // audit record saying it had not been. A redaction record is a claim about
+  // what happened to the value, so it is only ever written by the branch that
+  // actually did it, and a transform that cannot be performed falls back to the
+  // stricter rule rather than the weaker one.
+  if (blurred === undefined) {
+    notices.push(
+      `${policy.vendor} data is withheld: its value could not be reduced in precision.`,
+    );
+    return {
+      ...cell,
+      value: 'withheld',
+      redaction: {
+        rule: 'strip',
+        note: `${policy.vendor}: not reducible to ${precision} significant digits, withheld`,
+      },
+    };
+  }
+
   notices.push(`${policy.vendor} figures are rounded: the licence permits indicative values only.`);
-  const value =
-    typeof cell.value === 'number' ? blurNumber(cell.value, precision) : cell.value;
   return {
     ...cell,
-    value,
+    value: blurred,
     redaction: {
       rule: 'blur',
       note: `${policy.vendor}: shown to ${precision} significant digits`,
     },
   };
+}
+
+/**
+ * Blur a cell value, or report that it cannot be blurred.
+ *
+ * Numbers go straight through `blurNumber`. A string is blurred only when it is
+ * a single number wearing decoration — `"$12,450.38"`, `"12450 bp"`, `"-3.75%"`
+ * — in which case the decoration is kept and the number inside it is reduced.
+ * Anything else (a sentence, a date, two numbers, a contract label) returns
+ * `undefined` and the caller strips it: guessing which digits in free text are
+ * the licensed figure is how a redaction misses one.
+ *
+ * The decoration is deliberately narrow — a currency mark in front, a unit of
+ * at most a few characters behind. An earlier pass allowed any non-digit text
+ * on either side, which made `"NVDA Jan 1400 C"` a number wearing decoration:
+ * the strike blurred to itself and an option label went out labelled `blur`.
+ * Free text that happens to contain one number is not a figure, and the export
+ * withholds it rather than deciding which part of it was licensed.
+ */
+function blurValue(value: number | string, significant: number): number | string | undefined {
+  if (typeof value === 'number') return blurNumber(value, significant);
+
+  const match = /^([\s$\u20ac\u00a3\u00a5]{0,3})(-?\d[\d,]*(?:\.\d+)?)([\s%a-zA-Z]{0,4})$/.exec(
+    value.trim(),
+  );
+  if (!match) return undefined;
+  const prefix = match[1] ?? '';
+  const digits = match[2] ?? '';
+  const suffix = match[3] ?? '';
+  const parsed = Number.parseFloat(digits.replace(/,/g, ''));
+  if (!Number.isFinite(parsed)) return undefined;
+  return `${prefix}${blurNumber(parsed, significant)}${suffix}`;
 }
 
 /** Keep the magnitude, drop the precision. */

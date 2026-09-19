@@ -46,20 +46,35 @@ export interface DispatchRequest {
 }
 
 /**
+ * Placements that are inside the tenant boundary.
+ *
+ * An allowlist, and the distinction is not pedantry. The first version asked
+ * `placement !== 'vendor'` and allowed everything else, which reads the same
+ * until a placement arrives that is neither — a new deployment mode, a stale
+ * record, a field from a service built against a different version of this
+ * enum. Allow-by-negation says yes to all of them. The two names below are the
+ * two machines we actually control, and anything not on this list crosses the
+ * boundary until someone adds it here deliberately.
+ *
+ * This is not the per-vendor allowlist the note used to warn about: that would
+ * be a list of counterparties trusted with position data, which grows. This is
+ * a list of places the data physically sits, which does not.
+ */
+const INSIDE_BOUNDARY: ReadonlySet<string> = new Set<string>(['on_device', 'self_hosted']);
+
+/**
  * Refuse tenant-bound content to anything off-premises.
  *
- * `self_hosted` and `on_device` are inside the boundary; `vendor` is not. The
- * test is on the placement, never on the vendor's name or on a per-vendor
- * allowlist, because an allowlist is a list somebody eventually adds to.
+ * The test is on the placement, never on the vendor's name.
  */
 export function routerGate(request: DispatchRequest): EgressDecision {
   const worst = combine(request.contextClasses);
-  if (request.placement !== 'vendor') return { allowed: true };
+  if (INSIDE_BOUNDARY.has(request.placement)) return { allowed: true };
   if (!mustStayInTenant(worst)) return { allowed: true };
   return {
     allowed: false,
     control: 'router',
-    reason: `context is classified ${worst} and ${request.modelId} runs off-premises`,
+    reason: `context is classified ${worst} and ${request.modelId} runs at placement ${request.placement}, outside the tenant boundary`,
   };
 }
 
@@ -153,8 +168,19 @@ export class PositionFingerprints {
    * something by chance.
    */
   scan(payload: string): Match[] {
-    const symbols = [...payload.matchAll(/\b[A-Z]{1,6}(?:[.-][A-Z]{1,3})?\b/g)]
-      .map((m) => ({ text: m[0], at: m.index }))
+    // Case-insensitive, and folded before the digest. The constructor
+    // upper-cases on ingest, so matching had to as well — it did not, and an
+    // all-lowercase dump was invisible: `\b[A-Z]{1,6}\b` never matched `nvda`,
+    // `symbols` came back empty, and the scan returned before the number pass
+    // ever ran. `Nvda` failed for the same reason.
+    //
+    // The cost is that a ticker which is also an ordinary word — IT, ALL, KEY,
+    // ON — now matches in lowercase prose. That is the right side to err on:
+    // a match still needs the ticker *and* an exact holding quantity within
+    // the pairing window, so prose alone does not trip it, while a reformatted
+    // position dump no longer walks through.
+    const symbols = [...payload.matchAll(/\b[A-Za-z]{1,6}(?:[.-][A-Za-z]{1,3})?\b/g)]
+      .map((m) => ({ text: m[0].toUpperCase(), at: m.index }))
       .filter((s) => this.symbols.has(digest(s.text)));
     if (symbols.length === 0) return [];
 

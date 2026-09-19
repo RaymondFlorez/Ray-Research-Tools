@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@picasso/canvas-core": "*",
+    "@picasso/canvas-data": "*",
     "@picasso/canvas-pricing": "*",
     "@picasso/canvas-router": "*",
     "@picasso/canvas-agents": "*",

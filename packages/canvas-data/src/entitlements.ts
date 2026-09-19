@@ -76,7 +76,22 @@ export function checkEntitlement(
       return { allowed: true };
 
     case 'licensed': {
-      if (record.vendor === undefined || entitlements.vendors.has(record.vendor)) {
+      // A licensed record with no vendor recorded is a denial, not a pass. The
+      // first version read `record.vendor === undefined || vendors.has(...)`
+      // and allowed it, on the reasoning that there was no licence to check —
+      // but `licensed` is the stamp that says redistribution is governed by
+      // someone's terms, and a missing vendor means we do not know whose. The
+      // check that cannot be performed is the one that must not be assumed
+      // passed: dropping the vendor field became a way to read every licensed
+      // record in the tenant.
+      if (record.vendor === undefined) {
+        return {
+          allowed: false,
+          reason: 'no_vendor_licence',
+          message: 'Licensed data with no vendor recorded; no licence covers it.',
+        };
+      }
+      if (entitlements.vendors.has(record.vendor)) {
         return { allowed: true };
       }
       return {
@@ -168,6 +183,19 @@ export interface ScanResult {
 }
 
 /**
+ * How far apart two parts of a fingerprint may sit and still count as one.
+ *
+ * Measured in normalized characters — letters and digits, everything else
+ * already removed — between the end of one part and the start of the next.
+ * `{"symbol":"NVDA","qty":12450}` normalizes to `symbolnvdaqty12450`, putting
+ * three characters between the ticker and the quantity; a nested envelope puts
+ * twenty or so. Forty-eight covers the serializations anyone actually emits
+ * without loosening the match to "somewhere in the document", which is the
+ * point at which a long filing matches something by chance.
+ */
+export const FINGERPRINT_GAP = 48;
+
+/**
  * Control two: the proxy's check, on the actual bytes.
  *
  * This one does not look at any classification, because a payload assembled by
@@ -175,28 +203,111 @@ export interface ScanResult {
  * the tenant's own position fingerprints, and blocks on a match regardless of
  * what the payload claims to be.
  *
- * Matching is done on a normalized copy — case folded, punctuation and
- * whitespace removed — so an agent cannot slip a holding past by reformatting
- * it. Fingerprints shorter than four characters are ignored: they match
- * everything and would block every request.
+ * Matching happens in two stages, and both exist because a literal substring
+ * search over the raw payload catches only the one formatting the fingerprint
+ * happened to be written in.
+ *
+ * **Normalization** keeps letters and digits and drops everything else. The
+ * first version stripped a *list* of punctuation — whitespace, comma, period,
+ * underscore, quote, parens, hyphen — and the list was the bug: it omitted
+ * every separator a serializer actually emits, so a markdown row
+ * `| NVDA | 12,450 |` and a colon-separated `NVDA: 12,450` both walked past. An
+ * allowlist of kept characters cannot have that hole; a denylist of stripped
+ * ones always can.
+ *
+ * **Segmentation and windowing** handle what normalization alone cannot.
+ * Stripping punctuation does not help against text that is not punctuation:
+ * `{"symbol":"NVDA","qty":12450}` normalizes to `symbolnvdaqty12450`, which
+ * does not contain `nvda12450` because the key name sits between them, and
+ * `<td>NVDA</td><td>12450</td>` fails the same way on the tag names. So the
+ * fingerprint is cut into its letter-runs and digit-runs and each is located
+ * independently; a match requires all of them inside one window of
+ * `FINGERPRINT_GAP` characters per join. The cut is made on the *normalized*
+ * form, so the fingerprint and the payload are segmented by the same rule and
+ * a dotted `N.V.D.A.` is still one segment.
+ *
+ * What this still does not catch: an encoded payload. A scanner that sees
+ * base64 sees nothing, and no amount of normalization changes that — it is the
+ * blind spot the classification stamp in `checkEgress` covers, which is why
+ * both controls run and neither is allowed to read the other's inputs.
+ *
+ * Fingerprints shorter than four characters after normalization are ignored:
+ * they match everything and would block every request.
  */
 export function scanForFingerprints(
   payload: string,
   fingerprints: readonly Fingerprint[],
 ): ScanResult {
-  const normalize = (value: string): string =>
-    value.toLowerCase().replace(/[\s,._'"()\-]/g, '');
-
-  const haystack = normalize(payload);
+  const haystack = normalizeForScan(payload);
   const matched: string[] = [];
 
   for (const fingerprint of fingerprints) {
-    const needle = normalize(fingerprint.value);
+    const needle = normalizeForScan(fingerprint.value);
     if (needle.length < 4) continue;
-    if (haystack.includes(needle)) matched.push(fingerprint.label);
+    if (containsSegments(haystack, segment(needle))) matched.push(fingerprint.label);
   }
 
   return { clean: matched.length === 0, matched };
+}
+
+/** Letters and digits, lowercased. An allowlist, deliberately. */
+function normalizeForScan(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/** A normalized string cut into its letter-runs and digit-runs. */
+function segment(normalized: string): string[] {
+  return normalized.match(/[a-z]+|[0-9]+/g) ?? [];
+}
+
+/**
+ * Whether every segment occurs in the haystack inside one bounded window.
+ *
+ * Order is not required: a serializer that writes the quantity before the
+ * symbol states the holding just as plainly as one that does not. The window is
+ * the smallest span covering one occurrence of each segment, found by sweeping
+ * the merged occurrence list — the standard minimum-covering-window sweep, kept
+ * here rather than approximated because a greedy first-occurrence match reports
+ * a span far wider than the real one and would miss matches it should make.
+ */
+function containsSegments(haystack: string, segments: readonly string[]): boolean {
+  if (segments.length === 0) return false;
+
+  const budget =
+    segments.reduce((sum, seg) => sum + seg.length, 0) + FINGERPRINT_GAP * (segments.length - 1);
+
+  // (position, which segment) for every occurrence of every segment.
+  const hits: Array<{ at: number; seg: number }> = [];
+  for (const [index, seg] of segments.entries()) {
+    let from = haystack.indexOf(seg);
+    if (from === -1) return false;
+    while (from !== -1) {
+      hits.push({ at: from, seg: index });
+      from = haystack.indexOf(seg, from + 1);
+    }
+  }
+  hits.sort((a, b) => a.at - b.at);
+
+  const counts = new Array<number>(segments.length).fill(0);
+  let covered = 0;
+  let lo = 0;
+  for (let hi = 0; hi < hits.length; hi += 1) {
+    const entering = hits[hi];
+    if (entering === undefined) continue;
+    if ((counts[entering.seg] ?? 0) === 0) covered += 1;
+    counts[entering.seg] = (counts[entering.seg] ?? 0) + 1;
+
+    while (covered === segments.length) {
+      const leaving = hits[lo];
+      if (leaving === undefined) break;
+      const span = entering.at + (segments[entering.seg]?.length ?? 0) - leaving.at;
+      if (span <= budget) return true;
+      counts[leaving.seg] = (counts[leaving.seg] ?? 0) - 1;
+      if ((counts[leaving.seg] ?? 0) === 0) covered -= 1;
+      lo += 1;
+    }
+  }
+  return false;
 }
 
 export interface EgressAudit {
