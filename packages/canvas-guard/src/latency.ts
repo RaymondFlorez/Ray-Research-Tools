@@ -10,11 +10,11 @@
  * argued.
  *
  * The evidence field is the part worth arguing about, and it is deliberately
- * unflattering. Nine of the fourteen rows have nothing behind them in this
+ * unflattering. Eight of the fourteen rows have nothing behind them in this
  * repo, for reasons that are structural rather than lazy: there is no
  * ClickHouse here, no DuckDB, no market data feed and no models at all.
  * Recording that as `unmeasured` with the reason, rather than leaving the row
- * silent, is the difference between a checklist that reports 5/14 and one that
+ * silent, is the difference between a checklist that reports 6/14 and one that
  * reports nothing and implies 14/14.
  *
  * Three rows are measured and **missed**, and they stay recorded as missed. A
@@ -85,9 +85,12 @@ export const LATENCY_BUDGETS: readonly BudgetedInteraction[] = [
     p95Ms: 40,
     ceilingNote: 'recompute deferred to drag-end',
     evidence: {
-      kind: 'unmeasured',
-      because:
-        'there is no interactive drag harness; the scheduler and the deferral are unit-tested in canvas-core, but the frame cost of dragging with a live downstream graph has not been timed.',
+      kind: 'measured',
+      p50Ms: 0.104,
+      p95Ms: 0.306,
+      where: 'canvas-integration, test/drag.test.ts, 400 frames dragging a node with 20 downstream',
+      caveat:
+        'the CPU path this code owns — spatial index update, invalidation, scheduling and scene assembly — under Node, not painting, which the browser does. A floor on the real number. The ceiling column of this row is a behaviour rather than a time, and it is the measurement that matters: the same twenty downstream nodes evaluated for real cost 6.55ms each, so 131ms a frame against a 40ms p95, which is why the PRD defers them rather than optimising them.',
     },
   },
   {

@@ -27,6 +27,36 @@ npm run typecheck --workspaces
 | `spatial.ts` | 3.1 | R-tree with incremental insert, move and delete |
 | `viewport.ts` | 3.1, 3.8 | Affine transform, cursor-anchored zoom, LOD mapping with debounced crossings |
 | `document.ts` | 3.2.6 | Document CRUD, wiring, and the spatial index over it |
+| `search.ts` | 3.8 | The fuzzy matcher, the command palette ranking, spatial content search, and the fly-to framing |
+| `template.ts` | 3.9 | Canvas templates: keep the structure and the layout, strip the subject |
+
+## Three rules that are easy to state and easy to get wrong
+
+**A drag holds its subtree back.** PRD 7.1 puts "recompute deferred to drag-end" in the
+ceiling column of the node-drag row, which is a behaviour rather than a time.
+`schedule` takes a `dragging` set and reports what it held separately from what nothing
+needs yet — two different claims about why a node is not computing. Invalidation is *not*
+suppressed: the subtree goes stale and renders stale, which is the honest state, because
+those numbers no longer follow from their inputs. Measured in `canvas-integration`, the
+deferral is the difference between 0.3ms a frame and 131ms.
+
+**A template strips more than the parameter that names the ticker.** PRD 3.9's sentence is
+one line — "canvas templates strip instrument bindings and keep structure, so a completed
+analysis re-runs against a new ticker in one action" — and a canvas that has *run* carries
+the old subject in five more places: computed values, cache keys, dataset snapshots and
+as-of stamps, provenance and verification flags, and entitlement tags. The cache key is the
+one that matters, because a key derived against NVDA would let a node instantiated for MU
+serve NVDA's answer: silent, fast, wrong. `instantiate` returns every node stale with none
+of it, and names any binding the caller did not supply rather than half-binding quietly.
+
+The layout is kept. The spatial arrangement of a canvas *is* the analysis in a way a list
+of nodes is not, and a template that discarded it would hand back the same graph as a pile.
+
+**A palette that guesses what you meant hides what you wanted.** `searchPalette` ranks node
+types, tickers, existing nodes and templates together and uses kind only as a tiebreak —
+existing nodes first, because the palette is most often a way of getting back to something
+already on the canvas. The matcher scores contiguity, word starts and earliness, which is
+what makes `esn` find `EventStudyNode` and `micron` find `MU`.
 
 ## The invariants the tests exist to protect
 

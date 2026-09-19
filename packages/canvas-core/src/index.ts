@@ -18,3 +18,5 @@ export * from './graph.js';
 export * from './hash.js';
 export * from './cacheKey.js';
 export * from './document.js';
+export * from './template.js';
+export * from './search.js';

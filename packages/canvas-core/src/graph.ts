@@ -201,6 +201,25 @@ export interface ScheduleInput {
   pinned?: Iterable<NodeID>;
   /** Cap on concurrently computing nodes (PRD 7.3 target: 200). */
   concurrencyLimit?: number;
+  /**
+   * Nodes the analyst currently has hold of (PRD 7.1).
+   *
+   * > Node drag with 20 downstream nodes — 16ms p50, 40ms p95, **recompute
+   * > deferred to drag-end**.
+   *
+   * A drag emits a change per frame. Recomputing the dragged node's descendants
+   * on each one spends the whole budget on answers nobody will read, because
+   * the next frame invalidates them again — and the cost is not the dragged
+   * node's, it is its subtree's, so it grows with a number the analyst cannot
+   * see. Deferring is not an optimisation to reach for later: at twenty
+   * downstream nodes the naive version is already outside the 40ms p95, and at
+   * two hundred it is outside anything.
+   *
+   * The nodes still go stale. Invalidation is not suppressed, only evaluation,
+   * so the canvas shows them stale during the drag and computes them once when
+   * the hand comes off. `dragEnded` is the other half of that.
+   */
+  dragging?: Iterable<NodeID>;
 }
 
 export interface ScheduleResult {
@@ -213,6 +232,16 @@ export interface ScheduleResult {
    * counter shown on the minimap as a pressure indicator.
    */
   pressure: number;
+  /**
+   * Stale nodes held back only because a drag is in progress.
+   *
+   * Reported separately from `deferred`, which holds what nothing needs yet.
+   * These are wanted — they are on screen and their inputs changed — and the
+   * only reason they are not computing is that the analyst has not let go.
+   * A node deferred for that reason renders stale rather than absent, and
+   * telling the two apart is what lets the renderer say which.
+   */
+  heldByDrag: NodeID[];
 }
 
 /**
@@ -230,13 +259,23 @@ export function schedule(doc: CanvasDocument, input: ScheduleInput): ScheduleRes
   const needed = new Set<NodeID>(roots);
   for (const id of ancestors(doc, roots, adj)) needed.add(id);
 
+  // Everything downstream of a node under the hand, plus the node itself.
+  // Descendants rather than the node alone, because the cost a drag creates is
+  // its subtree's and that is the whole reason the PRD defers it.
+  const dragRoots = new Set<NodeID>();
+  for (const id of input.dragging ?? []) if (doc.nodes.has(id)) dragRoots.add(id);
+  const held = dragRoots.size === 0 ? dragRoots : descendants(doc, dragRoots, adj);
+  for (const id of dragRoots) held.add(id);
+
   const wanted: NodeID[] = [];
   const deferred: NodeID[] = [];
+  const heldByDrag: NodeID[] = [];
   for (const id of order) {
     const node = doc.nodes.get(id) as PicassoNode;
     if (node.binding === 'loose') continue;
     if (node.state.status !== 'stale') continue;
-    if (needed.has(id)) wanted.push(id);
+    if (held.has(id)) heldByDrag.push(id);
+    else if (needed.has(id)) wanted.push(id);
     else deferred.push(id);
   }
 
@@ -245,6 +284,7 @@ export function schedule(doc: CanvasDocument, input: ScheduleInput): ScheduleRes
     order: limit === Infinity ? wanted : wanted.slice(0, limit),
     deferred,
     pressure: deferred.length,
+    heldByDrag,
   };
 }
 

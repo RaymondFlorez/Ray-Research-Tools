@@ -181,3 +181,120 @@ describe('viewport-scoped scheduling (PRD 3.4.2)', () => {
     expect(new Set(readyToEvaluate(doc, next))).toEqual(new Set(['b', 'c']));
   });
 });
+
+// ---------------------------------------------------------------------------
+// PRD 7.1: "recompute deferred to drag-end"
+// ---------------------------------------------------------------------------
+
+describe('a drag holds its subtree back', () => {
+  /** A chain: the dragged node feeding `depth` descendants, all wired. */
+  function chain(depth: number) {
+    const doc = createDocument('drag');
+    const ids: NodeID[] = [];
+    for (let i = 0; i <= depth; i += 1) {
+      const id = `n${i}`;
+      ids.push(id);
+      addNode(
+        doc,
+        node({
+          id,
+          binding: 'wired',
+          inputs: [port('in', 'series', { cardinality: 'many', required: false })],
+          outputs: [port('out', 'series')],
+        }),
+      );
+      if (i > 0) wire(doc, `n${i - 1}`, id);
+    }
+    return { doc, ids };
+  }
+
+  it('holds the dragged node and everything below it', () => {
+    const { doc, ids } = chain(20);
+    markStale(doc, 'n0');
+    const result = schedule(doc, { visible: ids, dragging: ['n0'] });
+
+    expect(result.order).toEqual([]);
+    expect(result.heldByDrag.length).toBe(21);
+    expect(new Set(result.heldByDrag)).toEqual(new Set(ids));
+  });
+
+  it('computes the same batch the moment the hand comes off', () => {
+    const { doc, ids } = chain(20);
+    markStale(doc, 'n0');
+    const during = schedule(doc, { visible: ids, dragging: ['n0'] });
+    const after = schedule(doc, { visible: ids });
+
+    expect(during.order).toEqual([]);
+    expect(after.order.length).toBe(21);
+    // Nothing was lost: what the drag held is exactly what runs afterwards.
+    expect(new Set(during.heldByDrag)).toEqual(new Set(after.order));
+    // And in dependency order, so the chain still evaluates top down.
+    expect(after.order[0]).toBe('n0');
+    expect(after.order[after.order.length - 1]).toBe('n20');
+  });
+
+  // Invalidation is not suppressed, only evaluation. The canvas shows the
+  // subtree stale while the hand is down, which is the honest state — the
+  // numbers on screen no longer follow from the inputs.
+  it('leaves the subtree stale rather than pretending it is current', () => {
+    const { doc, ids } = chain(20);
+    markStale(doc, 'n0');
+    schedule(doc, { visible: ids, dragging: ['n0'] });
+    for (const id of ids) {
+      expect(doc.nodes.get(id)?.state.status, id).toBe('stale');
+    }
+  });
+
+  it('does not hold a node that is merely near the drag', () => {
+    const { doc, ids } = chain(6);
+    // A sibling fed by the same upstream node but not below the dragged one.
+    addNode(
+      doc,
+      node({
+        id: 'sibling',
+        binding: 'wired',
+        inputs: [port('in', 'series', { cardinality: 'many', required: false })],
+        outputs: [port('out', 'series')],
+      }),
+    );
+    wire(doc, 'n0', 'sibling');
+    markStale(doc, 'n0');
+
+    // Drag n3: n4, n5, n6 are below it; the sibling is not.
+    const result = schedule(doc, { visible: [...ids, 'sibling'], dragging: ['n3'] });
+    expect(new Set(result.heldByDrag)).toEqual(new Set(['n3', 'n4', 'n5', 'n6']));
+    expect(result.order).toContain('sibling');
+    expect(result.order).toContain('n0');
+  });
+
+  it('holds nothing when nothing is being dragged', () => {
+    const { doc, ids } = chain(5);
+    markStale(doc, 'n0');
+    const result = schedule(doc, { visible: ids });
+    expect(result.heldByDrag).toEqual([]);
+    expect(result.order.length).toBe(6);
+  });
+
+  it('separates what a drag holds from what nothing needs yet', () => {
+    const { doc, ids } = chain(8);
+    markStale(doc, 'n0');
+    // Only the first four are on screen, and the drag is on n1.
+    const visible = ids.slice(0, 4);
+    const result = schedule(doc, { visible, dragging: ['n1'] });
+
+    // n1..n8 are below the drag; n0 is on screen and above it.
+    expect(result.order).toEqual(['n0']);
+    expect(new Set(result.heldByDrag)).toEqual(new Set(ids.slice(1)));
+    // A node is counted once. The two reasons are different claims about why a
+    // node is not computing, and a node must not appear under both.
+    for (const id of result.heldByDrag) expect(result.deferred).not.toContain(id);
+  });
+
+  it('ignores a dragged id that is not in the document', () => {
+    const { doc, ids } = chain(3);
+    markStale(doc, 'n0');
+    const result = schedule(doc, { visible: ids, dragging: ['ghost'] });
+    expect(result.heldByDrag).toEqual([]);
+    expect(result.order.length).toBe(4);
+  });
+});
