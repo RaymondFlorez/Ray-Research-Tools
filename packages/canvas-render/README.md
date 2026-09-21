@@ -15,8 +15,54 @@ npm test --workspace @picasso/canvas-render
 | `style.ts` | 3.2 | The binding visual signature per LOD, plus status colors |
 | `edges.ts` | 3.5 | Quadratic bezier geometry, port anchors, per-class styling, flow pulse |
 | `mount.ts` | 3.1 | Which nodes the DOM layer should mount, with the 120ms LOD debounce |
+| `chart.ts` | 7.1, 3.3 | Crosshair resolution, range select, and min/max decimation — the interaction half of a chart node |
 | `wash.ts` | 3.6 | Passive-mode heat with a 20 minute half-life, and anomaly halo severity |
 | `theme.ts` | — | Light and dark token sets |
+
+## Chart interaction, and the number that decided how it is written
+
+> | Chart interaction (crosshair, range select) | 12ms | 30ms | 60ms | — PRD 7.1
+
+Twelve milliseconds is a pointer-move budget, and a series port is "time-indexed numeric"
+against a PRD that sizes a local query at five million rows. The implementation that reads
+naturally — walk the points, find the closest — is three orders of magnitude off that
+before anything is drawn.
+
+Measured over 2,000 pointer moves on a five-million-point series:
+
+```
+crosshair    p50 0.0042ms   p95 0.0288ms   max 0.081ms
+range select p50 inside the same budget
+decimation   5,000,000 -> 2,800 points in 23.3ms
+```
+
+The figure that matters is not the p50, it is the flatness: **0.00121ms with the pointer at
+the left edge against 0.00122ms at the right**. A scan would be free at one end and maximal
+at the other, and the budget rests on the difference.
+
+Decimation is held to the 60ms ceiling rather than the 12ms p50 because it runs when the
+window changes, not on every pointer position, and what matters is that its cost is bounded
+by the pixel width rather than by the series length.
+
+Three decisions worth stating, because each could have gone the other way.
+
+**The readout is the last observation at or before the cursor, never an interpolation.**
+Series on one chart have different frequencies — a daily price against a quarterly
+fundamental — and a chart that interpolated would put a gross margin on a Tuesday in
+February that the company never reported. A series whose first point is after the cursor
+reads as *absent* rather than as its first value, and it still appears in the tooltip:
+silently dropping it would look like the series had ended.
+
+**Min/max decimation, not largest-triangle-three-buckets.** LTTB draws a prettier line and
+it drops extremes, because an extreme is one point and the triangle heuristic prefers
+points that describe the shape. On a price series the extreme *is* the shape — a spike to
+an intraday low is what the analyst is looking at the chart for — so a decimation that
+smoothed it away would have removed the reason to draw it. A test plants a one-point spike
+in a hundred thousand flat samples and requires it to survive.
+
+**A range select is half-open**, so two adjacent selections do not both contain the point
+on their shared boundary, and normalized, so dragging right to left selects the same range
+as left to right.
 
 ## Three rules worth stating
 

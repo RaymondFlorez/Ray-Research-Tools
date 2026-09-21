@@ -10,11 +10,11 @@
  * argued.
  *
  * The evidence field is the part worth arguing about, and it is deliberately
- * unflattering. Eight of the fourteen rows have nothing behind them in this
+ * unflattering. Seven of the fourteen rows have nothing behind them in this
  * repo, for reasons that are structural rather than lazy: there is no
  * ClickHouse here, no DuckDB, no market data feed and no models at all.
  * Recording that as `unmeasured` with the reason, rather than leaving the row
- * silent, is the difference between a checklist that reports 6/14 and one that
+ * silent, is the difference between a checklist that reports 7/14 and one that
  * reports nothing and implies 14/14.
  *
  * Three rows are measured and **missed**, and they stay recorded as missed. A
@@ -109,9 +109,12 @@ export const LATENCY_BUDGETS: readonly BudgetedInteraction[] = [
     p95Ms: 30,
     ceilingMs: 60,
     evidence: {
-      kind: 'unmeasured',
-      because:
-        'chart nodes render through the scene assembler, which is measured, but crosshair and range-select are interaction handlers that do not exist yet.',
+      kind: 'measured',
+      p50Ms: 0.0042,
+      p95Ms: 0.0288,
+      where: 'canvas-render, test/chart.test.ts, 2,000 pointer moves over a 5,000,000-point series',
+      caveat:
+        'the resolution, not the painting: binary search to the bracketing points, one readout per series, screen coordinates for the marker. Sized at five million points because that is what the PRD sizes a local query at. The figure is flat across the series — 0.00121ms with the pointer at the left edge against 0.00122ms at the right — which is the property the budget rests on and the one a linear scan would not have. Decimating the same series to the pixel width costs 23.3ms, inside the 60ms ceiling; it runs when the window changes rather than on every pointer move.',
     },
   },
   {

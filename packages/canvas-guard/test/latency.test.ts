@@ -53,11 +53,11 @@ describe('the report', () => {
   // The figure this repo actually stands behind. It is written here so a change
   // to it has to be deliberate: closing a gap moves this line, and so does
   // quietly downgrading a missed row to unmeasured.
-  it('stands at 6 measured, 3 met, 3 missed, 8 unmeasured', () => {
-    expect(report.measured).toBe(6);
-    expect(report.met).toBe(3);
+  it('stands at 7 measured, 4 met, 3 missed, 7 unmeasured', () => {
+    expect(report.measured).toBe(7);
+    expect(report.met).toBe(4);
     expect(report.missed).toBe(3);
-    expect(report.unmeasured).toBe(8);
+    expect(report.unmeasured).toBe(7);
   });
 
   it('names the three that are missed', () => {

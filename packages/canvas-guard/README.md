@@ -27,13 +27,13 @@ the harness that measured it and what that measurement does not cover, or the
 reason there is no measurement.
 
 ```
-14 budgets · 6 measured · 3 met · 3 missed · 8 unmeasured
+14 budgets · 7 measured · 4 met · 3 missed · 7 unmeasured
 ```
 
 **An unmeasured row is never reported as met.** That is the whole reason for a
 third state: a missing measurement and a passing one are different, and
 collapsing them turns a coverage figure into a ceiling on what anyone will look
-at. Eight rows have nothing behind them for structural reasons — no ClickHouse, no
+at. Seven rows have nothing behind them for structural reasons — no ClickHouse, no
 DuckDB, no models, no market data feed — and naming each gap beats a silent row
 that implies 14/14.
 
