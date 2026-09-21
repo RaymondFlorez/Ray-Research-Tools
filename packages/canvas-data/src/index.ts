@@ -7,6 +7,7 @@
  */
 
 export * from './bitemporal.js';
+export * from './instruments.js';
 export * from './adjustments.js';
 export * from './entitlements.js';
 export * from './timescrub.js';

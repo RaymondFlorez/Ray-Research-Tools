@@ -12,6 +12,7 @@ npm test --workspace @picasso/canvas-data
 |---|---|---|
 | `bitemporal.ts` | 5.8, 3.8 | Append-only store with valid time and knowledge time; restatement history and leak detection |
 | `adjustments.ts` | 5.1 | Corporate actions with the adjustment factors exposed, not baked in |
+| `instruments.ts` | 5.1 | The canonical instrument model: identifier check digits, cross-venue ambiguity, and point-in-time ticker resolution |
 | `entitlements.ts` | 7.2 | Four data classes, per-user entitlement, and the two independent egress controls |
 | `timescrub.ts` | 3.8, 3.9 | Snapshot catalog and the canvas asof, propagated into provenance and cache keys |
 
@@ -79,6 +80,42 @@ of how much history you asked for.
 **A missing source is missing, not defaulted.** Scrubbing to before a source existed omits
 it from the snapshot set and names it in `missingSources`, so the canvas can mark that node
 unavailable rather than quietly substituting the oldest data it has.
+
+## A ticker is a lease, not a name
+
+PRD 5.1 asks for "a canonical instrument model keyed by an internal ID, with mappings to
+figi, isin, cusip, ticker+mic, and chain-native identifiers". Two of the three jobs in that
+sentence are bookkeeping. The third is a trap that is invisible until it bites.
+
+**Identifiers are refused if they fail their own check digit.** ISIN, CUSIP and FIGI all
+carry one, and an identifier that fails it is a transcription error — admitting one means
+every series, position and entitlement keyed to it is keyed to a security that does not
+exist. The algorithms are checked against real identifiers rather than against themselves:
+four ISINs, three CUSIPs, three FIGIs, plus a mutated digit of each. What a check digit
+*cannot* do is tell that a valid identifier names the wrong security, and a test pins that
+limit so nobody reads more into the validation than it offers.
+
+**Tickers resolve as of a date, because they are re-let.** `FB` to `META` is the easy case:
+a rename keeps the internal id, so a ten-year chart does not become two charts. The hard
+case is a symbol freed by one issuer and taken by another. A backtest resolving it as of
+2019 must get the company that held it in 2019, and a registry that resolves against "now"
+hands back whoever holds it today — a look-ahead of exactly the kind the bitemporal layer
+exists to prevent, arriving through the reference layer instead of through the price series,
+and silent.
+
+So `resolveTicker` requires an as-of and `resolveTickerNow` is a *separate call* rather than
+a default. An analyst typing in a search box means today; a backtest does not, and the
+difference should be made rather than fallen into.
+
+**Ambiguity produces candidates, never a guess.** `MU` is Micron on XNAS and Micron on
+XFRA — different currencies, different closing times, different securities. Every lookup
+returns an array, including the ones that can only match once: a caller who has to write
+`[0]` has seen that the answer might not be unique, and the day a second match appears is
+the day the other kind of caller silently takes the wrong one.
+
+`canvas-integration/test/reference.test.ts` is where that contract meets `canvas-ink`'s:
+the case the registry calls ambiguous is the case the sketch refuses to promote, and a
+sketch drawn on a canvas scrubbed to 2019 binds to the 2019 holder of the symbol.
 
 ## Egress is checked twice, on purpose
 
