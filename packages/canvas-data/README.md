@@ -13,6 +13,7 @@ npm test --workspace @picasso/canvas-data
 | `bitemporal.ts` | 5.8, 3.8 | Append-only store with valid time and knowledge time; restatement history and leak detection |
 | `adjustments.ts` | 5.1 | Corporate actions with the adjustment factors exposed, not baked in |
 | `instruments.ts` | 5.1 | The canonical instrument model: identifier check digits, cross-venue ambiguity, and point-in-time ticker resolution |
+| `conflate.ts` | 7.3 | Server-side conflation to 4Hz per series, with per-field combine semantics |
 | `entitlements.ts` | 7.2 | Four data classes, per-user entitlement, and the two independent egress controls |
 | `timescrub.ts` | 3.8, 3.9 | Snapshot catalog and the canvas asof, propagated into provenance and cache keys |
 
@@ -116,6 +117,46 @@ the day the other kind of caller silently takes the wrong one.
 `canvas-integration/test/reference.test.ts` is where that contract meets `canvas-ink`'s:
 the case the registry calls ambiguous is the case the sketch refuses to promote, and a
 sketch drawn on a canvas scrubbed to 2019 binds to the 2019 holder of the symbol.
+
+## Conflation is not "keep the last"
+
+> Live subscribed series per canvas | 2,000 | NATS subject filtering, **server-side
+> conflation to 4Hz max per series** — PRD 7.3
+
+The arithmetic is the easy part: 2,000 series at 4Hz is 8,000 updates a second, and the
+tick rate above it does not matter because the output rate does not depend on the input
+rate. What takes care is what conflation means *per field*, and the natural implementation
+gets it wrong in a way that shows up as a wrong number rather than as a slow one.
+
+For a **price** it is the last: the earlier ones are superseded, which is what conflation
+is for. For **traded size it is a sum**. Two hundred ticks arrive in a 250ms window, each
+carrying the size of its trade, and keeping the last reports the size of one trade as the
+volume of two hundred — silently, and by an amount that grows with how busy the tape is. A
+volume that is wrong when the market is quiet and very wrong when it is not is worse than
+no volume. For a **high it is a max and a low a min**, which is the point min/max
+decimation makes about a chart: the extreme is often on a tick that gets dropped, and it is
+often the one the analyst cares about.
+
+A test feeds 1,200ms of ticks across 200 series and requires every series' reported volume
+to equal what was sent, to the unit.
+
+### The grid, and the drift it exists to stop
+
+Each series is anchored to its own first tick so the phases spread — a single global timer
+would turn 2,000 smooth streams into a 2,000-message spike four times a second, the same
+total rate in a much worse shape.
+
+Within a series the due times sit on a fixed grid from that anchor, rather than being
+measured from whichever tick opened the window. That difference looks like nothing and is a
+drift: a window starting when the next tick arrives lasts `window + gap`, the gap
+accumulates, and a series ticking at 1kHz emits **three** times a second instead of four.
+Under the cap, so not a breach — and a quarter of the updates missing for no reason anybody
+chose. The first version did exactly that and a test caught it. The grid also recovers
+cleanly from silence: a series quiet for ten seconds lands on its next slot boundary rather
+than firing on the spot or working through forty stale windows.
+
+Measured at the PRD's shape — 2,000 series under a tape delivering 750 ticks per series per
+second — the fan-out holds at 8,000 updates a second, a compression of about 187 to one.
 
 ## Egress is checked twice, on purpose
 
