@@ -12,6 +12,7 @@ safe to wire into anything.
 | `provenance.ts` | A model-sourced fact cannot feed a compute node without an override that records who, when and why. |
 | `digest.ts` | The return card: four lines, deterministic in shape, composed without a model. |
 | `redteam.ts` | The suite phase 6 exits on. |
+| `context.ts` | PRD 4.6's context builder: the lineage slice, the spatial neighborhood, and the budget that decides what reaches the prompt. |
 
 ## The exit criterion
 
@@ -118,12 +119,64 @@ Measured cost on the policy's 8B row: **0.0033 cents**, against the PRD's
 "about 0.02 cents". The payload is a few hundred characters of structured
 detector output; the series data never reaches the prompt.
 
+## Context assembly
+
+PRD 4.6 builds the prompt from the canvas rather than from chat history, and
+`assembleContext` implements it: the question and the selection, the **lineage
+slice**, the spatial neighborhood, pinned canvas memory, retrieved evidence.
+
+Three of its decisions are not restatements of the specification.
+
+**Ancestors, not descendants.** The lineage slice is what the selected value
+was computed *from*. The obvious generalisation — everything connected — pulls
+in the node's descendants, which are the conclusions drawn from it; handing
+those to a model asked to derive them produces agreement with the canvas
+because it was read off the canvas. Ancestors carry their distance from the
+selection, so a slice that has to be cut is cut at the far end.
+
+**A table is never inlined, structurally.** `tableContext` is the only way to
+put a table in a context and it cannot produce rows, because it is never given
+any: it takes a schema, summary statistics and the handle of the tool that can
+query the table. A 2.5-million-row table enters the prompt as **25 tokens**.
+
+**The classification travels.** Every item carries the classification of what
+it came from and the assembled context reports the most sensitive one *that
+was kept* — a class that got dropped at the ceiling is not reported, because
+the gate would then refuse a payload that does not contain it.
+
+### What the floors actually protect
+
+The PRD gives the per-category floors a purpose: "so that retrieval never
+crowds out the lineage slice". Measured, that is not what they do here. The
+greedy fill is greedy *within* the priority order, so a category is exhausted
+before the next is looked at: forty retrieved chunks scoring 100 against six
+ancestors scoring 1 leaves the lineage slice **fully intact with no floor at
+all**, and the test asserts it both ways.
+
+What does get crowded out is everything below whichever category is large. A
+selection with 400 ancestors under a 1,000-token ceiling spends **1,000 on
+lineage and 0 on memory** — the analyst's own stated thesis never reaches the
+prompt. That is the failure the floors are load-bearing against, and the
+README says so rather than repeating the sentence from the PRD.
+
+A floor larger than its category's content is released rather than held: 80
+reserved for a lineage slice holding one 10-token ancestor leaves 90 for
+evidence under a 100-token ceiling, not 20.
+
 ## What is not here
 
 - No real model calls. Every agent in the runtime is a function the caller
   supplies, and the Critic's prose is a callback. What is measured is the
   runtime, the reconciliation and the deterministic critiques.
-- No retrieval index. `disconfirming` takes a `Retrieve` function.
+- No retrieval index. `disconfirming` takes a `Retrieve` function, and
+  `assembleContext` takes evidence already ranked by one.
+- No tokenizer. `approximateTokens` is four characters to a token, which
+  under-counts code and over-counts long prose; `countTokens` takes a real one.
+  The budget's guarantees are exact in whatever unit it is handed.
+- `assembleContext` does not decide what a node's latest value is. A
+  `PicassoNode` does not carry one — `NodeRuntimeState` holds a status, a cache
+  key and a cost — so the value is a caller-supplied function rather than a
+  field invented here for two places to disagree about.
 - The blackboard runs in one process. The PRD's `agent-runtime` is a Python
   service with concurrent sessions; the scheduling semantics here are the
   contract it would implement, not the service.
