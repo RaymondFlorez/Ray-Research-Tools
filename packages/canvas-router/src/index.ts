@@ -14,3 +14,4 @@ export * from './budget.js';
 export * from './tenantBudget.js';
 export * from './trace.js';
 export * from './evals.js';
+export * from './canary.js';

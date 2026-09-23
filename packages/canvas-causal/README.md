@@ -5,7 +5,7 @@ Newey-West errors, a regime split that cannot be hidden, and shock propagation o
 graph that is allowed to have cycles.
 
 ```bash
-npm test --workspace @picasso/canvas-causal    # 31 tests
+npm test --workspace @picasso/canvas-causal    # 36 tests
 ```
 
 | Module | PRD | What it does |

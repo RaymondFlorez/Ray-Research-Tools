@@ -5,7 +5,7 @@ that run on every one of them, and the statistics that account for how many stra
 analyst tried before this one.
 
 ```bash
-npm test --workspace @picasso/canvas-sim    # 28 tests
+npm test --workspace @picasso/canvas-sim    # 38 tests
 ```
 
 | Module | PRD | What it does |
