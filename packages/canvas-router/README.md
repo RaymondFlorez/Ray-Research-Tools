@@ -82,6 +82,35 @@ cheaper model when money runs short produces a worse answer that looks exactly l
 one. The prompt also names the **tightest** ceiling rather than the first one checked,
 because raising the wrong one changes nothing.
 
+### The tenant's monthly bill is a different budget
+
+PRD 7.3 adds one 4.3 does not mention: "per-tenant monthly inference budgets with soft
+warnings at 70 percent and hard stops with an override path at 100 percent". `budget.ts`
+stops one canvas running away; `tenantBudget.ts` is the organisation's monthly bill, and it
+has three parts that are easy to get subtly wrong.
+
+**The warning is a state, not an event.** "Soft warning at 70 percent" reads like something
+that fires once — and fired once, it is missed once, by whoever happened to be working at
+that moment while the desk head who needed to see it was in a meeting. The tier comes back
+on *every* decision. Crossing is derivable from two consecutive checks; being over is not
+derivable from an event already delivered.
+
+**Spend belongs to the month it happened in**, not the month of the query. Otherwise a
+month's total depends on when somebody asked, two reports of the same month disagree, and
+the one that disagrees is always the one somebody is using to argue about a bill. The
+month boundary is the tenant's own: 2am UTC on April 1 is still March for a tenant billed
+in New York, and the last five hours of a month are not nothing at quarter-end.
+
+**An override that does not expire is not an override.** This is the one that matters.
+"Hard stop with an override path" invites an implementation where the stop fires once,
+somebody approves, and the tenant is uncapped from then on. An override here raises the
+ceiling by a stated amount, for a stated reason, by a named person, *until a stated time*,
+and is scoped to one month so it cannot carry into the next. Every one of those is
+required — the same rule the provenance override and the audit record already follow. The
+base ceiling is reported alongside the raised one, so a lifted ceiling is visible rather
+than implied, and it is reported on every decision while it is in force rather than only
+when it bites.
+
 ## What the trace store is for
 
 Only verified dispatches count toward a model's acceptance rate. An unverified dispatch says

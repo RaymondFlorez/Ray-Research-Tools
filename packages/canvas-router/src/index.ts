@@ -11,5 +11,6 @@ export * from './policy.js';
 export * from './router.js';
 export * from './cascade.js';
 export * from './budget.js';
+export * from './tenantBudget.js';
 export * from './trace.js';
 export * from './evals.js';
