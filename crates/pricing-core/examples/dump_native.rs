@@ -15,6 +15,36 @@ fn main() {
         emit(format!("norm_cdf({x})"), ffi::pc_norm_cdf(x));
     }
 
+    // Pin and early-exercise carry (PRD 5.4). Both are compared against a
+    // threshold, so a last-bit disagreement is a warning that appears on one
+    // side and not the other.
+    for &m in &[0.9, 0.98, 1.0, 1.02, 1.1] {
+        for &v in &[0.0, 0.12, 0.3, 0.9] {
+            for &t in &[0.0, 1.0 / 252.0, 3.0 / 252.0, 0.25] {
+                let tag = format!("{m}/{v}/{t}");
+                emit(
+                    format!("pin({tag})"),
+                    ffi::pc_pin_sigmas(100.0, 100.0 * m, v, t),
+                );
+            }
+        }
+    }
+
+    for &is_call in &[1, 0] {
+        for &m in &[0.8, 1.0, 1.25] {
+            for &q in &[0.0, 0.017, 0.09] {
+                for &t in &[0.02, 0.25, 1.0] {
+                    let tag = format!("{is_call}/{m}/{q}/{t}");
+                    emit(
+                        format!("carry({tag})"),
+                        ffi::pc_early_exercise_carry(100.0, 100.0 * m, 0.045, q, t, is_call),
+                    );
+                    emit(format!("discount({tag})"), ffi::pc_discount(0.045, t));
+                }
+            }
+        }
+    }
+
     for &is_call in &[1, 0] {
         for &m in &[0.7, 0.85, 1.0, 1.15, 1.3] {
             for &t in &[0.02, 0.25, 1.0, 2.0] {

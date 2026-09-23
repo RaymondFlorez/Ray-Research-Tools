@@ -34,6 +34,16 @@ export interface PricingExports {
   ): number;
   pc_implied_vol_reason(): number;
   pc_norm_cdf(x: number): number;
+  pc_pin_sigmas(spot: number, strike: number, vol: number, time: number): number;
+  pc_early_exercise_carry(
+    spot: number,
+    strike: number,
+    rate: number,
+    dividend: number,
+    time: number,
+    isCall: number,
+  ): number;
+  pc_discount(rate: number, time: number): number;
 
   pc_book_reset(): void;
   pc_book_add_leg(
@@ -151,6 +161,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'memory',
   'pc_price', 'pc_greek', 'pc_american_fast', 'pc_american_exact', 'pc_american_detail',
   'pc_implied_vol', 'pc_implied_vol_reason', 'pc_norm_cdf',
+  'pc_pin_sigmas', 'pc_early_exercise_carry', 'pc_discount',
   'pc_book_reset', 'pc_book_add_leg', 'pc_book_len', 'pc_grid_reprice',
   'pc_grid_data', 'pc_grid_stride', 'pc_grid_axis_ptr', 'pc_grid_axis_len',
   'pc_guard_value',

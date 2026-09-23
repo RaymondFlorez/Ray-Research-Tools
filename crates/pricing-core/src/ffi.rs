@@ -172,6 +172,36 @@ pub extern "C" fn pc_norm_cdf(x: f64) -> f64 {
     crate::normal::cdf(x)
 }
 
+/// Distance from spot to a strike in remaining standard deviations (PRD 5.4).
+///
+/// Exported rather than computed in TypeScript because the result is compared
+/// against a threshold: a last-place difference between two math libraries
+/// turns the pin warning on in the browser and off on the server.
+#[no_mangle]
+pub extern "C" fn pc_pin_sigmas(spot: f64, strike: f64, vol: f64, time: f64) -> f64 {
+    crate::risk::pin_sigmas(spot, strike, vol, time)
+}
+
+/// What exercising an American option early is worth, before time value.
+#[no_mangle]
+pub extern "C" fn pc_early_exercise_carry(
+    spot: f64,
+    strike: f64,
+    rate: f64,
+    dividend: f64,
+    time: f64,
+    is_call: i32,
+) -> f64 {
+    crate::risk::early_exercise_carry(spot, strike, rate, dividend, time, is_call != 0)
+}
+
+/// A discount factor, so a dated dividend is discounted by the same `exp` the
+/// carry above uses.
+#[no_mangle]
+pub extern "C" fn pc_discount(rate: f64, time: f64) -> f64 {
+    crate::risk::discount(rate, time)
+}
+
 // ---------------------------------------------------------------------------
 // Grid repricing across the boundary.
 //

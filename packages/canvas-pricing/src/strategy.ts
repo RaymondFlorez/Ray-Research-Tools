@@ -26,6 +26,7 @@ import {
   type Vec2,
 } from '@picasso/canvas-core';
 import type { GridPricer, GridResult, GridSpec, Leg, Market } from './grid.js';
+import { bookRisk, type BookRisk } from './risk.js';
 
 /** PRD's worked example: 25 spots by 15 vols. */
 export const DEFAULT_GRID: GridSpec = {
@@ -126,6 +127,13 @@ export interface EvaluationOk {
   ok: true;
   result: GridResult;
   node: PicassoNode;
+  /**
+   * PRD 5.4: "Pin risk and assignment risk are computed and flagged."
+   *
+   * Computed here rather than offered as a separate call, because a warning
+   * the analyst has to ask for is a warning they find out about afterwards.
+   */
+  risk: BookRisk;
 }
 
 export interface EvaluationRefused {
@@ -177,7 +185,7 @@ export function evaluateStrategy(
     latencyMs: result.elapsedMs,
     ...(node.state.cacheKey !== undefined ? { cacheKey: node.state.cacheKey } : {}),
   };
-  return { ok: true, result, node };
+  return { ok: true, result, node, risk: bookRisk(pricer.exports, legs, market) };
 }
 
 /**

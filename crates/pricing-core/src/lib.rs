@@ -27,6 +27,7 @@ pub mod portfolio;
 pub mod quad;
 pub mod rng;
 pub mod resample;
+pub mod risk;
 pub mod solve;
 pub mod special;
 

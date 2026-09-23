@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 185 tests
+cargo test --release                              # 193 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -236,9 +236,11 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 3826 values spanning BSM, all ten
-Greeks, both American paths, implied vol, and every cell and guard figure of a 40-leg
-25x15 grid. It currently reports agreement on every bit.
+hide exactly the disagreement it exists to find — across 5,013 values spanning BSM, all ten
+Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
+grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
+Heston with its calibration, and the pin and early-exercise thresholds. It currently
+reports agreement on every bit.
 
 **The grid had to be added before the second failure showed up.** Every one of the 2250
 cell values already agreed; one guard figure did not, and only that one. The cells are the
@@ -525,3 +527,30 @@ the money and near expiry the price is intrinsic and carries no information abou
 volatility: every vol across a wide band reproduces it to the last bit of a double. An
 early version happily returned 0.5 for an option whose true vol was 0.08, with a residual
 below 1e-10. A chain shows "--" there, and so does this.
+
+## Pin and early exercise, and why they are here
+
+`risk.rs` is four small functions and none of them is interesting arithmetic:
+a log over a square root, and two differences of exponentials. They are in the
+crate anyway, because of what is done with the answer.
+
+Both are compared against a threshold. Pin risk asks whether the distance to a
+short strike, in units of the move the underlier still has left, is inside one
+sigma; assignment risk asks whether the carry from exercising early exceeds the
+time value it throws away. A comparison against a threshold is precisely where a
+last-place difference between two math libraries stops being invisible: the
+browser shows the analyst a pin warning and the server's export does not carry
+it, and nothing about the two numbers looks different when anybody checks.
+
+So the transcendentals are here and the surrounding bookkeeping — shares at
+risk, which leg, the Reg-T formulas — stays in TypeScript, where it is addition,
+multiplication and `max` on values that already crossed the boundary and that
+every IEEE-754 implementation agrees on exactly.
+
+The measure itself is scale-free, which a percentage band is not. Two percent
+from the strike with two days left is **1.852 sigma** on a twelve-vol name and
+**0.247** on a ninety-vol one: the same band, and the right answer is opposite
+in the two cases. And the carry comparison degenerates the way the textbook
+says it should — a call on a non-dividend payer has negative carry at every
+strike and every maturity, so it is never flagged, where a rule phrased as "deep
+in the money and close to expiry" would flag it constantly.

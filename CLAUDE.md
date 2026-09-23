@@ -76,4 +76,4 @@ Only `libm`. Everything compiles to both a native target and
 `wasm32-unknown-unknown` and must produce identical bits: use `libm` rather
 than `std` float methods, integer-only RNG, and bisection rather than Newton
 where control flow would otherwise depend on a value rather than a sign.
-`scripts/verify-wasm-parity.mjs` enforces this across 4,271 values.
+`scripts/verify-wasm-parity.mjs` enforces this across 5,013 values.

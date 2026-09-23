@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 127 tests
+npm test --workspace @picasso/canvas-pricing    # 147 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -220,6 +220,47 @@ reduce in `u64` before narrowing.
 Nothing in the crate's own test suite could see this: it runs natively, where both forms
 are identical. It is visible only by running the same code on both targets and comparing.
 
+## Pin, assignment and margin
+
+PRD 5.4 asks for four numbers this package was computing around rather than
+computing: pin risk, assignment risk, Reg-T margin and portfolio margin.
+
+**Pin risk is measured in sigma, not percent.** A short strike "near the money
+at expiry" cannot be a fixed band: two percent away is far on a twelve-vol
+utility with two days to run and close enough to pin on a ninety-vol biotech, so
+a percentage flags the wrong book in both directions. The measure is the
+distance to the strike in units of the move still to come, **1.852 sigma against
+0.247** for exactly that pair. Only short positions pin — a long option at the
+strike is a decision the holder makes, a short one is a decision made for them,
+after the close, and the stock is carried over a weekend they cannot trade.
+
+**Assignment risk is a comparison, not a threshold.** Early exercise is rational
+when what it buys — dividends captured less interest given up, or the reverse
+for a put — is worth more than the time value it throws away. The comparison
+degenerates correctly: a call on a non-dividend payer is never flagged, at any
+strike and any maturity, where a rule phrased as "deep in the money and close to
+expiry" would flag it constantly. An analyst warned about something that cannot
+happen stops reading the warnings.
+
+Both live in `pricing-core` rather than here, for the reason the section above
+gives: they are numbers compared against a threshold, and a last-place
+difference would turn a warning on in the browser and off on the server.
+
+**Portfolio margin is the grid, not a second model.** The regulatory method is a
+scenario sweep — reprice across ±15 percent and take the worst loss — and this
+package already sweeps, so `portfolioMargin` reads the answer off a
+`GridResult`. When the analyst's own grid is narrower than the rule's range it
+says so rather than extrapolating: a margin number produced by guessing past the
+edge of what was priced is the kind of number that gets believed.
+
+Reg-T is the opposite kind of thing, a set of per-position formulas that do not
+know the book is hedged, and the gap between the two is what an analyst
+actually wants to see. Verticals are recognised — greedily, nearest strike
+within a type and expiry — and margined at maximum loss. **Butterflies,
+condors, boxes and calendars are not**: they all reduce further under the real
+rules and this reports the more conservative number for them. A margin estimate
+that quietly under-reports is worse than one that is visibly rough.
+
 ## The guard, seen
 
 `apps/canvas-demo/payoff.html` draws the surface and marks every escalated cell with a
@@ -232,3 +273,22 @@ below the risk-free rate, early exercise is worthless and the fast path returns 
 European price by construction. An earlier version of the demo book marked only the even
 legs American, which made them all calls, and the guard dutifully reported zero error
 against nothing at all.
+
+## What is not covered
+
+- **No SVI fit and no arbitrage constraints.** `pc_svi_*` prices a surface it
+  is handed; PRD 5.4's Gatheral-Jacquier no-butterfly and no-calendar checks,
+  and the explicit flag for when they cannot be satisfied, are not implemented.
+- **No vol analytics.** Term structure, skew history, realized-versus-implied
+  and the variance risk premium are named in 5.4 and are not here.
+- **Margin is an estimate, and a rough one.** Reg-T recognises long premium,
+  naked shorts and verticals; every other recognised strategy is margined more
+  conservatively than an account would be. Portfolio margin is the CBOE equity
+  range read off whatever grid was priced, not OCC TIMS, and there is no
+  cross-margining, no concentration add-on and no index range.
+- **One underlier at a time.** The grid, the flags and both margin numbers
+  assume a single underlier. PRD 5.4's "aggregate Greeks by underlying, sector,
+  and expiry bucket" is the portfolio layer, and it is not in this package.
+- **Marks come from the model, not the market.** `bookRisk` marks each leg
+  through the engine, so an assignment flag rests on a theoretical value. A real
+  book would mark to the chain.

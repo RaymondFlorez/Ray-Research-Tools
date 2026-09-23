@@ -342,6 +342,20 @@ function recompute(label) {
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
 
+  match = /^pin\(([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
+  if (match) {
+    const [, m, v, t] = match;
+    return w.pc_pin_sigmas(100, 100 * Number(m), Number(v), Number(t));
+  }
+
+  match = /^(carry|discount)\((\d)\/([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
+  if (match) {
+    const [, kind, isCall, m, q, t] = match;
+    return kind === 'discount'
+      ? w.pc_discount(0.045, Number(t))
+      : w.pc_early_exercise_carry(100, 100 * Number(m), 0.045, Number(q), Number(t), Number(isCall));
+  }
+
   match = /^(greek(\d)|fast|exact|iv)\((\d)\/([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
   if (!match) throw new Error(`unparsed label: ${label}`);
 
@@ -380,8 +394,8 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio ` +
-    `and Heston with its calibration` +
+    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, ` +
+    `Heston with its calibration, and the pin and early-exercise thresholds` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {
