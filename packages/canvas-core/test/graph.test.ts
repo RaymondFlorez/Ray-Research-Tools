@@ -298,3 +298,167 @@ describe('a drag holds its subtree back', () => {
     expect(result.order.length).toBe(4);
   });
 });
+
+// ---------------------------------------------------------------------------
+// PRD 7.3: "concurrency limits with priority by viewport distance"
+// ---------------------------------------------------------------------------
+
+describe('the concurrency cap spends its budget on what the analyst can see', () => {
+  const VIEWPORT = { x: 0, y: 0, scale: 1, width: 1000, height: 800 };
+
+  /**
+   * Independent nodes spread along x, so distance from the viewport is the
+   * only thing that can order them — and deliberately created in the *reverse*
+   * order, so topological order and distance order disagree. A cap that sorted
+   * topologically would take the far ones.
+   */
+  function spread(count: number) {
+    const doc = createDocument('spread');
+    const ids: NodeID[] = [];
+    for (let i = count - 1; i >= 0; i -= 1) {
+      const id = `n${i}`;
+      ids.unshift(id);
+      const created = addNode(
+        doc,
+        node({ id, binding: 'wired', x: i * 400, y: 0, w: 200, h: 100 }),
+      );
+      created.state = { status: 'stale' };
+    }
+    return { doc, ids };
+  }
+
+  it('takes the nearest nodes, not the first ones', () => {
+    const { doc, ids } = spread(40);
+    const result = schedule(doc, {
+      visible: ids,
+      concurrencyLimit: 5,
+      viewport: VIEWPORT,
+    });
+
+    expect(result.order.length).toBe(5);
+    // n0..n4 are the five closest to a viewport at the origin.
+    expect(new Set(result.order)).toEqual(new Set(['n0', 'n1', 'n2', 'n3', 'n4']));
+  });
+
+  it('follows the viewport when it moves', () => {
+    const { doc, ids } = spread(40);
+    const far = schedule(doc, {
+      visible: ids,
+      concurrencyLimit: 3,
+      viewport: { ...VIEWPORT, x: 12_000 },
+    });
+    // Nodes sit at x = i * 400, so a viewport at 12,000 spanning 1,000 covers
+    // n30 through n32.
+    expect(new Set(far.order)).toEqual(new Set(['n30', 'n31', 'n32']));
+  });
+
+  it('keeps the old behaviour when no viewport is given', () => {
+    const { doc, ids } = spread(40);
+    const result = schedule(doc, { visible: ids, concurrencyLimit: 5 });
+    expect(result.order.length).toBe(5);
+    // Topological order, which for these independent nodes is creation order.
+    expect(result.order).toEqual(['n39', 'n38', 'n37', 'n36', 'n35']);
+  });
+
+  it('does nothing when everything fits', () => {
+    const { doc, ids } = spread(10);
+    const capped = schedule(doc, { visible: ids, concurrencyLimit: 50, viewport: VIEWPORT });
+    const uncapped = schedule(doc, { visible: ids });
+    expect(capped.order).toEqual(uncapped.order);
+  });
+
+  /**
+   * The constraint that makes this more than a sort: a node cannot evaluate
+   * before its inputs.
+   */
+  describe('with dependencies', () => {
+    /** A far chain feeding a near node, plus near independents. */
+    function chainIntoNear() {
+      const doc = createDocument('chain');
+      const ids: NodeID[] = [];
+      // The chain sits far away: c0 -> c1 -> ... -> c5 -> near.
+      for (let i = 0; i < 6; i += 1) {
+        const id = `c${i}`;
+        ids.push(id);
+        addNode(doc, node({ id, binding: 'wired', x: 40_000 + i * 300, y: 0, w: 200, h: 100 })).state = { status: 'stale' };
+      }
+      addNode(doc, node({ id: 'near', binding: 'wired', x: 0, y: 0, w: 200, h: 100 })).state = { status: 'stale' };
+      ids.push('near');
+      for (let i = 1; i < 6; i += 1) wire(doc, `c${i - 1}`, `c${i}`);
+      wire(doc, 'c5', 'near');
+      // Independent near nodes, further out than `near` but nearer than the chain.
+      for (let i = 0; i < 4; i += 1) {
+        const id = `alone${i}`;
+        ids.push(id);
+        addNode(doc, node({ id, binding: 'wired', x: 2_000 + i * 300, y: 0, w: 200, h: 100 })).state = { status: 'stale' };
+      }
+      return { doc, ids };
+    }
+
+    it('brings a near node\'s far ancestors with it', () => {
+      const { doc, ids } = chainIntoNear();
+      const result = schedule(doc, { visible: ids, concurrencyLimit: 7, viewport: VIEWPORT });
+
+      // `near` is closest, so its whole chain comes too — seven slots, exactly.
+      expect(new Set(result.order)).toEqual(
+        new Set(['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'near']),
+      );
+      // And the chain runs in dependency order, not in distance order.
+      expect(result.order).toEqual(['c0', 'c1', 'c2', 'c3', 'c4', 'c5', 'near']);
+    });
+
+    // Selection is by distance; emission is topological. Ranking decides what
+    // is in the batch, the DAG decides what order it runs in.
+    it('emits topologically even though it selected by distance', () => {
+      const { doc, ids } = chainIntoNear();
+      const result = schedule(doc, { visible: ids, concurrencyLimit: 11, viewport: VIEWPORT });
+      const position = new Map(result.order.map((id, i) => [id, i]));
+      for (let i = 1; i < 6; i += 1) {
+        expect(position.get(`c${i}`)).toBeGreaterThan(position.get(`c${i - 1}`) as number);
+      }
+      expect(position.get('near')).toBeGreaterThan(position.get('c5') as number);
+    });
+
+    // Progress toward the thing the analyst is looking at beats finishing
+    // something further away that happens to be cheaper.
+    it('takes part of a chain that does not fit whole, as a prefix', () => {
+      const { doc, ids } = chainIntoNear();
+      const result = schedule(doc, { visible: ids, concurrencyLimit: 3, viewport: VIEWPORT });
+
+      expect(result.order).toEqual(['c0', 'c1', 'c2']);
+      // Not `near` itself — it cannot run yet — and not the cheap independents,
+      // which would have been three finished nodes and no progress at all.
+      expect(result.order).not.toContain('near');
+      expect(result.order.some((id) => id.startsWith('alone'))).toBe(false);
+    });
+
+    it('moves on to the next nearest once a chain is satisfied', () => {
+      const { doc, ids } = chainIntoNear();
+      const result = schedule(doc, { visible: ids, concurrencyLimit: 9, viewport: VIEWPORT });
+      expect(result.order.length).toBe(9);
+      expect(result.order).toContain('near');
+      // Seven for the chain and `near`, then the two nearest independents.
+      expect(result.order).toContain('alone0');
+      expect(result.order).toContain('alone1');
+      expect(result.order).not.toContain('alone2');
+    });
+  });
+
+  // A row of tiles or a grid of cells puts many nodes at the same distance, and
+  // a batch that varied between identical frames would make every downstream
+  // measurement unreproducible.
+  it('is deterministic when distances tie', () => {
+    const doc = createDocument('tie');
+    const ids: NodeID[] = [];
+    for (let i = 0; i < 20; i += 1) {
+      const id = `t${i}`;
+      ids.push(id);
+      // All at the same distance: a ring around the viewport.
+      addNode(doc, node({ id, binding: 'wired', x: 5_000, y: i * 0, w: 200, h: 100 })).state = { status: 'stale' };
+    }
+    const once = schedule(doc, { visible: ids, concurrencyLimit: 6, viewport: VIEWPORT });
+    const twice = schedule(doc, { visible: ids, concurrencyLimit: 6, viewport: VIEWPORT });
+    expect(once.order).toEqual(twice.order);
+    expect(once.order.length).toBe(6);
+  });
+});

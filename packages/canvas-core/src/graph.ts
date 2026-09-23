@@ -13,6 +13,7 @@
  */
 
 import type { CanvasDocument, Edge, NodeID, PicassoNode } from './types.js';
+import { visibleWorldRect, type Viewport } from './viewport.js';
 
 export class CycleError extends Error {
   constructor(readonly cycle: NodeID[]) {
@@ -202,6 +203,19 @@ export interface ScheduleInput {
   /** Cap on concurrently computing nodes (PRD 7.3 target: 200). */
   concurrencyLimit?: number;
   /**
+   * Where the analyst is looking, for the priority the cap needs (PRD 7.3).
+   *
+   * > Simultaneously computing nodes | 200 | Orchestrator concurrency limits
+   * > with **priority by viewport distance**
+   *
+   * Without it the cap takes the first `limit` nodes in topological order,
+   * which on a ten-thousand-node canvas is whichever corner of the graph sorts
+   * first — quite possibly nothing the analyst can see, while the node under
+   * their cursor waits behind two hundred they are not looking at. Supplying
+   * the viewport turns the cap from "some nodes" into "the nearest nodes".
+   */
+  viewport?: Viewport;
+  /**
    * Nodes the analyst currently has hold of (PRD 7.1).
    *
    * > Node drag with 20 downstream nodes — 16ms p50, 40ms p95, **recompute
@@ -281,11 +295,98 @@ export function schedule(doc: CanvasDocument, input: ScheduleInput): ScheduleRes
 
   const limit = input.concurrencyLimit ?? Infinity;
   return {
-    order: limit === Infinity ? wanted : wanted.slice(0, limit),
+    order:
+      limit === Infinity
+        ? wanted
+        : prioritize(doc, adj, wanted, order, limit, input.viewport),
     deferred,
     pressure: deferred.length,
     heldByDrag,
   };
+}
+
+/** World distance from the viewport's centre to a node, zero if it overlaps. */
+function distanceToViewport(node: PicassoNode, vp: Viewport): number {
+  const view = visibleWorldRect(vp);
+  const rect = {
+    minX: node.position.x,
+    minY: node.position.y,
+    maxX: node.position.x + node.size.w,
+    maxY: node.position.y + node.size.h,
+  };
+  const dx = Math.max(view.minX - rect.maxX, rect.minX - view.maxX, 0);
+  const dy = Math.max(view.minY - rect.maxY, rect.minY - view.maxY, 0);
+  return Math.hypot(dx, dy);
+}
+
+/**
+ * Fill the concurrency budget with the nodes nearest the viewport.
+ *
+ * The constraint that makes this more than a sort: a node cannot evaluate
+ * before its inputs, so taking the nearest node means taking its stale
+ * ancestors too. Three things follow.
+ *
+ * **Selection is by distance, emission is topological.** Ranking decides *what*
+ * is in the batch; the DAG decides what order it runs in, and the two are not
+ * the same question. Emitting in distance order would hand the caller a batch
+ * whose second entry needs its fifth.
+ *
+ * **A node that does not fit whole is taken in part.** If the nearest node
+ * needs fifty ancestors and only ten slots remain, ten of those ancestors go in
+ * — that is progress toward the thing the analyst is looking at, and the
+ * alternative is spending the last ten slots on something further away that
+ * happens to be cheaper. Skipping it entirely would also starve it: it would
+ * never fit, because nothing would ever have been computed for it.
+ *
+ * **Ties break on the topological index**, so a batch is deterministic. Two
+ * nodes at the same distance are common — a row of tiles, a grid of cells —
+ * and a batch that varied between identical frames would make every downstream
+ * measurement unreproducible.
+ */
+function prioritize(
+  doc: CanvasDocument,
+  adj: Adjacency,
+  wanted: readonly NodeID[],
+  order: readonly NodeID[],
+  limit: number,
+  viewport?: Viewport,
+): NodeID[] {
+  if (wanted.length <= limit) return [...wanted];
+  if (!viewport) return wanted.slice(0, limit);
+
+  const topoIndex = new Map<NodeID, number>();
+  order.forEach((id, index) => topoIndex.set(id, index));
+
+  const wantedSet = new Set(wanted);
+  const ranked = [...wanted].sort((a, b) => {
+    const da = distanceToViewport(doc.nodes.get(a) as PicassoNode, viewport);
+    const db = distanceToViewport(doc.nodes.get(b) as PicassoNode, viewport);
+    return da - db || (topoIndex.get(a) as number) - (topoIndex.get(b) as number);
+  });
+
+  const chosen = new Set<NodeID>();
+  for (const id of ranked) {
+    if (chosen.size >= limit) break;
+    if (chosen.has(id)) continue;
+
+    // The node and every stale ancestor of it still waiting, in dependency
+    // order, so a partial take is a prefix of what the node needs rather than
+    // an arbitrary slice of it.
+    const chain: NodeID[] = [];
+    const needed = ancestors(doc, [id], adj);
+    for (const candidate of order) {
+      if (candidate === id || (needed.has(candidate) && wantedSet.has(candidate))) {
+        if (!chosen.has(candidate)) chain.push(candidate);
+      }
+    }
+
+    for (const candidate of chain) {
+      if (chosen.size >= limit) break;
+      chosen.add(candidate);
+    }
+  }
+
+  return order.filter((id) => chosen.has(id));
 }
 
 /** Nodes whose every data input is ready, so they can start right now. */

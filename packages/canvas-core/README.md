@@ -41,6 +41,26 @@ suppressed: the subtree goes stale and renders stale, which is the honest state,
 those numbers no longer follow from their inputs. Measured in `canvas-integration`, the
 deferral is the difference between 0.3ms a frame and 131ms.
 
+**The concurrency cap spends its budget on what the analyst can see.** PRD 7.3 caps
+simultaneously computing nodes at 200 "with priority by viewport distance", and the cap
+was taking the first 200 in topological order — on a ten-thousand-node canvas, whichever
+corner of the graph sorts first, quite possibly nothing on screen while the node under the
+cursor waits behind two hundred nobody is looking at.
+
+What makes this more than a sort is that a node cannot evaluate before its inputs, so
+taking the nearest node means taking its stale ancestors too. Three consequences:
+**selection is by distance and emission is topological** — ranking decides what is in the
+batch, the DAG decides what order it runs in, and emitting in distance order would hand the
+caller a batch whose second entry needs its fifth. **A chain that does not fit whole is
+taken as a prefix**, because partial progress toward the thing on screen beats finishing
+something further away that happens to be cheaper — and skipping it would starve it, since
+nothing would ever have been computed for it. **Ties break on topological index**, so a row
+of tiles at equal distance produces the same batch every frame; one that varied would make
+every downstream measurement unreproducible.
+
+Without a viewport the old behaviour stands, so the ranking is something a caller opts into
+by saying where it is looking.
+
 **A template strips more than the parameter that names the ticker.** PRD 3.9's sentence is
 one line — "canvas templates strip instrument bindings and keep structure, so a completed
 analysis re-runs against a new ticker in one action" — and a canvas that has *run* carries
