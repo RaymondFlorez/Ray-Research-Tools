@@ -44,6 +44,13 @@ export interface PricingExports {
     isCall: number,
   ): number;
   pc_discount(rate: number, time: number): number;
+  pc_vol_reset(): void;
+  pc_vol_observe(close: number): void;
+  pc_vol_len(): number;
+  pc_realized_vol(periodsPerYear: number): number;
+  pc_realized_variance(periodsPerYear: number): number;
+  pc_forward_vol(t1: number, v1: number, t2: number, v2: number): number;
+  pc_event_move(tBefore: number, vBefore: number, tAfter: number, vAfter: number): number;
 
   pc_book_reset(): void;
   pc_book_add_leg(
@@ -162,6 +169,8 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_price', 'pc_greek', 'pc_american_fast', 'pc_american_exact', 'pc_american_detail',
   'pc_implied_vol', 'pc_implied_vol_reason', 'pc_norm_cdf',
   'pc_pin_sigmas', 'pc_early_exercise_carry', 'pc_discount',
+  'pc_vol_reset', 'pc_vol_observe', 'pc_vol_len', 'pc_realized_vol', 'pc_realized_variance',
+  'pc_forward_vol', 'pc_event_move',
   'pc_book_reset', 'pc_book_add_leg', 'pc_book_len', 'pc_grid_reprice',
   'pc_grid_data', 'pc_grid_stride', 'pc_grid_axis_ptr', 'pc_grid_axis_len',
   'pc_guard_value',

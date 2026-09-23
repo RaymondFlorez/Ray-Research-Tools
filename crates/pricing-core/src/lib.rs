@@ -29,6 +29,7 @@ pub mod rng;
 pub mod resample;
 pub mod risk;
 pub mod solve;
+pub mod vol;
 pub mod special;
 
 pub use bsm::{Greeks, Inputs, OptionType};

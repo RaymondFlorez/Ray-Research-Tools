@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 193 tests
+cargo test --release                              # 202 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -236,11 +236,11 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,013 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,187 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
-Heston with its calibration, and the pin and early-exercise thresholds. It currently
-reports agreement on every bit.
+Heston with its calibration, the pin and early-exercise thresholds, and the volatility
+analytics. It currently reports agreement on every bit.
 
 **The grid had to be added before the second failure showed up.** Every one of the 2250
 cell values already agreed; one guard figure did not, and only that one. The cells are the

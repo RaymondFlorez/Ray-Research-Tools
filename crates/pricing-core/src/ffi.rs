@@ -203,6 +203,58 @@ pub extern "C" fn pc_discount(rate: f64, time: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
+// Volatility analytics (PRD 5.4).
+//
+// The close series is pushed across one value at a time, like the book and the
+// curve, because the alternative is a pointer into linear memory that the
+// caller has to keep valid across a call it does not control.
+
+thread_local! {
+    static CLOSES: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Clears the close series.
+#[no_mangle]
+pub extern "C" fn pc_vol_reset() {
+    CLOSES.with(|c| c.borrow_mut().clear());
+}
+
+/// Appends one close, in order.
+#[no_mangle]
+pub extern "C" fn pc_vol_observe(close: f64) {
+    CLOSES.with(|c| c.borrow_mut().push(close));
+}
+
+#[no_mangle]
+pub extern "C" fn pc_vol_len() -> i32 {
+    CLOSES.with(|c| c.borrow().len() as i32)
+}
+
+/// Annualized realized volatility over the observed closes.
+#[no_mangle]
+pub extern "C" fn pc_realized_vol(periods_per_year: f64) -> f64 {
+    CLOSES.with(|c| crate::vol::realized_vol(&c.borrow(), periods_per_year))
+}
+
+/// Annualized realized variance over the observed closes.
+#[no_mangle]
+pub extern "C" fn pc_realized_variance(periods_per_year: f64) -> f64 {
+    CLOSES.with(|c| crate::vol::realized_variance(&c.borrow(), periods_per_year))
+}
+
+/// The volatility between two expiries. NaN marks a calendar arbitrage.
+#[no_mangle]
+pub extern "C" fn pc_forward_vol(t1: f64, v1: f64, t2: f64, v2: f64) -> f64 {
+    crate::vol::forward_vol(t1, v1, t2, v2)
+}
+
+/// The move the market attributes to a dated event, as a fraction of spot.
+#[no_mangle]
+pub extern "C" fn pc_event_move(t_before: f64, v_before: f64, t_after: f64, v_after: f64) -> f64 {
+    crate::vol::event_move(t_before, v_before, t_after, v_after)
+}
+
+// ---------------------------------------------------------------------------
 // Grid repricing across the boundary.
 //
 // A 25x15 grid is 375 cells and a 40-leg book is 15,000 repricings. Crossing

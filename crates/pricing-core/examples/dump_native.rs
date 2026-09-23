@@ -45,6 +45,35 @@ fn main() {
         }
     }
 
+    // Volatility analytics (PRD 5.4). The close series is pushed through the
+    // same FFI the browser uses, because a realized vol that disagrees in the
+    // last bit turns a variance premium's sign over at the boundary.
+    ffi::pc_vol_reset();
+    let mut close = 100.0_f64;
+    for i in 0..120 {
+        // A deterministic wobble with a drift: not centred, which is the
+        // convention under test.
+        let step = if i % 3 == 0 { 1.013 } else if i % 3 == 1 { 0.991 } else { 1.004 };
+        close *= step;
+        ffi::pc_vol_observe(close);
+        if i % 20 == 19 {
+            emit(format!("realized({i})"), ffi::pc_realized_vol(252.0));
+            emit(format!("realized_var({i})"), ffi::pc_realized_variance(252.0));
+        }
+    }
+
+    for &t1 in &[0.08, 0.25, 0.5] {
+        for &v1 in &[0.18, 0.3, 0.55] {
+            for &t2 in &[0.75, 1.0, 2.0] {
+                for &v2 in &[0.16, 0.3, 0.44] {
+                    let tag = format!("{t1}/{v1}/{t2}/{v2}");
+                    emit(format!("fwdvol({tag})"), ffi::pc_forward_vol(t1, v1, t2, v2));
+                    emit(format!("evmove({tag})"), ffi::pc_event_move(t1, v1, t2, v2));
+                }
+            }
+        }
+    }
+
     for &is_call in &[1, 0] {
         for &m in &[0.7, 0.85, 1.0, 1.15, 1.3] {
             for &t in &[0.02, 0.25, 1.0, 2.0] {

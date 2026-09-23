@@ -151,6 +151,31 @@ function fmt(value) {
 
 const curves = wasmCurves();
 
+/**
+ * The realized-vol series, through WASM.
+ *
+ * Built once and indexed, because the series is stateful: the values are read
+ * at four points as it grows, and re-pushing it per label would compare a
+ * different window each time.
+ */
+function wasmVol() {
+  const rows = new Map();
+  w.pc_vol_reset();
+  let close = 100;
+  for (let i = 0; i < 120; i += 1) {
+    const step = i % 3 === 0 ? 1.013 : i % 3 === 1 ? 0.991 : 1.004;
+    close *= step;
+    w.pc_vol_observe(close);
+    if (i % 20 === 19) {
+      rows.set(`realized(${i})`, w.pc_realized_vol(252));
+      rows.set(`realized_var(${i})`, w.pc_realized_variance(252));
+    }
+  }
+  return rows;
+}
+
+const volRows = wasmVol();
+
 /** Bond analytics and the Hull-White lattice, through WASM. */
 function wasmBonds() {
   const rows = new Map();
@@ -342,6 +367,15 @@ function recompute(label) {
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
 
+  if (volRows.has(label)) return volRows.get(label);
+
+  match = /^(fwdvol|evmove)\(([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
+  if (match) {
+    const [, kind, t1, v1, t2, v2] = match;
+    const args = [Number(t1), Number(v1), Number(t2), Number(v2)];
+    return kind === 'fwdvol' ? w.pc_forward_vol(...args) : w.pc_event_move(...args);
+  }
+
   match = /^pin\(([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
   if (match) {
     const [, m, v, t] = match;
@@ -395,7 +429,7 @@ for (const [label, nativeBits] of native) {
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
     `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, ` +
-    `Heston with its calibration, and the pin and early-exercise thresholds` +
+    `Heston with its calibration, the pin and early-exercise thresholds, and the vol analytics` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

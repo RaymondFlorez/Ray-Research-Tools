@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 147 tests
+npm test --workspace @picasso/canvas-pricing    # 165 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -261,6 +261,53 @@ condors, boxes and calendars are not**: they all reduce further under the real
 rules and this reports the more conservative number for them. A margin estimate
 that quietly under-reports is worse than one that is visibly rough.
 
+## Vol analytics
+
+PRD 5.4's last bullet — term structure, skew, realized versus implied, the
+variance risk premium, and the event-implied move. Four of the five are a
+subtraction once the inputs are right, and the inputs are where the decisions
+are.
+
+**A variance premium compares two windows that are the same window.** Implied
+variance is forward-looking and realized variance is backward-looking, so
+differencing today's implied against the *trailing* thirty days is a different
+quantity: it says whether volatility rose or fell, not whether it was
+overpriced, and the two have opposite signs often enough that nobody would spot
+the swap. `variancePremium` takes the quote's expiry and refuses a window that
+has not closed yet. A number that cannot be computed yet is not the same as one
+computed from the data lying nearest to hand.
+
+**Realized volatility does not centre its returns.** Over a twenty- or
+sixty-day window the sample mean is a drift estimate whose standard error is
+several times the drift, so subtracting it removes more signal than bias — and
+an implied volatility is a zero-drift parameter, so a centred realized number
+would be differenced against something it does not match.
+
+**Skew is read in delta space, through the engine.** A slope in strike space
+moves when spot moves and when time passes with the smile unchanged, so a
+*history* of it measures the underlier as much as the smile. Every quote's
+delta comes from the same engine that prices everything else, the smile is
+interpolated in delta, and extrapolation is refused: a 25-delta risk reversal
+read off strikes that stop at 35 delta is a number about the interpolation.
+The at-the-money reading is the nearest quoted strike rather than the
+fifty-delta point, because carry puts an equity's at-the-money put nearer
+forty-five and asking for fifty refuses an ordinary smile.
+
+**The term structure flags a calendar arbitrage instead of flattening it.** A
+near expiry carrying more total variance than a far one gives a negative
+forward variance, which no diffusion can produce. PRD 5.4 asks for "an explicit
+flag when the constraints cannot be satisfied, which is itself information", so
+the point carries the flag and no forward volatility at all — clamping it to
+zero would draw a flat patch that reads as a market view.
+
+**The event move is not the straddle.** The straddle's implied move over an
+expiry spanning an event includes the ordinary diffusion over the same days:
+over five trading days on a thirty-vol name that is **4.2 percent by itself**,
+more than half of what a naive reading would call the earnings move. Two
+expiries bracketing the event separate them. Quotes with no event premium raise
+rather than returning zero — "the market prices no move" and "these quotes do
+not say" are different statements.
+
 ## The guard, seen
 
 `apps/canvas-demo/payoff.html` draws the surface and marks every escalated cell with a
@@ -276,11 +323,14 @@ against nothing at all.
 
 ## What is not covered
 
-- **No SVI fit and no arbitrage constraints.** `pc_svi_*` prices a surface it
-  is handed; PRD 5.4's Gatheral-Jacquier no-butterfly and no-calendar checks,
-  and the explicit flag for when they cannot be satisfied, are not implemented.
-- **No vol analytics.** Term structure, skew history, realized-versus-implied
-  and the variance risk premium are named in 5.4 and are not here.
+- **No surface fit.** PRD 5.4 asks for SVI per expiry with the
+  Gatheral-Jacquier no-butterfly and no-calendar constraints, and an explicit
+  flag when they cannot be satisfied. None of it is here: a leg carries its own
+  vol and the grid shifts it. Heston is calibrated to a quoted smile
+  (`heston.ts`), which is a different object and does not stand in for it.
+- **No skew history.** `skew()` reads one smile. PRD 5.4 asks for "skew and
+  its history", and the storage that would make a history is `canvas-data`'s,
+  not this package's.
 - **Margin is an estimate, and a rough one.** Reg-T recognises long premium,
   naked shorts and verticals; every other recognised strategy is margined more
   conservatively than an account would be. Portfolio margin is the CBOE equity
