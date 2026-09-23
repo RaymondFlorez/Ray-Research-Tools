@@ -106,6 +106,7 @@ fallback would make the ladder look more verified than it is.
 | surface → calibration → simulation | The quoted smile is inverted to a Heston parameter set by differential evolution, that set drives the simulation, and the left tail moves *because of it* — a calibration feeding a simulation that ignored it would pass every assertion in the step above. |
 | markets → scenario | A probability curve becomes a weight carrying its resolution criteria, and 6% of unmodelled mass is reported rather than normalized away. |
 | pricing → agents | A draft citing the engine's own vega and delta passes the join; one transcribed digit fails it, and the Scribe is handed the number rather than prose. |
+| agents → core (the answer) | The reconciled draft becomes a TextPad, and the vega in its prose — the number the Rust engine produced — flies the viewport to the grid node that produced it, framed exactly as the command palette would frame it. A draft the join rejected cannot be written at all. |
 | agents (no models) | The Critic still produces assumptions, base rate and sweep with an empty fleet. |
 | guard → export | A positions cell blocks an external bundle and the audit log records the attempt; the same figures export internally with the appendix attached. |
 | sync → core | Two clients derive the *same* cache key for the same node, and a change to any field feeding it — a param, a dataset snapshot, a node version, an edge adapter — moves both. |

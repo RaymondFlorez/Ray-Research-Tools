@@ -19,10 +19,22 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { Shock } from '@picasso/canvas-core';
+import {
+  addNode,
+  createDocument,
+  createNode,
+  flyTo,
+  nodeRect,
+  type Shock,
+  type Viewport,
+} from '@picasso/canvas-core';
 import {
   Blackboard,
+  flyToSource,
+  handleAt,
   joinAndReconcile,
+  materialize,
+  reconcile,
   plan,
   run,
   scope,
@@ -30,6 +42,7 @@ import {
   critique,
   type CellReading,
   type Narrative,
+  type Fact,
   type PlannedStep,
 } from '@picasso/canvas-agents';
 import {
@@ -672,6 +685,110 @@ describe('6 · every number in the answer traces to a cell', () => {
     expect(handed).toEqual([vega]);
     expect(result.ok).toBe(true);
     expect(result.attempts).toBe(2);
+  });
+});
+
+describe("6b · the answer lands on the canvas and its numbers fly to the engine's node", () => {
+  /** The grid node the reprice actually came off, where the analyst can see it. */
+  function canvasWithGrid() {
+    const doc = createDocument('walkthrough');
+    addNode(
+      doc,
+      createNode({
+        id: 'grid-corner',
+        kind: 'ScenarioNode',
+        binding: 'wired',
+        position: { x: 3200, y: 1800 },
+        size: { w: 280, h: 200 },
+      }),
+    );
+    return doc;
+  }
+
+  it('writes the reconciled draft into a TextPad whose vega flies to grid-corner', () => {
+    const corner = bookValue({ spot: 109.02, rate: 0.0491, dividend: 0.004 }, 0);
+    const vega = Math.round(corner.vega);
+    const head = 'Under the shock the book carries vega of ';
+    const vegaText = String(vega);
+    const narrative = { text: `${head}${vegaText}.`, handles: [{ factId: 'f-vega', start: head.length, end: head.length + vegaText.length }] };
+    const facts: Fact[] = [
+      {
+        id: 'f-vega',
+        claim: 'total portfolio vega under the shock',
+        value: { number: vega, unit: 'usd', asof: '2026-03-11' },
+        provenance: { kind: 'cell', nodeId: 'grid-corner', cacheKey: 'k-1', port: 'vega' },
+        confidence: 1,
+        contested: false,
+        assertedBy: 'simulator',
+        at: 1,
+      },
+    ];
+    const cells: CellReading[] = [
+      { nodeId: 'grid-corner', cacheKey: 'k-1', port: 'vega', label: 'vega', value: vega, unit: 'usd', asof: '2026-03-11' },
+    ];
+
+    const doc = canvasWithGrid();
+    const reconciliation = reconcile({ narrative, facts, cells });
+    expect(reconciliation.ok).toBe(true);
+
+    const answer = materialize({
+      narrative,
+      reconciliation,
+      facts,
+      doc,
+      nodeId: 'answer-1',
+      position: { x: 3600, y: 2200 },
+    });
+    expect(answer.node.kind).toBe('TextPad');
+    expect(answer.broken).toEqual([]);
+    expect(answer.sources).toEqual(['grid-corner']);
+
+    // 5.7 step 6: "every number is clickable and flies the viewport to its
+    // source node". The number the analyst clicks is the one the Rust engine
+    // produced, and the place it flies to is where that reprice happened.
+    const viewport: Viewport = { x: 0, y: 0, scale: 1, width: 1440, height: 900 };
+    const clicked = handleAt(answer.handles, head.length + 1)!;
+    expect(clicked.factId).toBe('f-vega');
+    expect(flyToSource(doc, viewport, clicked)).toEqual(
+      flyTo(viewport, nodeRect(doc.nodes.get('grid-corner')!)),
+    );
+  });
+
+  it('will not write a draft the join rejected', () => {
+    const corner = bookValue({ spot: 109.02, rate: 0.0491, dividend: 0.004 }, 0);
+    const vega = Math.round(corner.vega);
+    const head = 'Under the shock the book carries vega of ';
+    const wrong = String(vega + 330);
+    const narrative = { text: `${head}${wrong}.`, handles: [{ factId: 'f-vega', start: head.length, end: head.length + wrong.length }] };
+    const facts: Fact[] = [
+      {
+        id: 'f-vega',
+        claim: 'total portfolio vega under the shock',
+        value: { number: vega, unit: 'usd', asof: '2026-03-11' },
+        provenance: { kind: 'cell', nodeId: 'grid-corner', cacheKey: 'k-1', port: 'vega' },
+        confidence: 1,
+        contested: false,
+        assertedBy: 'simulator',
+        at: 1,
+      },
+    ];
+    const cells: CellReading[] = [
+      { nodeId: 'grid-corner', cacheKey: 'k-1', port: 'vega', label: 'vega', value: vega, unit: 'usd', asof: '2026-03-11' },
+    ];
+    const reconciliation = reconcile({ narrative, facts, cells });
+    expect(reconciliation.ok).toBe(false);
+    // The pipeline's order is 4 then 6, and an order written in a comment is
+    // an order until somebody adds a fast path.
+    expect(() =>
+      materialize({
+        narrative,
+        reconciliation,
+        facts,
+        doc: canvasWithGrid(),
+        nodeId: 'answer-1',
+        position: { x: 3600, y: 2200 },
+      }),
+    ).toThrow(/cannot be written/);
   });
 });
 

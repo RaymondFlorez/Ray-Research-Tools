@@ -13,6 +13,7 @@ safe to wire into anything.
 | `digest.ts` | The return card: four lines, deterministic in shape, composed without a model. |
 | `redteam.ts` | The suite phase 6 exits on. |
 | `context.ts` | PRD 4.6's context builder: the lineage slice, the spatial neighborhood, and the budget that decides what reaches the prompt. |
+| `synthesis.ts` | PRD 5.7 step 6: the reconciled answer becomes a TextPad whose every number flies to the node that produced it. |
 
 ## The exit criterion
 
@@ -200,6 +201,43 @@ README says so rather than repeating the sentence from the PRD.
 A floor larger than its category's content is released rather than held: 80
 reserved for a lineage slice holding one 10-token ancestor leaves 90 for
 evidence under a 100-token ceiling, not 20.
+
+## Synthesis
+
+> **Synthesize.** Answer written into a `TextPad` with inline provenance
+> handles. Every number is clickable and flies the viewport to its source node.
+> — PRD 5.7, step 6
+
+The Reconciler holds the hard part already — text with spans, every numeral
+inside a span, every span naming its fact — so what is left is entirely about
+what cannot happen.
+
+**The TextPad is not reachable from an unreconciled draft.** `materialize`
+takes the `ReconcileResult` and refuses one that did not pass. The pipeline's
+order says the answer is written after reconciliation, and an order written in
+a comment is an order until somebody adds a fast path. Constructing a passing
+result by hand is possible and is the sort of thing a reviewer sees; a
+forgotten call is not.
+
+**A handle resolves to a place, or it is reported as broken.** "Every number is
+clickable" is a claim about every number, so a span whose fact cites a node
+that has left the canvas is listed rather than rendered as a link that does
+nothing. A number nobody can trace should look different from one nobody
+clicked. A `literal` waiver — a form name, a quarter — produces no handle at
+all, since teaching the analyst that handles sometimes do nothing costs more
+than the affordance is worth.
+
+**The viewport is computed at the click.** A handle stores where the source
+*is*, not the viewport that would frame it, and `flyToSource` calls
+`canvas-core`'s own `flyTo` rather than framing a second way. A viewport
+captured at synthesis is wrong as soon as the analyst zooms, and a number that
+lands slightly wrong is worse than one that does not move: it puts them on a
+different node and tells them nothing has changed.
+
+The answer node arrives `loose`. Prose computes nothing and has nothing to
+invalidate; binding it would put it in the scheduler with no work to do. The
+handles are what connect it to the canvas, and they point at nodes that are
+themselves live.
 
 ## What is not here
 

@@ -16,4 +16,5 @@ export * from './coordinator.js';
 export * from './digest.js';
 export * from './query.js';
 export * from './context.js';
+export * from './synthesis.js';
 export * from './redteam.js';
