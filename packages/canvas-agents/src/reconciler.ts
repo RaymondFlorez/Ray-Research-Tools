@@ -104,6 +104,7 @@ export type FindingKind =
   | 'ambiguous_handle'
   | 'dangling_handle'
   | 'unverified_source'
+  | 'note_as_data'
   | 'retracted'
   | 'contested'
   | 'missing_cell'
@@ -161,6 +162,7 @@ const BLOCKING: ReadonlySet<FindingKind> = new Set<FindingKind>([
   'ambiguous_handle',
   'dangling_handle',
   'unverified_source',
+  'note_as_data',
   'retracted',
   'contested',
   'missing_cell',
@@ -306,6 +308,20 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
     }
 
     // fact -> source
+    if (fact.provenance.kind === 'note') {
+      // PRD 3.2.5. The analyst wrote "GM probably 71" in the margin and the
+      // narrative is now reporting 71 as a figure. It traces perfectly — to a
+      // belief. Its own kind, not `unverified_source`, because the remedy is
+      // different: a model number wants checking against a cell, and this one
+      // wants the sentence rewritten to say who thinks so.
+      add(
+        'note_as_data',
+        `${fact.id} traces to analyst note ${fact.provenance.nodeId}; a note is what the analyst believes, not a measured value`,
+        { factId: fact.id, span },
+      );
+      continue;
+    }
+
     if (fact.provenance.kind === 'model') {
       add(
         'unverified_source',

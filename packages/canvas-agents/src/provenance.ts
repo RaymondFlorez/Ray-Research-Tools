@@ -23,7 +23,17 @@ import type { Edge, NodeStatus, PicassoNode, UnverifiedOverride } from '@picasso
 import type { Fact } from './blackboard.js';
 
 export function isUnverified(fact: Fact): boolean {
-  return fact.provenance.kind === 'model';
+  return fact.provenance.kind === 'model' || isAnalystNote(fact);
+}
+
+/**
+ * A fact read off the analyst's own margin (PRD 3.2.5).
+ *
+ * Separated from `isUnverified` because the two are refused differently, and
+ * collapsing them would quietly give notes an override path.
+ */
+export function isAnalystNote(fact: Fact): boolean {
+  return fact.provenance.kind === 'note';
 }
 
 /** What a fact renders as on the canvas. */
@@ -84,6 +94,22 @@ export function checkWire(fact: Fact, target: PicassoNode, edge: Edge): WireDeci
   }
   if (!isUnverified(fact)) return { allowed: true, overridden: false };
   if (!isComputeNode(target)) return { allowed: true, overridden: false };
+  // PRD 3.2.5: "notes are treated as intent and hypothesis, never as data."
+  // Never is the whole rule. A model-sourced number can be approved into
+  // compute by somebody who takes responsibility for it, because somewhere a
+  // model did produce it; a number in the analyst's margin is a belief, and
+  // there is nothing to take responsibility *for*. An override here would say
+  // "I approve treating what I guessed as what I measured", which is the
+  // failure, not the remedy. So this is the one refusal with no override.
+  if (isAnalystNote(fact)) {
+    return {
+      allowed: false,
+      reason:
+        `fact ${fact.id} was read off analyst note ${fact.provenance.kind === 'note' ? fact.provenance.nodeId : ''} ` +
+        `and ${target.id} is a compute node; a note is intent, never data, and this has no override`,
+      needsOverride: false,
+    };
+  }
   if (overrideIsValid(edge.unverifiedOverride)) return { allowed: true, overridden: true };
   return {
     allowed: false,
@@ -117,6 +143,13 @@ export class OverrideLog {
   private readonly records: OverrideRecord[] = [];
 
   approve(fact: Fact, target: PicassoNode, edge: Edge, override: UnverifiedOverride): OverrideRecord {
+    if (isAnalystNote(fact)) {
+      // Refused here as well as in `checkWire`, so the log cannot record an
+      // approval that the gate will go on ignoring. A record of an approval
+      // that never took effect is worse than no record: it reads, later, as
+      // evidence that somebody signed off on the number.
+      throw new Error(`fact ${fact.id} is an analyst note; a note cannot be approved into compute`);
+    }
     if (!overrideIsValid(override)) {
       throw new Error('an override must record an approver, a time and a reason');
     }

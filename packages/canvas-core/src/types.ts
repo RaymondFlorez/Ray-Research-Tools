@@ -193,6 +193,14 @@ export interface Edge {
   adapter?: AdapterKind;
   causal?: CausalEdgeParams;
   /**
+   * PRD 3.2.2. Set on a `reference` edge drawn from a loose object to a node:
+   * the note travels with the node, into the node's context panel and into the
+   * AI context builder, as intent and hypothesis and never as data (3.2.5).
+   * Carried on the edge because the tag is decided when the arrow is drawn and
+   * read much later, by a context builder that never saw the gesture.
+   */
+  contextTag?: 'analyst_note';
+  /**
    * PRD 4.5. Records the analyst's explicit, logged override when an
    * unverified output is wired into a compute node.
    */

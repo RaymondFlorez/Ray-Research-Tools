@@ -3,6 +3,7 @@ import type { Edge, PicassoNode } from '@picasso/canvas-core';
 import type { Fact } from '../src/blackboard.js';
 import {
   auditDocument,
+  isAnalystNote,
   badgeFor,
   checkWire,
   OverrideLog,
@@ -52,6 +53,13 @@ const cellFact: Fact = {
   ...modelFact,
   id: 'f-cell',
   provenance: { kind: 'cell', nodeId: 'agg', cacheKey: 'k1' },
+};
+
+const noteFact: Fact = {
+  ...modelFact,
+  id: 'f-note',
+  claim: 'gross margin, per the margin of the canvas',
+  provenance: { kind: 'note', nodeId: 'note-7' },
 };
 
 describe('the badge', () => {
@@ -148,5 +156,61 @@ describe('the sweep', () => {
     ]);
     const violations = auditDocument(edges, nodes, (e) => facts.get(e.id));
     expect(violations.map((v) => v.edge.id)).toEqual(['e1']);
+  });
+});
+
+describe('a number read off the analyst\'s margin (PRD 3.2.5)', () => {
+  const override = {
+    approvedBy: 'maya',
+    approvedAt: 1_770_000_000_000,
+    reason: 'I wrote it, I stand behind it',
+  };
+
+  it('is unverified, and says which kind of unverified', () => {
+    expect(isAnalystNote(noteFact)).toBe(true);
+    expect(isAnalystNote(modelFact)).toBe(false);
+    expect(badgeFor(noteFact)).toBe('unverified');
+    expect(statusFor(noteFact)).toBe('unverified');
+  });
+
+  it('is refused into compute with no override path at all', () => {
+    const wire = edge('e1', 'mc');
+    wire.unverifiedOverride = override;
+    const decision = checkWire(noteFact, node('mc', 'MonteCarloNode'), wire);
+    expect(decision.allowed).toBe(false);
+    // The difference from every other refusal in this file: there is nothing
+    // the analyst can press. "Never" is the whole rule.
+    expect(decision.allowed === false && decision.needsOverride).toBe(false);
+    expect(decision.allowed === false && decision.reason).toContain('note-7');
+
+    const model = checkWire(modelFact, node('mc', 'MonteCarloNode'), wire);
+    expect(model.allowed).toBe(true);
+  });
+
+  it('still reaches a node a person reads', () => {
+    // A note pinned next to a TextPad is exactly what the analyst asked for.
+    expect(checkWire(noteFact, node('pad', 'TextPad'), edge('e2', 'pad')).allowed).toBe(true);
+    expect(checkWire(noteFact, node('mc', 'MonteCarloNode'), edge('e3', 'mc', 'reference')).allowed).toBe(
+      true,
+    );
+  });
+
+  it('cannot be written into the override log either', () => {
+    const log = new OverrideLog();
+    // A record of an approval the gate goes on ignoring reads, later, as
+    // evidence that somebody signed off on the number.
+    expect(() => log.approve(noteFact, node('mc', 'MonteCarloNode'), edge('e1', 'mc'), override)).toThrow(
+      /analyst note/,
+    );
+    expect(log.all()).toEqual([]);
+  });
+
+  it('is caught by the sweep as well as the gate', () => {
+    const wire = edge('e1', 'mc');
+    wire.unverifiedOverride = override;
+    const nodes = new Map([['mc', node('mc', 'MonteCarloNode')]]);
+    const violations = auditDocument([wire], nodes, () => noteFact);
+    expect(violations).toHaveLength(1);
+    expect(violations[0]!.reason).toContain('never data');
   });
 });

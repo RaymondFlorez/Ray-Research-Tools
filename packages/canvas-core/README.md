@@ -21,7 +21,7 @@ npm run typecheck --workspaces
 | `types.ts` | 3.3, Appendix A | Port types, node, edge, provenance, scenario and shock definitions |
 | `binding.ts` | 3.2.1, 3.2.4 | `loose` / `bound` / `wired` state machine, freeze-to-loose, ambient promote affordance |
 | `ports.ts` | 3.4.5, 3.8 | Connect-time validation, implicit adapters, constraint checks, one-click fixes |
-| `arrows.ts` | 3.2.2 | Drawn-arrow endpoint resolution and annotation-to-data promotion |
+| `arrows.ts` | 3.2.2, 3.2.5 | Drawn-arrow endpoint resolution, the edge a resolved arrow becomes, and annotation-to-data promotion |
 | `graph.ts` | 3.4.1, 3.4.2, 3.4.4 | Topological order, cycle reporting, push invalidation, viewport-scoped scheduling |
 | `cacheKey.ts` | 3.4.3 | Content-addressed cache keys with canonical serialization |
 | `spatial.ts` | 3.1 | R-tree with incremental insert, move and delete |
@@ -121,6 +121,13 @@ is broken:
 - **Two arrow endpoint combinations the PRD table does not list** are resolved the
   conservative way: an arrow from a wired node into a loose object is a drawing, and a
   `bound` endpoint behaves like a loose one, because it exposes no ports.
+- **`edgeFromArrow` is not in the PRD** and exists because a resolution that is
+  never written onto an edge is a decision that lasts as long as the gesture.
+  `resolveDrawnArrow` tags a loose-to-wired arrow `analyst_note`, and the thing
+  that reads that tag is a context builder in another package, minutes or days
+  later, which never saw the arrow being drawn. It refuses to produce a `data`
+  edge for the same reason `promoteAnnotationToData` is separate: there is no
+  path from a drawn arrow to a wired one that skips `connect`'s validation.
 
 ## Not here yet
 

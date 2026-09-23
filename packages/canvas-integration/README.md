@@ -38,7 +38,7 @@ fixture gives every fact its own node. A reading is now identified by node
 *and* port, with the cache key dating it rather than identifying it — and
 `test/reconciler.test.ts` carries the regression.
 
-## Three suites, three seams
+## Five suites, five seams
 
 | Suite | Seam |
 |---|---|
@@ -46,6 +46,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `collaboration.test.ts` | `canvas-sync` ↔ `canvas-core`: what crosses the wire, and what deliberately does not. |
 | `sketch.test.ts` | `canvas-ink` → `canvas-core` → `canvas-sync` → `canvas-render`: a stroke becoming a node. |
 | `degradation.test.ts` | PRD 7.4's ladder, checked against the packages that would actually carry each rung. |
+| `margin.test.ts` | `canvas-ink` → `canvas-core` → `canvas-agents`: a handwritten note reaching the model without becoming data. |
 
 ## The second bug, found the same way
 
@@ -111,6 +112,8 @@ fallback would make the ladder look more verified than it is.
 | sync (computation) | A wired node arriving from a peer carries no cache key and is `stale`; a loose one is `idle`. Removing a node takes its edges atomically, so no peer renders a dangling wire. |
 | ink → core | A hand-drawn box, through the real recognizer, becomes a `bound` node the scheduler picks up and a cache key can be derived from — with the resolved instrument id in the key, not the handwriting. |
 | ink → render | The accepted node draws, with its kind's glyph, nothing culled. |
+| ink → core → agents (the margin) | An unreadable scribble carrying readable words becomes a loose note; the arrow drawn from it to a node puts `analyst_note` on the edge; the context builder reads that tag off the edge without having seen the gesture, and the note reaches the prompt framed as intent. |
+| agents (never as data) | The same note's number is refused into a `MonteCarloNode` *with* a valid override, and a narrative reporting it as a measured figure fails reconciliation with a blocking `note_as_data`. Three modules enforce one sentence from PRD 3.2.5, and each is in a different file from the one the number entered by. |
 | guard → router | A frontier outage still answers every frontier task class, from `open-70b`; an on-device-only fleet classifies but refuses codegen. |
 | guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |

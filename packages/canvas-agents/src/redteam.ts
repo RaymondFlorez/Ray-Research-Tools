@@ -296,6 +296,17 @@ export const INJECTIONS: readonly Injection[] = [
     },
   },
   {
+    id: 'note_promoted_to_datum',
+    description: "a figure from the analyst's own margin note, cited as a computed one",
+    expect: 'note_as_data',
+    apply: (c) => {
+      // The failure PRD 3.2.5 names: the analyst wrote a number down as a
+      // guess, an agent read it out of the context, and the narrative now
+      // reports it with the same face as a repriced leg.
+      factIn(c, 'f-vega').provenance = { kind: 'note', nodeId: 'note-margin-7' };
+    },
+  },
+  {
     id: 'dangling_citation',
     description: 'a handle cites a fact id that is not on the board',
     expect: 'dangling_handle',

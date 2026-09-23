@@ -141,7 +141,7 @@ function pickBest(models: readonly Model[]): Model | undefined {
 
 export interface Assumption {
   nodeId: NodeID;
-  kind: 'hand_set_param' | 'weak_mapping';
+  kind: 'hand_set_param' | 'weak_mapping' | 'analyst_note';
   /** Param name, or the edge id for a mapping. */
   name: string;
   value?: number;
@@ -154,7 +154,14 @@ export interface Assumption {
 export const WEAK_MAPPING_R2 = 0.2;
 
 /**
- * Params the analyst set by hand, and mappings the data barely supports.
+ * Params the analyst set by hand, mappings the data barely supports, and the
+ * analyst's own notes.
+ *
+ * The notes are there because PRD 3.2.5 puts them there: a note "becomes a
+ * statement of what the analyst believes, which the Critic is specifically
+ * instructed to test". A margin note is the purest assumption on the canvas —
+ * it is load-bearing precisely because nothing computed it — and it is the one
+ * the analyst is least likely to list when asked what they assumed.
  *
  * A param counts as hand-set when the node has an input port of that name and
  * nothing is wired into it. That is the definition the canvas can actually
@@ -187,6 +194,25 @@ export function extractAssumptions(doc: CanvasDocument, scope?: readonly NodeID[
         description: `${node.kind} ${node.id}: ${port.name} is set to ${JSON.stringify(value)} by hand, not derived`,
       });
     }
+  }
+
+  // PRD 3.2.2 and 3.2.5: a note the analyst attached to a node by arrow.
+  // Only attached ones, not every loose object on the canvas — the arrow is
+  // the analyst saying this note is about that node, and a critique that
+  // listed the whole margin would bury the four that carry the argument.
+  for (const edge of doc.edges.values()) {
+    if (edge.class !== 'reference' || edge.contextTag !== 'analyst_note') continue;
+    if (inScope && !inScope.has(edge.to.nodeId)) continue;
+    const note = doc.nodes.get(edge.from.nodeId);
+    if (!note || note.binding !== 'loose') continue;
+    const text = note.params.text;
+    if (typeof text !== 'string' || text.trim() === '') continue;
+    assumptions.push({
+      nodeId: edge.to.nodeId,
+      kind: 'analyst_note',
+      name: note.id,
+      description: `${edge.to.nodeId} carries the analyst's note "${text.trim()}", which is a belief and has not been tested`,
+    });
   }
 
   for (const edge of doc.edges.values()) {

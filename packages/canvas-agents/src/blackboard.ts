@@ -46,7 +46,18 @@ export type Provenance =
   | { kind: 'cell'; nodeId: string; cacheKey: string; port?: string }
   | { kind: 'document'; docId: string; page: number; charStart: number; charEnd: number }
   /** Marked UNVERIFIED. See `provenance.ts` for what that forbids. */
-  | { kind: 'model'; traceId: string };
+  | { kind: 'model'; traceId: string }
+  /**
+   * A number an agent read off the analyst's own handwriting (PRD 3.2.5).
+   *
+   * "A handwritten 'GM probably 71' never becomes a number in a computation.
+   * It becomes a statement of what the analyst believes." So this is not a
+   * weaker `cell`: it is a different kind of claim. The number is evidence
+   * about what the analyst thinks, and the thing it is evidence *for* has not
+   * been measured by anybody. `provenance.ts` refuses it into compute with no
+   * override path at all, which no other source gets.
+   */
+  | { kind: 'note'; nodeId: string };
 
 export interface Quantity {
   number: number;

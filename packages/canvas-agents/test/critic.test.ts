@@ -65,6 +65,48 @@ describe('assumption extraction is a graph traversal', () => {
     expect(assumptions.map((a) => a.name)).not.toContain('lookbackDays');
   });
 
+  it("names the analyst's own attached note as an untested belief", () => {
+    // PRD 3.2.5: a note "becomes a statement of what the analyst believes,
+    // which the Critic is specifically instructed to test".
+    const doc = scenario();
+    addNode(
+      doc,
+      createNode({
+        id: 'margin',
+        kind: 'TextPad',
+        binding: 'loose',
+        params: { text: 'the March cut is basically priced' },
+      }),
+    );
+    doc.edges.set('a-margin', {
+      id: 'a-margin',
+      from: { nodeId: 'margin', portId: 'out' },
+      to: { nodeId: 'scn', portId: 'in' },
+      class: 'reference',
+      contextTag: 'analyst_note',
+    });
+    const notes = extractAssumptions(doc).filter((a) => a.kind === 'analyst_note');
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.nodeId).toBe('scn');
+    expect(notes[0]!.description).toContain('the March cut is basically priced');
+  });
+
+  it('leaves the rest of the margin out of it', () => {
+    // Only what the analyst drew an arrow from. A critique that listed every
+    // loose object on the canvas would bury the assumptions that matter.
+    const doc = scenario();
+    addNode(
+      doc,
+      createNode({
+        id: 'elsewhere',
+        kind: 'TextPad',
+        binding: 'loose',
+        params: { text: 'lunch with the PM thursday' },
+      }),
+    );
+    expect(extractAssumptions(doc).filter((a) => a.kind === 'analyst_note')).toEqual([]);
+  });
+
   it('flags a causal mapping the data barely supports', () => {
     const doc = scenario();
     const weak: Edge = {

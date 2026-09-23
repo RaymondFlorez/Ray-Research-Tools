@@ -54,6 +54,23 @@
  * review comment, for the same reason `present()` is the only way to produce a
  * displayable number.
  *
+ * ## A loose note is ingested, and can only arrive as intent
+ *
+ * PRD 3.2.5 sends the analyst's margin into this builder — "the context
+ * builder (section 4.6) ingests recognized text from loose objects in the
+ * spatial neighborhood, tagged `analyst_note`" — under a constraint stated in
+ * bold: **notes are treated as intent and hypothesis, never as data.**
+ *
+ * The laundering path is short and quiet. A loose note is a node, a node has
+ * params, and its recognized text lives in `params.text`, so the obvious
+ * neighborhood loop emits `note-7 TextPad text=GM probably 71` — a param
+ * assignment, in the same serialization as a calibrated one, and the model has
+ * no way to tell which is which. So a loose node carrying text never reaches
+ * `summarizeNode` at all: it is routed through `analystNote`, which is the
+ * only producer of an item with `role: 'intent'` and refuses any node that is
+ * not loose. Laundering a note into data now requires binding it, which is a
+ * thing the analyst does on purpose.
+ *
  * ## The classification travels
  *
  * Everything assembled here is about to become a prompt, and what may be in a
@@ -66,6 +83,7 @@
 import {
   buildAdjacency,
   type CanvasDocument,
+  type Edge,
   type NodeID,
   type ParamValue,
   type PicassoNode,
@@ -99,6 +117,15 @@ export const CATEGORY_ORDER: readonly ContextCategory[] = [
 
 export interface ContextItem {
   category: ContextCategory;
+  /**
+   * What the item is for.
+   *
+   * `data` is something the canvas computed or retrieved. `intent` is
+   * something the analyst believes — a margin note, a stated thesis — which
+   * the Critic tests and nothing computes with. Required rather than defaulted
+   * to `data`, because the default that gets forgotten is the wrong one.
+   */
+  role: 'data' | 'intent';
   /** What goes in the prompt. */
   text: string;
   /** Estimated tokens. Supplied rather than guessed at, so a caller can use a real tokenizer. */
@@ -200,11 +227,82 @@ export function tableContext(
     `${stats ? ` stats(${stats})` : ''} query via ${summary.queryTool}`;
   return {
     category: 'lineage',
+    role: 'data',
     text,
     tokens: approximateTokens(text),
     score,
     classification,
     nodeId,
+  };
+}
+
+/**
+ * The framing every note carries into the prompt.
+ *
+ * Stated on the item rather than once at the top of the context, because a
+ * budget drops items and a single header that survives while the note it
+ * governs does not — or the reverse — is a rule that holds in the common case.
+ */
+export const NOTE_FRAMING = 'Analyst note (intent, hypothesis; never data)';
+
+export class NotALooseNote extends Error {
+  constructor(readonly nodeId: NodeID, detail: string) {
+    super(`${nodeId} cannot enter the context as an analyst note: ${detail}`);
+    this.name = 'NotALooseNote';
+  }
+}
+
+/** The recognized text of a loose object, if it has any. */
+export function noteText(node: PicassoNode): string | undefined {
+  if (node.binding !== 'loose') return undefined;
+  const text = node.params.text;
+  return typeof text === 'string' && text.trim() !== '' ? text : undefined;
+}
+
+/**
+ * The only way a note enters a context (PRD 3.2.5).
+ *
+ * It refuses a node that is not loose, because the whole constraint rests on
+ * the distinction: a bound or wired object is something the canvas computes,
+ * and calling its output a note would let a computed number arrive stripped of
+ * its provenance. It refuses a node with no recognized text for the same
+ * reason in the other direction — a shape with no words is not a statement of
+ * belief, it is a drawing, and inventing a text for it would put something in
+ * the prompt the analyst never wrote.
+ *
+ * `attachedTo` is set when the analyst drew an arrow from the note to a node
+ * (PRD 3.2.2, `contextTag: 'analyst_note'`). It is in the text because the
+ * note means something different next to a different node: "watch the March
+ * expiry" is about whatever it points at.
+ */
+export function analystNote(
+  node: PicassoNode,
+  options: {
+    category?: ContextCategory;
+    score?: number;
+    classification?: ContextClassification;
+    attachedTo?: NodeID;
+    countTokens?: (text: string) => number;
+  } = {},
+): ContextItem {
+  if (node.binding !== 'loose') {
+    throw new NotALooseNote(node.id, `it is ${node.binding}, and a note is a loose object`);
+  }
+  const body = noteText(node);
+  if (body === undefined) {
+    throw new NotALooseNote(node.id, 'it carries no recognized text');
+  }
+  const about = options.attachedTo ? ` on ${options.attachedTo}` : '';
+  const text = `${NOTE_FRAMING}${about} — ${node.id}: ${body}`;
+  const count = options.countTokens ?? approximateTokens;
+  return {
+    category: options.category ?? 'neighborhood',
+    role: 'intent',
+    text,
+    tokens: count(text),
+    score: options.score ?? 0,
+    classification: options.classification ?? 'public',
+    nodeId: node.id,
   };
 }
 
@@ -400,6 +498,19 @@ export interface ContextInput {
  * selection through two routes of different lengths, because the short route is
  * how directly it explains the value.
  */
+/**
+ * A note ranks immediately below the node it is attached to.
+ *
+ * Not equal, because a tie sorts by text and would sometimes put the note
+ * first; not lower by any visible amount, because the point is that the two
+ * are budgeted as one thing.
+ */
+const NOTE_RANK_EPSILON = 1e-6;
+
+function isNoteEdge(edge: Edge): boolean {
+  return edge.class === 'reference' && edge.contextTag === 'analyst_note';
+}
+
 function ancestorDepths(doc: CanvasDocument, roots: ReadonlySet<NodeID>): Map<NodeID, number> {
   const adj = buildAdjacency(doc);
   const depth = new Map<NodeID, number>();
@@ -437,6 +548,7 @@ export function assembleContext(input: ContextInput): AssembledContext {
   const questionText = `Question: ${question}`;
   items.push({
     category: 'question',
+    role: 'data',
     text: questionText,
     tokens: count(questionText),
     score: Number.POSITIVE_INFINITY,
@@ -444,13 +556,17 @@ export function assembleContext(input: ContextInput): AssembledContext {
   });
 
   const selectedSet = new Set<NodeID>();
+  /** Where each node landed, so an attached note can be filed beside it. */
+  const placed = new Map<NodeID, { category: ContextCategory; score: number }>();
   for (const id of selected) {
     const node = doc.nodes.get(id);
     if (!node) continue;
     selectedSet.add(id);
+    placed.set(id, { category: 'question', score: 1 });
     const text = `Selected: ${summarizeNode(node, latest(node))}`;
     items.push({
       category: 'question',
+      role: 'data',
       text,
       tokens: count(text),
       score: 1,
@@ -464,9 +580,11 @@ export function assembleContext(input: ContextInput): AssembledContext {
     if (selectedSet.has(id)) continue;
     const node = doc.nodes.get(id);
     if (!node) continue;
+    placed.set(id, { category: 'lineage', score: 1 / depth });
     const text = `Lineage: ${summarizeNode(node, latest(node))}`;
     items.push({
       category: 'lineage',
+      role: 'data',
       text,
       tokens: count(text),
       // Nearer ancestors first: the thing a value was computed from directly
@@ -477,13 +595,31 @@ export function assembleContext(input: ContextInput): AssembledContext {
     });
   }
 
+  const noted = new Set<NodeID>();
   for (const [id, signal] of Object.entries(input.neighborhood ?? {})) {
     if (selectedSet.has(id)) continue;
     const node = doc.nodes.get(id);
     if (!node) continue;
+    // PRD 3.2.5. A loose object with recognized text is the analyst's margin,
+    // and summarizing it as a node would emit `text=GM probably 71` — a param
+    // assignment indistinguishable from a calibrated one. It goes through
+    // `analystNote` instead, which is the only producer of `role: 'intent'`.
+    if (noteText(node) !== undefined) {
+      noted.add(id);
+      items.push(
+        analystNote(node, {
+          category: 'neighborhood',
+          score: neighborhoodScore(signal),
+          classification: classify(node),
+          countTokens: count,
+        }),
+      );
+      continue;
+    }
     const text = `Nearby: ${summarizeNode(node, latest(node))}`;
     items.push({
       category: 'neighborhood',
+      role: 'data',
       text,
       tokens: count(text),
       score: neighborhoodScore(signal),
@@ -492,10 +628,36 @@ export function assembleContext(input: ContextInput): AssembledContext {
     });
   }
 
+  // Notes the analyst attached by arrow travel with the node they point at
+  // (PRD 3.2.2), so they are filed in that node's own category rather than in
+  // the neighborhood: a note that explains why a param is 1.4 is budgeted
+  // beside the node whose param it is, not behind every other nearby object.
+  // Scored just under it, so the two survive or fall together.
+  for (const edge of doc.edges.values()) {
+    if (!isNoteEdge(edge)) continue;
+    const host = placed.get(edge.to.nodeId);
+    if (!host) continue;
+    const note = doc.nodes.get(edge.from.nodeId);
+    if (!note || noted.has(note.id) || noteText(note) === undefined) continue;
+    noted.add(note.id);
+    items.push(
+      analystNote(note, {
+        category: host.category,
+        score: host.score - NOTE_RANK_EPSILON,
+        classification: classify(note),
+        attachedTo: edge.to.nodeId,
+        countTokens: count,
+      }),
+    );
+  }
+
   for (const [index, note] of (input.memory ?? []).entries()) {
     const text = `Canvas memory: ${note}`;
     items.push({
       category: 'memory',
+      // Pinned canvas memory is the analyst's thesis, constraints and house
+      // view. Those are beliefs, held to the same rule as a margin note.
+      role: 'intent',
       text,
       tokens: count(text),
       score: (input.memory ?? []).length - index,
@@ -507,6 +669,7 @@ export function assembleContext(input: ContextInput): AssembledContext {
     const text = `Evidence: ${found.text}`;
     items.push({
       category: 'evidence',
+      role: 'data',
       text,
       tokens: count(text),
       score: found.score,

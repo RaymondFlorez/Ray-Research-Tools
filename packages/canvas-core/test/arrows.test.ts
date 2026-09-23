@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { promoteAnnotationToData, resolveDrawnArrow } from '../src/arrows.js';
+import { edgeFromArrow, promoteAnnotationToData, resolveDrawnArrow } from '../src/arrows.js';
 import type { Edge } from '../src/types.js';
 import { node, port } from './fixtures.js';
 
@@ -96,5 +96,35 @@ describe('drawn arrows (PRD 3.2.2)', () => {
     expect(wired.to.portId).toBe('in');
     // The original drawing is untouched.
     expect(drawn.class).toBe('annotation');
+  });
+});
+
+describe('the edge a drawn arrow becomes', () => {
+  const from = { nodeId: 'note', portId: 'out' };
+  const to = { nodeId: 'chart', portId: 'in' };
+
+  it('carries the analyst_note tag onto the edge', () => {
+    const noteNode = node({ binding: 'loose' });
+    const chart = node({ inputs: [port('in', 'series')] });
+    const res = resolveDrawnArrow(noteNode, chart);
+    const edge = edgeFromArrow('a1', from, to, res);
+    // Decided when the arrow is drawn, read by a context builder in another
+    // package that never saw the gesture (PRD 3.2.2, 3.2.5).
+    expect(edge.class).toBe('reference');
+    expect(edge.contextTag).toBe('analyst_note');
+  });
+
+  it('leaves the tag off an edge that is only a drawing', () => {
+    const a = node({ binding: 'loose' });
+    const b = node({ binding: 'loose' });
+    const edge = edgeFromArrow('a2', from, to, resolveDrawnArrow(a, b));
+    expect(edge.class).toBe('annotation');
+    expect(edge.contextTag).toBeUndefined();
+  });
+
+  it('refuses to produce a data edge, whatever it is handed', () => {
+    // There is no path from a drawn arrow to a wired one that skips the port
+    // validation in connect().
+    expect(() => edgeFromArrow('a3', from, to, { class: 'data' })).toThrow(/promotion/);
   });
 });

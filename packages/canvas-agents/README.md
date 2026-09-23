@@ -22,7 +22,7 @@ safe to wire into anything.
 Measured by `runRedTeam()`:
 
 ```
-red team: 21/21 caught, 0/8 false positives, 1 documented gap
+red team: 22/22 caught, 0/8 false positives, 1 documented gap
 ```
 
 The second number is the one that makes the first mean anything. A checker
@@ -100,12 +100,34 @@ that can exchange it will exchange it every time.
 
 ## Provenance
 
+A `Fact` carries where its number came from, and two of the four sources are
+refused into compute — differently, which is the point.
+
 `checkWire` refuses a model-sourced fact into a compute node, and refuses it
 again when the override is a bare flag. An override that does not record an
 approver, a time and a reason is indistinguishable from no override, which is
 what it would become after one refactor. `OverrideLog` keeps the record
 outside the edge, because the edge can be deleted and the fact that somebody
 approved a fabricated number into a simulation should outlive it.
+
+A number read off the analyst's own handwriting (`provenance.kind === 'note'`,
+PRD 3.2.5) is refused with **no override path at all** — the only refusal here
+that has none. A model-sourced number can be approved by somebody who takes
+responsibility for it, because somewhere a model did produce it. A number in
+the margin is a belief, and there is nothing to take responsibility *for*: an
+override would say "I approve treating what I guessed as what I measured",
+which is the failure rather than the remedy. `OverrideLog.approve` throws on
+one too, so the log cannot record an approval the gate goes on ignoring — a
+record of an approval that never took effect reads, later, as evidence that
+somebody signed off on the number.
+
+The Reconciler gives it its own finding kind rather than reusing
+`unverified_source`, because the remedy is different: a model number wants
+checking against a cell, and this one wants the sentence rewritten to say who
+thinks so. The Critic picks the same notes up from the other end and lists them
+as assumptions — a margin note is the purest assumption on a canvas, load-bearing
+precisely because nothing computed it, and the one the analyst is least likely
+to name when asked what they assumed.
 
 ## The digest
 
@@ -138,6 +160,22 @@ selection, so a slice that has to be cut is cut at the far end.
 put a table in a context and it cannot produce rows, because it is never given
 any: it takes a schema, summary statistics and the handle of the tool that can
 query the table. A 2.5-million-row table enters the prompt as **25 tokens**.
+
+**A note can only arrive as intent.** PRD 3.2.5 sends the analyst's margin
+into this builder and constrains it in bold: notes are intent and hypothesis,
+**never data**. The laundering path is short and quiet — a loose note is a
+node, a node has params, and its recognized text sits in `params.text`, so the
+obvious neighborhood loop emits `note-7 TextPad text=GM probably 71`, a param
+assignment in the same serialization as a calibrated one. So a loose node
+carrying text never reaches `summarizeNode`: it is routed through
+`analystNote`, the only producer of an item with `role: 'intent'`, which
+refuses any node that is not loose. Laundering a note into data now requires
+binding it, which is something the analyst does on purpose.
+
+Notes the analyst attached by arrow (PRD 3.2.2's `analyst_note` tag, carried on
+the edge by `canvas-core`) are filed in the category of the node they point at
+rather than in the neighborhood, so a note explaining why a param is 1.4 is
+budgeted beside that node instead of behind every other nearby object.
 
 **The classification travels.** Every item carries the classification of what
 it came from and the assembled context reports the most sensitive one *that

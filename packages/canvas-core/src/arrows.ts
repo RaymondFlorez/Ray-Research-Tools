@@ -169,3 +169,31 @@ export function promoteAnnotationToData(edge: Edge, promotion: ArrowPromotion): 
   else delete next.adapter;
   return next;
 }
+
+/**
+ * The edge a resolved arrow becomes.
+ *
+ * `resolveDrawnArrow` decides a class and a tag and neither survives unless
+ * something writes them onto an edge. The `analyst_note` tag in particular is
+ * read by a context builder in another package, minutes or days later, which
+ * never saw the gesture that produced it — so losing it here would make PRD
+ * 3.2.2's "the note travels with the node" true only of the session that drew
+ * it.
+ *
+ * A `data` class is refused: `resolveDrawnArrow` never returns one, and a
+ * caller that constructs the resolution by hand does not get to skip
+ * `connect`'s validation by routing around it.
+ */
+export function edgeFromArrow(
+  id: string,
+  from: { nodeId: string; portId: string },
+  to: { nodeId: string; portId: string },
+  resolution: DrawnArrowResolution,
+): Edge {
+  if (resolution.class === 'data') {
+    throw new Error('a drawn arrow never becomes a data edge without promotion; use connect()');
+  }
+  const edge: Edge = { id, from, to, class: resolution.class };
+  if (resolution.contextTag) edge.contextTag = resolution.contextTag;
+  return edge;
+}

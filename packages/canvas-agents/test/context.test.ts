@@ -11,6 +11,10 @@ import {
 } from '@picasso/canvas-core';
 import {
   ATTENTION_BONUS,
+  NOTE_FRAMING,
+  NotALooseNote,
+  analystNote,
+  noteText,
   CATEGORY_ORDER,
   RECENCY_HALF_LIFE_MS,
   approximateTokens,
@@ -42,6 +46,24 @@ function n(
     })),
     params,
   });
+}
+
+/** A loose object carrying recognized text: the analyst's margin. */
+function note(id: string, text: string): PicassoNode {
+  return createNode({ id, kind: 'TextPad', binding: 'loose', params: { text } });
+}
+
+/** PRD 3.2.2 row 5: an arrow from a loose object to a node. */
+function attach(doc: CanvasDocument, from: NodeID, to: NodeID): Edge {
+  const edge: Edge = {
+    id: `${from}~${to}`,
+    from: { nodeId: from, portId: 'out' },
+    to: { nodeId: to, portId: 'in' },
+    class: 'reference',
+    contextTag: 'analyst_note',
+  };
+  doc.edges.set(edge.id, edge);
+  return edge;
 }
 
 function wire(doc: CanvasDocument, from: NodeID, to: NodeID): Edge {
@@ -228,7 +250,7 @@ function item(
   score: number,
   classification: ContextItem['classification'] = 'public',
 ): ContextItem {
-  return { category, text, tokens, score, classification };
+  return { category, role: 'data', text, tokens, score, classification };
 }
 
 describe('the token budget', () => {
@@ -437,5 +459,133 @@ describe('assembleContext', () => {
       'Canvas memory: Thesis: memory pricing turns in H2.',
       'Canvas memory: Constraint: no single name over 5%.',
     ]);
+  });
+});
+
+describe('the analyst margin (PRD 3.2.5)', () => {
+  it('never renders a note as a param assignment', () => {
+    const doc = chain();
+    addNode(doc, note('margin', 'GM probably 71'));
+    const assembled = assembleContext({
+      doc,
+      question: 'q',
+      selected: ['beta'],
+      neighborhood: { margin: { sinceEditMs: 0, seenThisSession: true, distance: 100 } },
+      policy: roomy,
+    });
+    const item = assembled.items.find((i) => i.nodeId === 'margin')!;
+    // The laundering path: `margin TextPad text=GM probably 71`, which reads
+    // exactly like a calibrated param.
+    expect(item.text).not.toContain('text=GM probably 71');
+    expect(item.text).toContain(NOTE_FRAMING);
+    expect(item.text).toContain('GM probably 71');
+    expect(item.role).toBe('intent');
+  });
+
+  it('is the only producer of an intent item', () => {
+    const doc = chain();
+    addNode(doc, note('margin', 'watch the March expiry'));
+    attach(doc, 'margin', 'beta');
+    const assembled = assembleContext({
+      doc,
+      question: 'q',
+      selected: ['beta'],
+      memory: ['Thesis: memory pricing turns in H2.'],
+      evidence: [{ text: 'a broker note', score: 1 }],
+      policy: roomy,
+    });
+    const intent = assembled.items.filter((i) => i.role === 'intent');
+    // The note and the pinned memory: both are what the analyst believes.
+    expect(intent.map((i) => i.category).sort()).toEqual(['memory', 'question']);
+    for (const i of assembled.items.filter((i) => i.role === 'data')) {
+      expect(i.text).not.toContain(NOTE_FRAMING);
+    }
+  });
+
+  it('refuses a node that is not loose, so a computed value cannot pose as a belief', () => {
+    const computed = createNode({
+      id: 'px',
+      kind: 'TextPad',
+      binding: 'wired',
+      params: { text: 'revenue 71' },
+    });
+    expect(() => analystNote(computed)).toThrow(NotALooseNote);
+    expect(noteText(computed)).toBeUndefined();
+  });
+
+  it('refuses a loose shape with no recognized text, rather than inventing one', () => {
+    const shape = createNode({ id: 'blob', kind: 'InkLayer', binding: 'loose' });
+    expect(() => analystNote(shape)).toThrow(NotALooseNote);
+    expect(() => analystNote(note('empty', '   '))).toThrow(NotALooseNote);
+  });
+
+  it('still summarizes a loose object that carries no text', () => {
+    const doc = chain();
+    addNode(doc, createNode({ id: 'blob', kind: 'InkLayer', binding: 'loose' }));
+    const assembled = assembleContext({
+      doc,
+      question: 'q',
+      selected: ['beta'],
+      neighborhood: { blob: { sinceEditMs: 0, seenThisSession: false, distance: 10 } },
+      policy: roomy,
+    });
+    const item = assembled.items.find((i) => i.nodeId === 'blob')!;
+    expect(item.role).toBe('data');
+    expect(item.text).toContain('Nearby:');
+  });
+
+  it('travels with the node the arrow attaches it to', () => {
+    const doc = chain();
+    addNode(doc, note('why', 'dealer gamma flips near 1150'));
+    attach(doc, 'why', 'factor');
+    const assembled = assembleContext({ doc, question: 'q', selected: ['beta'], policy: roomy });
+    const item = assembled.items.find((i) => i.nodeId === 'why')!;
+    // Filed with `factor`, the node it points at, not behind the neighborhood.
+    expect(item.category).toBe('lineage');
+    expect(item.text).toContain('on factor');
+    const factor = assembled.items.find((i) => i.nodeId === 'factor')!;
+    expect(item.score).toBeLessThan(factor.score);
+    expect(assembled.items.indexOf(item)).toBe(assembled.items.indexOf(factor) + 1);
+  });
+
+  it('is budgeted with its node rather than behind every other category', () => {
+    const doc = chain();
+    addNode(doc, note('why', 'dealer gamma flips near 1150'));
+    attach(doc, 'why', 'beta');
+    const wide = assembleContext({ doc, question: 'q', selected: ['beta'], policy: roomy });
+    const need = wide.items
+      .filter((i) => i.category === 'question')
+      .reduce((a, i) => a + i.tokens, 0);
+    const tight = assembleContext({
+      doc,
+      question: 'q',
+      selected: ['beta'],
+      evidence: Array.from({ length: 20 }, (_, i) => ({ text: `chunk ${i}`, score: 1000 })),
+      policy: { ceiling: need },
+    });
+    expect(tight.items.map((i) => i.nodeId)).toContain('why');
+    expect(tight.byCategory.evidence).toBe(0);
+  });
+
+  it('does not list a note twice when it is both attached and nearby', () => {
+    const doc = chain();
+    addNode(doc, note('why', 'dealer gamma flips near 1150'));
+    attach(doc, 'why', 'beta');
+    const assembled = assembleContext({
+      doc,
+      question: 'q',
+      selected: ['beta'],
+      neighborhood: { why: { sinceEditMs: 0, seenThisSession: true, distance: 5 } },
+      policy: roomy,
+    });
+    expect(assembled.items.filter((i) => i.nodeId === 'why')).toHaveLength(1);
+  });
+
+  it('ignores a note attached to a node that is not in the context', () => {
+    const doc = chain();
+    addNode(doc, note('why', 'about the conclusion, not the input'));
+    attach(doc, 'why', 'conclusion');
+    const assembled = assembleContext({ doc, question: 'q', selected: ['beta'], policy: roomy });
+    expect(assembled.items.map((i) => i.nodeId)).not.toContain('why');
   });
 });
