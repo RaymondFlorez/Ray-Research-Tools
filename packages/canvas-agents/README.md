@@ -13,6 +13,7 @@ safe to wire into anything.
 | `digest.ts` | The return card: four lines, deterministic in shape, composed without a model. |
 | `redteam.ts` | The suite phase 6 exits on. |
 | `context.ts` | PRD 4.6's context builder: the lineage slice, the spatial neighborhood, and the budget that decides what reaches the prompt. |
+| `agentNode.ts` | PRD 3.3's AgentNode: a scheduled agent that writes only inside its subgraph, skips runs its budget cannot pay for, and catches up once. |
 | `evidence.ts` | PRD 3.3's EvidenceNode: excerpts whose anchors must land on the text they quote, with stance labels and the absence of dissent stated. |
 | `synthesis.ts` | PRD 5.7 step 6: the reconciled answer becomes a TextPad whose every number flies to the node that produced it. |
 
@@ -239,6 +240,22 @@ The answer node arrives `loose`. Prose computes nothing and has nothing to
 invalidate; binding it would put it in the scheduler with no work to do. The
 handles are what connect it to the canvas, and they point at nodes that are
 themselves live.
+
+## Persistent agents
+
+An `AgentNode` (PRD 3.3) is "a persistent agent bound to a subgraph with a
+role, budget, and schedule". It runs when nobody is watching, so every one of
+those four nouns is implemented as a limit.
+
+**Bound** means its only handle on the canvas is an `AgentScope`: it reads its
+subgraph and what that subgraph is computed from, writes only its own nodes,
+and gets copies on read. A volatility monitor that decides the portfolio node
+upstream needs changing is refused. **Budget** is a ceiling per UTC month, and a
+run it cannot pay for is skipped with the reason recorded — not run on a cheaper
+model under the same name. **Schedule** does not backfill: an hourly agent back
+from a 72-hour weekend runs once and reports 71 skipped, rather than spending
+three days' budget in a minute on seventy-two answers to a question only the
+last one is about.
 
 ## Evidence
 
