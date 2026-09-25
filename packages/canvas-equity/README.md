@@ -106,7 +106,7 @@ The regression is four lines. The value is in the three ways an exposure lies:
 A custom factor gets no special treatment: an analyst who builds "quality" out
 of the same inputs as RMW sees a VIF that says so.
 
-## Two nodes that refuse to compute
+## Four scoring nodes that refuse to compute
 
 `ERQ12Node` and `AXM8Node` are named in 5.2 as platform rubrics — ERQ12 "from
 LEDGER" — with no definition anywhere available: no inputs, no components, no
@@ -118,6 +118,14 @@ A rubric invented to fill the gap would carry the name of a real house
 methodology while computing something nobody agreed to. An analyst reading
 "ERQ12: 7.4" would have no way to know it was fabricated, which is strictly
 worse than a gap.
+
+PRD 3.3 lists two more under `ScoringNode` — "a platform framework (AXM-8,
+ERQ-12, SIV, BPS)" — and defines those nowhere either; not even the acronyms
+are expanded. They had no node at all, which is quieter than a refusal and
+worse: a canvas referencing one had nothing to load. `sivNode` and `bpsNode`
+refuse on the same terms, and `scoringNode(id, framework)` covers all four
+with an exhaustive switch, so a framework that one day gains a specification
+has to be wired in on purpose.
 
 ## What is not here
 

@@ -190,3 +190,39 @@ export function erq12Node(id: string): PicassoNode {
 export function axm8Node(id: string): PicassoNode {
   return unspecifiedRubric(id, 'AXM8', 'a platform scoring node named in PRD 5.2');
 }
+
+/**
+ * SIV and BPS: the other two frameworks PRD 3.3 lists under `ScoringNode` —
+ * "instantiates a platform framework (AXM-8, ERQ-12, SIV, BPS) as a computed
+ * rubric" — and, like the first two, defines nowhere. Neither the acronyms'
+ * expansions nor their inputs appear in the specification, so they refuse on
+ * the same terms rather than being guessed at from their initials.
+ */
+export function sivNode(id: string): PicassoNode {
+  return unspecifiedRubric(id, 'SIV', 'a platform framework named in PRD 3.3');
+}
+
+export function bpsNode(id: string): PicassoNode {
+  return unspecifiedRubric(id, 'BPS', 'a platform framework named in PRD 3.3');
+}
+
+/** Every framework PRD 3.3 names for a `ScoringNode`, and none of them specified. */
+export const NAMED_FRAMEWORKS = ['AXM8', 'ERQ12', 'SIV', 'BPS'] as const;
+
+/**
+ * A `ScoringNode` for a named framework. Every one of them refuses today, and
+ * the switch is exhaustive so a framework that gains a specification has to be
+ * wired here on purpose rather than falling through to a default.
+ */
+export function scoringNode(id: string, framework: (typeof NAMED_FRAMEWORKS)[number]): PicassoNode {
+  switch (framework) {
+    case 'AXM8':
+      return axm8Node(id);
+    case 'ERQ12':
+      return erq12Node(id);
+    case 'SIV':
+      return sivNode(id);
+    case 'BPS':
+      return bpsNode(id);
+  }
+}

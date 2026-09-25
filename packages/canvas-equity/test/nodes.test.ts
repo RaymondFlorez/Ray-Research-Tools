@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  NAMED_FRAMEWORKS,
   UNSPECIFIED_RUBRIC,
   axm8Node,
+  bpsNode,
+  scoringNode,
+  sivNode,
   equityTile,
   erq12Node,
   estimateRevisionChart,
@@ -56,7 +60,7 @@ describe('the rubric nodes the PRD names but does not define', () => {
   // methodology while computing something nobody agreed to. An analyst reading
   // "ERQ12: 7.4" would have no way to know it was fabricated.
   it('load, and refuse to compute, and say exactly what is missing', () => {
-    for (const node of [erq12Node('e'), axm8Node('a')]) {
+    for (const node of [erq12Node('e'), axm8Node('a'), sivNode('s'), bpsNode('b')]) {
       expect(node.state.status).toBe('error');
       expect(node.state.error?.code).toBe(UNSPECIFIED_RUBRIC);
       expect(node.state.error?.retriable).toBe(false);
@@ -68,5 +72,17 @@ describe('the rubric nodes the PRD names but does not define', () => {
 
   it('name their source so the gap is attributable', () => {
     expect(erq12Node('e').state.error?.message).toContain('LEDGER');
+    expect(sivNode('s').state.error?.message).toContain('PRD 3.3');
+  });
+
+  it('cover every framework PRD 3.3 names for a ScoringNode, and compute none', () => {
+    // AXM-8, ERQ-12, SIV, BPS: four names, no definitions.
+    expect([...NAMED_FRAMEWORKS]).toEqual(['AXM8', 'ERQ12', 'SIV', 'BPS']);
+    for (const framework of NAMED_FRAMEWORKS) {
+      const node = scoringNode(`n-${framework}`, framework);
+      expect(node.kind).toBe('ScoringNode');
+      expect(node.params.rubric).toBe(framework);
+      expect(node.state.error?.code).toBe(UNSPECIFIED_RUBRIC);
+    }
   });
 });

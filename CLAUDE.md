@@ -54,9 +54,10 @@ to follow rather than work around:
 section stating what it does not cover. Keep it accurate; do not quietly widen
 a claim.
 
-**Two nodes deliberately refuse to compute.** `ERQ12Node` and `AXM8Node` in
-`canvas-equity/src/nodes.ts` report `unspecified_rubric` because the PRD names
-them and defines neither. Do not invent a formula for them.
+**Four scoring nodes deliberately refuse to compute.** `ERQ12Node`,
+`AXM8Node`, and the SIV and BPS frameworks in `canvas-equity/src/nodes.ts`
+report `unspecified_rubric` because the PRD names them and defines none. Do not
+invent a formula for any of them.
 
 ## Testing
 
