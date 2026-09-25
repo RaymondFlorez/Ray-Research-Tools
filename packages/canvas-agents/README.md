@@ -13,6 +13,7 @@ safe to wire into anything.
 | `digest.ts` | The return card: four lines, deterministic in shape, composed without a model. |
 | `redteam.ts` | The suite phase 6 exits on. |
 | `context.ts` | PRD 4.6's context builder: the lineage slice, the spatial neighborhood, and the budget that decides what reaches the prompt. |
+| `evidence.ts` | PRD 3.3's EvidenceNode: excerpts whose anchors must land on the text they quote, with stance labels and the absence of dissent stated. |
 | `synthesis.ts` | PRD 5.7 step 6: the reconciled answer becomes a TextPad whose every number flies to the node that produced it. |
 
 ## The exit criterion
@@ -238,6 +239,23 @@ The answer node arrives `loose`. Prose computes nothing and has nothing to
 invalidate; binding it would put it in the scheduler with no work to do. The
 handles are what connect it to the canvas, and they point at nodes that are
 themselves live.
+
+## Evidence
+
+An `EvidenceNode` (PRD 3.3) is "document excerpts with span anchors and stance
+labels", and 5.7's subtext query ends by writing one. `createEvidenceNode`
+compares every excerpt's text with its document at its anchor, exactly, and
+refuses a mismatch with what the document actually says there. A model quoting
+a filing paraphrases without meaning to — drops a "not", tidies a clause — and
+an excerpt whose anchor points at the real sentence while its text says
+something else is a paraphrase wearing a citation. It is the rule `metric()` in
+`canvas-equity` and the Reconciler's document check already apply, at the point
+the excerpt is made.
+
+A node with supporting excerpts and none contradicting says so in words — "no
+contradicting excerpt was found; that is not the same as none existing" —
+because an evidence card that reads as settled when nobody looked is what the
+Critic exists to catch.
 
 ## What is not here
 
