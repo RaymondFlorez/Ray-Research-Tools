@@ -13,3 +13,4 @@ export * from './canvas.js';
 export * from './transport.js';
 export * from './presence.js';
 export * from './snapshot.js';
+export * from './encryptedStore.js';
