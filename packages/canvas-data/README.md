@@ -16,6 +16,7 @@ npm test --workspace @picasso/canvas-data
 | `conflate.ts` | 7.3 | Server-side conflation to 4Hz per series, with per-field combine semantics |
 | `entitlements.ts` | 7.2 | Four data classes, per-user entitlement, and the two independent egress controls |
 | `timescrub.ts` | 3.8, 3.9 | Snapshot catalog and the canvas asof, propagated into provenance and cache keys |
+| `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 
 ## Scope: what this is and is not
 
@@ -205,3 +206,56 @@ round lot from a fingerprint. The two are checked against each other in
 `canvas-integration/test/egress-parity.test.ts`: nothing the guard proxy blocks may be
 passed here. They are allowed to differ in the other direction, and they do on exactly one
 case — see that file for why it cannot be resolved.
+
+## Three detectors, because they see three different things
+
+PRD 3.6's anomaly halos run "robust z-score on rolling median absolute
+deviation, changepoint detection (BOCPD), and a seasonal residual model (STL)".
+Each is blind to what another catches, and the tests show it rather than assert
+it: a three-sigma level shift that stays is invisible to a four-sigma robust z
+and caught by BOCPD twenty times in twenty; an overnight hour printed at the
+daytime level is inside the series' range, silent to the robust z, and 37
+robust sd out on the STL remainder. Every family reports severity in robust
+standard deviations, because the digest ranks across them.
+
+Measured on stationary Gaussian noise, which is what each would see between
+events:
+
+| Detector | False firings |
+|---|---|
+| Robust z, 60-point window, 4 sd | 29 in 40,000 points |
+| BOCPD, expected run 250, 10-point lag | 27 in 40,000 points |
+| STL remainder, 4 sd | 19 in 14,400 points |
+
+The robust z is roughly ten times what Gaussian theory predicts at four sd,
+because a MAD over sixty points is itself noisy and fattens the score's tails.
+The figure is stated rather than tuned away.
+
+Two defaults were changed by measurement.
+
+**BOCPD's lag.** Five points missed a three-sigma shift outright: the posterior
+needs a few points in the new regime to be convinced, and by then the new run
+is already five long and outside the window it is looked for in. At ten, every
+shift was caught within five points. Under a constant hazard `P(r_t = 0)` is the
+hazard at every step and says nothing, so the score is the mass on *short* run
+lengths — and the change location is the likeliest short run, not the likeliest
+run, which at the crossing is still the old one and scored a three-sigma shift
+at 0.67.
+
+**STL's seasonal span.** At the paper's minimum of 7, the robustness iterations
+manufactured outliers from clean noise: 26 of 720 points beyond four robust sd,
+against none without them. A downweighted point drops out of its subseries fit,
+its residual grows, and it is downweighted harder. A span near the number of
+cycles breaks the loop — one flagged point — and is the default. Robust STL is
+still the right choice: a 15-unit spike leaks 0.38 into every other day's
+seasonal at its hour without the robustness iterations, and nothing with them.
+
+STL is a batch decomposition, smoothed on both sides of each point, so a firing
+anywhere but the last index used points that arrived after it and carries
+`retrospective`. BOCPD scores a firing only from points that had arrived, and a
+test changes everything after one to confirm it.
+
+Not covered: the detectors are functions over an array, not the `alert-engine`
+service that runs them over every watched series; there is no per-node
+threshold store, and the live wash's z-threshold in `canvas-render` does not
+yet read these scores.
