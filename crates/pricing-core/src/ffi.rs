@@ -203,6 +203,82 @@ pub extern "C" fn pc_discount(rate: f64, time: f64) -> f64 {
 }
 
 // ---------------------------------------------------------------------------
+// SVI per expiry (PRD 5.4).
+
+thread_local! {
+    static SVI_QUOTES: RefCell<Vec<crate::svi::SliceQuote>> = const { RefCell::new(Vec::new()) };
+    static SVI_RESULT: RefCell<[f64; 18]> = const { RefCell::new([f64::NAN; 18]) };
+}
+
+#[no_mangle]
+pub extern "C" fn pc_svi_reset() {
+    SVI_QUOTES.with(|q| q.borrow_mut().clear());
+}
+
+/// One quote, as a desk has it: strike, forward, implied vol, years. The log
+/// and the square happen here, so both targets agree on the slice they fit.
+#[no_mangle]
+pub extern "C" fn pc_svi_quote(strike: f64, forward: f64, vol: f64, time: f64) {
+    SVI_QUOTES.with(|q| {
+        q.borrow_mut().push(crate::svi::SliceQuote {
+            k: libm::log(strike / forward),
+            w: vol * vol * time,
+        })
+    });
+}
+
+/// Fits the accumulated slice. 1 on success, 0 when there is no fit to make.
+///
+/// Results by `pc_svi_result(which)`: 0-4 the constrained a, b, rho, m, sigma;
+/// 5 its vol RMSE; 6 its minimum density; 7 where; 8-12 the free parameters;
+/// 13 its RMSE; 14 its minimum density; 15 where; 16 the arbitrage cost in
+/// vol; 17 the flag, 1 when the quotes cannot be fitted without arbitrage.
+#[no_mangle]
+pub extern "C" fn pc_svi_fit(time: f64) -> i32 {
+    let result = SVI_QUOTES.with(|q| crate::svi::fit_slice(&q.borrow(), time));
+    SVI_RESULT.with(|slot| {
+        let mut out = slot.borrow_mut();
+        match result {
+            None => {
+                *out = [f64::NAN; 18];
+                0
+            }
+            Some(r) => {
+                let c = r.constrained;
+                let f = r.free;
+                *out = [
+                    c.params.a, c.params.b, c.params.rho, c.params.m, c.params.sigma,
+                    c.rmse_vol, c.min_g, c.min_g_at,
+                    f.params.a, f.params.b, f.params.rho, f.params.m, f.params.sigma,
+                    f.rmse_vol, f.min_g, f.min_g_at,
+                    r.arbitrage_cost_vol,
+                    if r.quotes_admit_arbitrage { 1.0 } else { 0.0 },
+                ];
+                1
+            }
+        }
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn pc_svi_result(which: i32) -> f64 {
+    SVI_RESULT.with(|slot| slot.borrow().get(which as usize).copied().unwrap_or(f64::NAN))
+}
+
+/// Total variance (`which` 0) or the density function `g` (1) of a slice at `k`.
+#[no_mangle]
+pub extern "C" fn pc_svi_eval(a: f64, b: f64, rho: f64, m: f64, sigma: f64, k: f64, which: i32) -> f64 {
+    let svi = crate::svi::Svi { a, b, rho, m, sigma };
+    if which == 1 { svi.g(k) } else { svi.w(k) }
+}
+
+/// Log-moneyness, for a caller that has to place a strike on a fitted slice.
+#[no_mangle]
+pub extern "C" fn pc_log_moneyness(strike: f64, forward: f64) -> f64 {
+    libm::log(strike / forward)
+}
+
+// ---------------------------------------------------------------------------
 // Volatility analytics (PRD 5.4).
 //
 // The close series is pushed across one value at a time, like the book and the

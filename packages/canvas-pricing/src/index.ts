@@ -25,3 +25,4 @@ export * from './strategy.js';
 export * from './risk.js';
 export * from './vol.js';
 export * from './aggregate.js';
+export * from './svi.js';

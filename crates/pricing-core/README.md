@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 202 tests
+cargo test --release                              # 209 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -236,11 +236,11 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,213 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,251 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
-Heston with its calibration, the pin and early-exercise thresholds, and the volatility
-analytics. It currently reports agreement on every bit.
+Heston with its calibration, the pin and early-exercise thresholds, the volatility
+analytics, and two complete SVI fits. It currently reports agreement on every bit.
 
 **The grid had to be added before the second failure showed up.** Every one of the 2250
 cell values already agreed; one guard figure did not, and only that one. The cells are the
@@ -554,3 +554,44 @@ in the two cases. And the carry comparison degenerates the way the textbook
 says it should — a call on a non-dividend payer has negative carry at every
 strike and every maturity, so it is never flagged, where a rule phrased as "deep
 in the money and close to expiry" would flag it constantly.
+
+## SVI, and what "the constraints cannot be satisfied" can mean
+
+PRD 5.4 asks for SVI per expiry under the Gatheral-Jacquier conditions, "and an
+explicit flag when the constraints cannot be satisfied, which is itself
+information." `svi.rs` fits raw SVI in total variance against log-moneyness.
+
+**Butterfly is a statement about the density, so it is checked on the
+density.** Gatheral and Jacquier's `g(k)` is non-negative exactly when the slice
+implies a non-negative risk-neutral density. Parameter bounds cannot express
+it: Axel Vogt's slice, the paper's own counterexample, passes every bound this
+module imposes and has `g = -0.0329` at `k = 0.88`. The test checks `g` against
+something that does not call it — the convexity of Black-Scholes call prices in
+strike, by a three-point second difference — and the two agree in sign on both
+Vogt's slice and a clean one.
+
+**A slice can always be made arbitrage-free, so the flag means something
+else.** Flatten it and the density is fine. What cannot always be done is fit
+*these quotes* without arbitrage. So every slice is fitted twice, with and
+without the density constraint, and the flag fires when the unconstrained fit
+has a negative density and removing it costs more than a tenth of a vol point.
+On Vogt's quotes it costs **0.44 vol points of RMSE**, and that number travels
+with the flag rather than being thresholded away.
+
+**The optimizer found the grid's gaps twice.** The density penalty first ran on
+61 points while the check ran on 201; differential evolution returned a slice on
+Vogt's quotes whose negative density sat entirely between penalty points. On the
+same grid, it returned one sitting on the constraint's edge, `+5e-11` at the 201
+points and `-5.5e-7` on a 200,001-point grid. The penalty now holds `g` above
+`1e-4`, which keeps the fine-grid minimum at `+9.9e-5` and costs a thousandth of
+a vol point. An optimizer is a search for exactly the place a check does not
+look.
+
+**Calendar arbitrage is found, not repaired.** Total variance must not fall with
+maturity at any `k`; `canvas-pricing` checks neighbouring expiries and reports
+the pair and the worst `k`. Repairing it means refitting slices jointly, trading
+fit on one expiry against another, and that trade is the analyst's.
+
+Both SVI fits run through the parity harness: two full differential-evolution
+searches, every candidate scored at 201 grid points, bit-identical native and
+WASM.

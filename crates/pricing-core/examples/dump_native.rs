@@ -45,6 +45,29 @@ fn main() {
         }
     }
 
+    // SVI (PRD 5.4). Differential evolution over a penalty evaluated at 201
+    // points: every candidate has to score identically on both targets, or the
+    // two searches walk to different slices and every result below diverges.
+    for (label, params, t, lo, hi, n) in [
+        ("clean", [0.02, 0.12, -0.55, 0.05, 0.25], 0.5, 0.6, 1.45, 15usize),
+        ("vogt", [-0.041, 0.1331, 0.306, 0.3586, 0.4153], 1.0, 0.4, 2.6, 21usize),
+    ] {
+        ffi::pc_svi_reset();
+        // Strikes evenly spaced in price, placed through the crate's own log,
+        // so the harness never needs an `exp` that JavaScript would round
+        // differently. `sqrt` is correctly rounded on both sides by IEEE-754.
+        for i in 0..n {
+            let strike = 100.0 * (lo + (hi - lo) * i as f64 / (n - 1) as f64);
+            let k = ffi::pc_log_moneyness(strike, 100.0);
+            let w = ffi::pc_svi_eval(params[0], params[1], params[2], params[3], params[4], k, 0);
+            ffi::pc_svi_quote(strike, 100.0, (w / t).sqrt(), t);
+        }
+        emit(format!("svi_{label}_ok"), ffi::pc_svi_fit(t) as f64);
+        for which in 0..18 {
+            emit(format!("svi_{label}({which})"), ffi::pc_svi_result(which));
+        }
+    }
+
     // Volatility analytics (PRD 5.4). The close series is pushed through the
     // same FFI the browser uses, because a realized vol that disagrees in the
     // last bit turns a variance premium's sign over at the boundary.

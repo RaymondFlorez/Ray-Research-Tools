@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 174 tests
+npm test --workspace @picasso/canvas-pricing    # 179 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -291,6 +291,17 @@ carry American Greeks and the totals agree with the surface on screen. A
 position with no sector is its own `unclassified` row: leaving it out would
 understate every total in a sector report.
 
+## The SVI surface
+
+`fitSviSurface` fits raw SVI to each expiry in `pricing-core` and checks the
+Gatheral-Jacquier conditions: butterfly on each slice's density, calendar
+between neighbouring slices. Each slice comes back fitted twice — with the
+density constraint and without — so the flag PRD 5.4 asks for, "when the
+constraints cannot be satisfied", carries what satisfying them cost. On Axel
+Vogt's counterexample that is 0.44 vol points of RMSE, and the message says so
+in those words. The crate's README has the reasoning, including the two times
+the optimizer found a gap in the grid the constraint was checked on.
+
 ## Vol analytics
 
 PRD 5.4's last bullet — term structure, skew, realized versus implied, the
@@ -353,11 +364,13 @@ against nothing at all.
 
 ## What is not covered
 
-- **No surface fit.** PRD 5.4 asks for SVI per expiry with the
-  Gatheral-Jacquier no-butterfly and no-calendar constraints, and an explicit
-  flag when they cannot be satisfied. None of it is here: a leg carries its own
-  vol and the grid shifts it. Heston is calibrated to a quoted smile
-  (`heston.ts`), which is a different object and does not stand in for it.
+- **The SVI surface is fitted but not yet used for pricing.** `fitSviSurface`
+  fits and checks each expiry; a leg still carries its own vol and the grid
+  shifts it. Reading a leg's vol off the fitted surface is a wiring step that
+  has not been made. Calendar violations are reported, never repaired.
+- **SVI is raw SVI, fitted per slice.** There is no SSVI or eSSVI
+  parameterization, which would make the calendar condition hold by
+  construction rather than be checked afterwards.
 - **No skew history.** `skew()` reads one smile. PRD 5.4 asks for "skew and
   its history", and the storage that would make a history is `canvas-data`'s,
   not this package's.

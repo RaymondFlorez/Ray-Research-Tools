@@ -187,6 +187,33 @@ function wasmVol() {
 
 const volRows = wasmVol();
 
+/**
+ * SVI fits through WASM. The quotes are placed through the crate's own log,
+ * as the native side places them, because a quote that differs in the last
+ * bit is a different slice to fit; `Math.sqrt` is correctly rounded, so it
+ * matches the native one exactly.
+ */
+function wasmSvi() {
+  const rows = new Map();
+  for (const [label, params, t, lo, hi, n] of [
+    ['clean', [0.02, 0.12, -0.55, 0.05, 0.25], 0.5, 0.6, 1.45, 15],
+    ['vogt', [-0.041, 0.1331, 0.306, 0.3586, 0.4153], 1.0, 0.4, 2.6, 21],
+  ]) {
+    w.pc_svi_reset();
+    for (let i = 0; i < n; i += 1) {
+      const strike = 100 * (lo + ((hi - lo) * i) / (n - 1));
+      const k = w.pc_log_moneyness(strike, 100);
+      const tv = w.pc_svi_eval(...params, k, 0);
+      w.pc_svi_quote(strike, 100, Math.sqrt(tv / t), t);
+    }
+    rows.set(`svi_${label}_ok`, w.pc_svi_fit(t));
+    for (let which = 0; which < 18; which += 1) rows.set(`svi_${label}(${which})`, w.pc_svi_result(which));
+  }
+  return rows;
+}
+
+const sviRows = wasmSvi();
+
 /** Bond analytics and the Hull-White lattice, through WASM. */
 function wasmBonds() {
   const rows = new Map();
@@ -379,6 +406,7 @@ function recompute(label) {
   if (match) return w.pc_norm_cdf(Number(match[1]));
 
   if (volRows.has(label)) return volRows.get(label);
+  if (sviRows.has(label)) return sviRows.get(label);
 
   match = /^(fwdvol|evmove)\(([\d.]+)\/([\d.]+)\/([\d.]+)\/([\d.]+)\)$/.exec(label);
   if (match) {
@@ -440,7 +468,7 @@ for (const [label, nativeBits] of native) {
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
     `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, ` +
-    `Heston with its calibration, the pin and early-exercise thresholds, and the vol analytics` +
+    `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );
 if (mismatches === 0) {

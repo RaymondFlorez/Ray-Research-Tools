@@ -47,6 +47,12 @@ export interface PricingExports {
   pc_curve_shock_reset(): void;
   pc_curve_shock_point(tenor: number, bps: number): void;
   pc_curve_shock_custom(): number;
+  pc_svi_reset(): void;
+  pc_svi_quote(strike: number, forward: number, vol: number, time: number): void;
+  pc_svi_fit(time: number): number;
+  pc_svi_result(which: number): number;
+  pc_svi_eval(a: number, b: number, rho: number, m: number, sigma: number, k: number, which: number): number;
+  pc_log_moneyness(strike: number, forward: number): number;
   pc_vol_reset(): void;
   pc_vol_observe(close: number): void;
   pc_vol_len(): number;
@@ -173,6 +179,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_implied_vol', 'pc_implied_vol_reason', 'pc_norm_cdf',
   'pc_pin_sigmas', 'pc_early_exercise_carry', 'pc_discount',
   'pc_curve_shock_reset', 'pc_curve_shock_point', 'pc_curve_shock_custom',
+  'pc_svi_reset', 'pc_svi_quote', 'pc_svi_fit', 'pc_svi_result', 'pc_svi_eval', 'pc_log_moneyness',
   'pc_vol_reset', 'pc_vol_observe', 'pc_vol_len', 'pc_realized_vol', 'pc_realized_variance',
   'pc_forward_vol', 'pc_event_move',
   'pc_book_reset', 'pc_book_add_leg', 'pc_book_len', 'pc_grid_reprice',

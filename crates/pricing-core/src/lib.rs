@@ -31,5 +31,6 @@ pub mod risk;
 pub mod solve;
 pub mod vol;
 pub mod special;
+pub mod svi;
 
 pub use bsm::{Greeks, Inputs, OptionType};
