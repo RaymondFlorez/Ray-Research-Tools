@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 165 tests
+npm test --workspace @picasso/canvas-pricing    # 174 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -272,6 +272,25 @@ condors, boxes and calendars are not**: they all reduce further under the real
 rules and this reports the more conservative number for them. A margin estimate
 that quietly under-reports is worse than one that is visibly rough.
 
+## Aggregate Greeks, in units that add
+
+PRD 5.4 asks for the book's Greeks by underlying, sector and expiry bucket.
+Summing is easy; the problem is that half the Greeks are not summable across
+names in the units the engine returns. Share delta is shares of *that*
+underlier — three hundred of a $900 stock and three hundred of a $9 one are not
+six hundred of anything — so every row reports **dollar delta**, and carries
+share delta only when all its positions are on one underlier. That is expressed
+as the row's shape: a sector row has no `shareDelta` field to misread. Gamma is
+reported as the change in dollar delta for a one percent move, checked by
+moving spot through the engine rather than by re-deriving the formula (3,500.64
+against a finite difference of 3,500.18; the residual is the difference's own
+second-order term). Vega is per vol point and theta per calendar day.
+
+Every position is repriced through the grid path, one cell, so American legs
+carry American Greeks and the totals agree with the surface on screen. A
+position with no sector is its own `unclassified` row: leaving it out would
+understate every total in a sector report.
+
 ## Vol analytics
 
 PRD 5.4's last bullet — term structure, skew, realized versus implied, the
@@ -347,9 +366,13 @@ against nothing at all.
   conservatively than an account would be. Portfolio margin is the CBOE equity
   range read off whatever grid was priced, not OCC TIMS, and there is no
   cross-margining, no concentration add-on and no index range.
-- **One underlier at a time.** The grid, the flags and both margin numbers
-  assume a single underlier. PRD 5.4's "aggregate Greeks by underlying, sector,
-  and expiry bucket" is the portfolio layer, and it is not in this package.
+- **Margin and the grid are one underlier at a time.** Aggregate Greeks span
+  names (`aggregate.ts`); the scenario grid, the flags and both margin numbers
+  do not, and there is no cross-underlier scenario with correlated spot moves.
+- **Sectors are supplied, not resolved.** `aggregateGreeks` groups by whatever
+  sector each position carries; mapping an instrument to a sector is the
+  reference layer's job, and a position without one is reported as
+  `unclassified` rather than guessed.
 - **Marks come from the model, not the market.** `bookRisk` marks each leg
   through the engine, so an assignment flag rests on a theoretical value. A real
   book would mark to the chain.
