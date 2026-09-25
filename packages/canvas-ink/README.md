@@ -15,6 +15,7 @@ npm test --workspace @picasso/canvas-ink
 | `ribbon.ts` | Incremental tessellation into the SDF capsule buffer the GPU path draws |
 | `semantic.ts` | Schema validation of a model's reading, reference resolution, and the proposal nothing may skip |
 | `curve.ts` | PRD 5.3's ink-to-curve recognizer: a stroke drawn over a yield curve becomes tenor-point deltas |
+| `frechet.ts` | PRD 3.7's sketch-to-code verifier: discrete Fréchet distance between the ink and a re-rendered payoff, and the offer gate |
 
 ## Model-free on purpose
 
@@ -149,6 +150,40 @@ interpolates: a taper nobody drew, and the smallest invention that keeps every
 untouched pin where it was. `canvas-integration`'s `drawn-curve.test.ts` shows
 both versions against the real engine.
 
+## Verifying sketch-to-code
+
+PRD 3.7: the generator "must emit code that compiles and produces the sketched
+shape within tolerance; a verifier node re-renders the produced payoff and
+compares against the ink geometry (Fréchet distance under threshold) before the
+proposal is offered." The generator is a model and is not here; the verifier is
+deterministic and is.
+
+**Fréchet, because order matters.** The nearest-point (Hausdorff) distance
+cannot tell a curve from the same points visited in another order; Fréchet
+couples the two curves start to end. It is the discrete Eiter-Mannila form,
+checked against a brute-force enumeration of every coupling, after both curves
+are resampled evenly by arc length so a slow passage of ink counts no more than
+a fast one.
+
+**Shape, not scale — never mirror.** Both curves go to the unit square by their
+own bounding boxes, because nobody draws a payoff to scale. What must not be
+normalized away is a reflection: a short call is a long call upside down. So the
+ink's y direction is a *required* argument — screen space grows downward, a P&L
+axis upward, and read the wrong way a drawn long call verifies perfectly as a
+short one. The direction the pen travelled is not a mirror, and a stroke drawn
+right to left is reversed before comparison.
+
+**The tolerance sits in a measured gap.** Fifty hand-drawn long calls score
+0.016 to 0.072 against the true payoff; the nearest wrong shape, a bull call
+spread, 0.210 to 0.228; everything else 0.43 and up. The tolerance is 0.15. The
+first gap is the narrow one, and the one to re-measure if it moves.
+
+`offerPayoffProposal` is the only way a candidate becomes an offer, and a failed
+one is not offered at all — not greyed out, not with a warning. In
+`canvas-integration`, candidates re-rendered by the real pricing engine are
+judged by their payoff rather than their code: two long and one short of the
+same call is offered against a drawn long call, because it is one.
+
 ## Known limitation
 
 `GROUP_GAP_MS` is 900ms: strokes further apart than that start a new group. A shape drawn
@@ -158,3 +193,7 @@ constant is a guess and wants a real captured set behind it.
 The curve recognizer assumes a linear chart in both axes and a stroke drawn on
 it; a log-tenor axis would need its own `CurveFrame`, which is supported, but no
 chart in this repo draws one, so that path is untested against a renderer.
+
+Sketch-to-code covers payoff diagrams only. PRD 3.7 also names scribbled
+formulas and hand-drawn causal loops; there is no verifier for either, and no
+generator for any of the three.
