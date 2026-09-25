@@ -14,3 +14,4 @@ export * from './wash.js';
 export * from './mount.js';
 export * from './scene.js';
 export * from './chart.js';
+export * from './ribbon.js';

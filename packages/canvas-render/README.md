@@ -17,6 +17,7 @@ npm test --workspace @picasso/canvas-render
 | `mount.ts` | 3.1 | Which nodes the DOM layer should mount, with the 120ms LOD debounce |
 | `chart.ts` | 7.1, 3.3 | Crosshair resolution, range select, and min/max decimation — the interaction half of a chart node |
 | `wash.ts` | 3.6 | Passive-mode heat with a 20 minute half-life, and anomaly halo severity |
+| `ribbon.ts` | 3.6 | The event ribbon: ninety minutes of firings by time, merged where they collide, and the click that flies to them |
 | `theme.ts` | — | Light and dark token sets |
 
 ## Chart interaction, and the number that decided how it is written
@@ -97,3 +98,31 @@ fix — a lag label at 0.08 zoom is a few unreadable pixels — and turned out t
 cost too: on the 2,000-node demo it cut scene assembly at LOD0 from 11ms to 1.3ms, and the
 reference painter's frame from p50 43ms to p50 15.5ms, because the labels were being
 formatted and painted for all 759 edges.
+
+## The event ribbon
+
+PRD 3.6: "the last 90 minutes of firing events across all nodes, positioned by
+time. Clicking a mark flies the viewport to the responsible node." Ninety
+minutes across a 900-pixel strip is six seconds a pixel, and detectors on
+correlated series fire within a second of each other, so events closer than six
+pixels merge into one mark carrying every node, the count and the worst
+severity; clicking it frames all of them with `canvas-core`'s `flyTo`. Merging
+chains from a group's first event, not its last, or a steady drizzle four
+pixels apart becomes one mark spanning the strip.
+
+A mark whose node has since been deleted stays — something happened at that
+time — and refuses to fly. A mark stamped ahead of this clock is pinned to the
+right edge and flagged `clockAhead` rather than drawn where nothing can reach
+it.
+
+## What is not here
+
+- **No painting.** This package produces draw lists and layouts; the ribbon,
+  the wash and the halos are drawn by whichever surface consumes them. The
+  Canvas2D reference painter in `apps/canvas-demo` draws the wash; it does not
+  yet draw the ribbon.
+- **No detector.** The wash takes a z-score and the ribbon takes firings;
+  computing either is `canvas-data`'s `anomaly.ts`, and nothing here subscribes
+  to a series.
+- **No DOM.** `mount.ts` says which nodes the DOM layer should mount; mounting
+  them is the app's.
