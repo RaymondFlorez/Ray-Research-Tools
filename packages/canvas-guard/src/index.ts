@@ -21,3 +21,4 @@ export * from './latency.js';
 export * from './audit.js';
 export * from './exportBundle.js';
 export * from './redteam.js';
+export * from './session.js';

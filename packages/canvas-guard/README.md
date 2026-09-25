@@ -16,6 +16,7 @@ PRD 7's hardening layer.
 | `exportBundle.ts` | Audit appendix, vendor licence redaction, and the refusal to export a figure that cannot be reproduced. |
 | `latency.ts` | PRD 7.1's budget table as data, with the evidence behind each row and the check against an observed distribution. |
 | `redteam.ts` | The suite phase 7 exits on. |
+| `session.ts` | PRD 7.2's session policy: MFA per tenant, fifteen-minute tokens, and a silent refresh that can extend a session but never upgrade one. |
 
 ## The latency table, and where it actually stands
 
@@ -166,6 +167,32 @@ rollback rule: 0.10% false rollbacks on a stable model over 2000 trials
 rollback rule: catches 99% of a 5% -> 12% regression at 3 sigma
 ```
 
+## Sessions
+
+PRD 7.2: "OIDC with mandatory MFA for any tenant with `positions` class data.
+Short-lived (15 minute) session tokens with silent refresh." `session.ts` turns
+that sentence into four rules.
+
+**MFA belongs to the tenant, not the request.** A single-factor session is
+refused anywhere in a tenant holding positions, including on a public canvas.
+The per-request reading leaves a one-factor session inside a positions tenant,
+one authorization bug away from the book, and a second factor exists precisely
+so that nothing depends on every other check being right.
+
+**A long-lived token is refused, not trusted.** The fifteen minutes is checked
+on the token. An identity provider misconfigured to issue eight-hour tokens
+produces tokens that verify perfectly.
+
+**Refresh extends, never upgrades.** A refreshed token keeps the original login
+time and methods. One claiming a second factor with an unchanged `auth_time` is
+claiming a factor nobody presented, and is refused; so is one that drops a
+factor, changes subject or tenant, or comes from an earlier login.
+
+**Silent refresh ends — and this one is ours, not the PRD's.** Fifteen-minute
+tokens with unlimited silent refresh are an unlimited session. After twelve
+hours from the interactive login the user logs in again. The figure is a
+choice made here; the specification does not give one.
+
 ## What is not here
 
 - **No egress proxy process.** The proxy is a class, not a service in front of
@@ -176,7 +203,11 @@ rollback rule: catches 99% of a 5% -> 12% regression at 3 sigma
   sections are deployment configuration, not library code.
 - **No Postgres row-level security.** `TenantQuery` is the shape the query
   layer enforces, tested against in-memory rows.
-- **No OIDC or MFA.** The audit log records an actor; it does not authenticate
-  one.
+- **No OIDC.** `session.ts` decides what *verified* claims may do; verifying
+  them — signature, issuer, audience, key rotation — is the OIDC library's
+  job and is deliberately not reimplemented, since a hand-rolled JWT verifier
+  is a known way to accept `alg: none`. MFA counts SMS as a second factor
+  because the PRD asks for MFA, not phishing-resistant MFA; a tenant that wants
+  the latter needs a narrower method set than this one.
 - **No PDF pipeline.** `buildBundle` produces the bundle and the appendix; the
   PRD renders it through the existing WeasyPrint path.
