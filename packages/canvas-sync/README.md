@@ -14,6 +14,7 @@ npm test --workspace @picasso/canvas-sync
 | `transport.ts` | 7.4 | State-vector reconciliation, a cuttable `Link`, and a `Room` of peers |
 | `presence.ts` | 2.2, 7.3 | The 20Hz cursor throttle and the peer registry |
 | `snapshot.ts` | 3.9 | Snapshots, immutable named versions, and templates |
+| `tiering.ts` | 7.3 | Cold canvases' artifacts evicted after seven days unopened, rehydrated one at a time on read, and checked on the way back |
 | `encryptedStore.ts` | 7.2 | The offline store, encrypted under a key derived from the session and dropped on logout |
 
 ## The rule that shapes all of it
@@ -73,6 +74,28 @@ The throttle is not a blanket rate limit. A moving cursor is interpolatable and 
 20Hz; a selection change, a viewport jump, or the cursor leaving the canvas is a discrete
 event published immediately. Rate-limiting everything is the mistake that makes
 collaborative UIs feel laggy in exactly the moments people notice.
+
+## Cold canvases
+
+PRD 7.3: "Cold canvases evict their cached artifacts to S3 after 7 days;
+reopening rehydrates lazily." Three readings of that sentence decide whether it
+saves money or costs it.
+
+**Cold is unopened, not unedited.** A canvas the desk head reads every morning
+and never edits would, by last-modified, be evicted on day eight and rehydrated
+every morning after. Coldness runs from the last open.
+
+**Lazily is per artifact, on read.** Opening a canvas pulls nothing back; the
+viewport decides what is computed and so what is read, and an artifact nobody
+scrolls to stays cold.
+
+**What comes back is checked.** A cache key is derived from inputs and cannot
+vouch for the bytes under it, so each artifact's digest is taken on the way
+out and checked on the way in; a mismatch is reported `corrupt` and dropped so
+the node recomputes rather than showing a changed number as a cached one. A
+fresh write supersedes an evicted artifact, and the stale object is deleted at
+the next sweep rather than left in the bucket. There is no S3 here — `ColdStore`
+is the seam.
 
 ## The offline store is encrypted, and what that does not cover
 
