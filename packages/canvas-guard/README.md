@@ -199,8 +199,11 @@ choice made here; the specification does not give one.
   a socket. The PRD's deployment puts it out of reach of the code agents
   influence, and that separation is the actual control; what is implemented and
   measured here is its decision function.
-- **No Firecracker, no seccomp, no CSP.** PRD 7.2's sandbox and client-side
-  sections are deployment configuration, not library code.
+- **No Firecracker, no seccomp.** PRD 7.2's sandbox is deployment
+  configuration, not library code. The client-side CSP and COOP/COEP are
+  applied by the demo server (`scripts/security-headers.mjs`) and checked in
+  Chromium by `apps/canvas-demo/scripts/csp-check.mjs`; there is no production
+  origin here, and no separate Pyodide or sandbox origin.
 - **No Postgres row-level security.** `TenantQuery` is the shape the query
   layer enforces, tested against in-memory rows.
 - **No OIDC.** `session.ts` decides what *verified* claims may do; verifying

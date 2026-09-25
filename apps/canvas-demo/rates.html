@@ -38,6 +38,7 @@
       .verdict[data-sign="up"] { border-color: #6a8f5f; background: #f1f7ef; color: #2f6b46; }
       .verdict[data-sign="down"] { border-color: #c0392b; background: #fdf1ef; color: #96301f; }
       p.note { margin: 0; font-size: 10.5px; color: #8d8880; line-height: 1.6; }
+      .note.spaced { margin-top: 8px; }
     </style>
     <script type="importmap">
       {
@@ -86,7 +87,7 @@
         <div id="assumed">
           <h2>What it assumed</h2>
           <ul id="assumptions"></ul>
-          <p class="note" style="margin-top:8px">
+          <p class="note spaced">
             Betas are regressed from two years of daily observations, not typed in.
             A mapping below an R² of 0.2 is an assumption, and is marked as one.
             The history here is synthetic; the estimator is not.

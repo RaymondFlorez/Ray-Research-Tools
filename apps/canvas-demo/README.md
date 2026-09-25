@@ -68,6 +68,30 @@ presence rather than document, so it keeps flowing even while the document link 
 both clients start equal, the peer cursor arrives, offline each client sees only its own
 work (7 vs 6 nodes), and reconnecting leaves both with all 8.
 
+## Under PRD 7.2's content security policy
+
+Every page is served with a strict CSP, `COOP: same-origin` and
+`COEP: require-corp` (`scripts/security-headers.mjs`), and
+`scripts/csp-check.mjs` loads all seven in Chromium and checks, per page, that
+nothing the page needs was refused, that `eval` and `new Function` are, that an
+injected inline script does not run, and that the page is cross-origin isolated.
+43 checks, all passing.
+
+Two details the PRD's sentence does not settle and the browser does. The
+pricing core is WebAssembly, whose compilation CSP gates: `'wasm-unsafe-eval'`
+permits exactly that and leaves `eval` refused, and the payoff page reprices
+all 375 cells under it. The inline import maps and styles are admitted by
+SHA-256 of their exact text rather than by `'unsafe-inline'`, so an injected
+`<script>` is refused even on a page with inline scripts of its own.
+
+Writing the check found three things. `eval` appeared to be *allowed* on every
+page, because Playwright's `page.evaluate` runs through DevTools and CSP exempts
+it; the probe now runs as a same-origin script the page itself loads. `rates.html`
+carried an inline `style=` attribute, which no hash covers, and it moved into
+the stylesheet. And `gl.html` had not loaded at all since `canvas-gl` started
+importing `canvas-ink` for the GPU ink path — its import map never gained the
+entry. That had nothing to do with CSP; the check just looked at every page.
+
 ## Screenshot harness
 
 `scripts/screenshot.mjs` drives the page in headless Chromium, asserts on the scene stats
