@@ -533,6 +533,61 @@ pub extern "C" fn pc_curve_shock(shape: i32, bps: f64, pivot: f64) -> i32 {
     })
 }
 
+thread_local! {
+    static CUSTOM_SHOCK: RefCell<(Vec<f64>, Vec<f64>)> = const { RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// Clears the points of an arbitrary shock (PRD 5.3, the pen-drawn curve).
+#[no_mangle]
+pub extern "C" fn pc_curve_shock_reset() {
+    CUSTOM_SHOCK.with(|s| {
+        let mut s = s.borrow_mut();
+        s.0.clear();
+        s.1.clear();
+    });
+}
+
+/// Adds one tenor-point delta. Tenors must arrive in increasing order.
+#[no_mangle]
+pub extern "C" fn pc_curve_shock_point(tenor: f64, bps: f64) {
+    CUSTOM_SHOCK.with(|s| {
+        let mut s = s.borrow_mut();
+        s.0.push(tenor);
+        s.1.push(bps);
+    });
+}
+
+/// Applies the accumulated points to the built curve.
+///
+/// Returns the shocked curve's pin count, -1 with no curve, -2 when the
+/// points are empty or not strictly increasing in tenor. The order is
+/// checked here rather than trusted, because `delta_bps` walks the tenors
+/// assuming it and would interpolate across a reversed pair without
+/// complaint.
+#[no_mangle]
+pub extern "C" fn pc_curve_shock_custom() -> i32 {
+    let shock = CUSTOM_SHOCK.with(|s| {
+        let s = s.borrow();
+        if s.0.windows(2).any(|w| !(w[1] > w[0])) {
+            return None;
+        }
+        CurveShock::custom(s.0.clone(), s.1.clone())
+    });
+    let Some(shock) = shock else { return -2 };
+    CURVE.with(|c| {
+        let mut slot = c.borrow_mut();
+        match slot.as_ref() {
+            Some(built) => {
+                let shocked = shock.apply(built);
+                let pins = shocked.pins().count() as i32;
+                *slot = Some(shocked);
+                pins
+            }
+            None => -1,
+        }
+    })
+}
+
 fn with_curve<F: FnOnce(&Curve) -> f64>(f: F) -> f64 {
     CURVE.with(|c| match c.borrow().as_ref() {
         Some(built) => f(built),

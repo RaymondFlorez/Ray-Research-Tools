@@ -38,7 +38,7 @@ fixture gives every fact its own node. A reading is now identified by node
 *and* port, with the cache key dating it rather than identifying it — and
 `test/reconciler.test.ts` carries the regression.
 
-## Five suites, five seams
+## Six suites, six seams
 
 | Suite | Seam |
 |---|---|
@@ -47,6 +47,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `sketch.test.ts` | `canvas-ink` → `canvas-core` → `canvas-sync` → `canvas-render`: a stroke becoming a node. |
 | `degradation.test.ts` | PRD 7.4's ladder, checked against the packages that would actually carry each rung. |
 | `margin.test.ts` | `canvas-ink` → `canvas-core` → `canvas-agents`: a handwritten note reaching the model without becoming data. |
+| `drawn-curve.test.ts` | `canvas-ink` → `canvas-pricing` → `pricing-core`: a pen stroke becoming a shocked curve. |
 
 ## The second bug, found the same way
 
@@ -119,6 +120,21 @@ fallback would make the ladder look more verified than it is.
 | guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
 | guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |
+
+## A third disagreement, caught before it ran
+
+Writing `drawn-curve.test.ts` meant reading both halves side by side, and they
+disagree about one word. `canvas-ink` keeps a tenor the stroke did not cross
+*absent* and tells the analyst it is "left alone"; `pricing-core` holds a shock's
+end values flat beyond its last point. Handed to each other directly, a belly
+shock drawn from 3y to 10y at +40bp moves the 3-month and 30-year rates by 40bp
+too — measured, and kept in the suite as the version that is wrong.
+
+This one was not found by a failing test: it was seen while writing the seam,
+and the suite now holds both readings so the fix cannot quietly regress.
+`engineShockPoints` writes every undrawn pin as an explicit zero, and the
+tenors the analyst was told would not move come back identical to twelve
+places.
 
 ## Phase 5's third exit number
 

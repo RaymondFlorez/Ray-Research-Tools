@@ -48,6 +48,26 @@ export interface CurveShock {
 }
 
 /**
+ * An arbitrary shape: tenor-point deltas, as the pen-drawn curve arrives
+ * (PRD 5.3).
+ *
+ * The engine interpolates between the points in log tenor and holds the end
+ * values flat beyond them. Flat is the right default for a shock somebody
+ * typed out to 30y and asked about at 40y, and the wrong one for a stroke that
+ * stopped at 12y: the analyst left the long end alone, and flat extrapolation
+ * would move it by whatever they drew at 10y. So the points given here are
+ * applied exactly as given, and a caller converting a drawing is expected to
+ * say where the drawing stopped — `canvas-ink`'s `engineShockPoints` does.
+ */
+export interface DrawnShock {
+  shape: 'custom';
+  /** Strictly increasing in tenor. */
+  points: ReadonlyArray<{ tenor: number; bps: number }>;
+}
+
+export type AnyCurveShock = CurveShock | DrawnShock;
+
+/**
  * A built curve, readable at any tenor.
  *
  * Reads go straight back into WASM rather than caching a sampled copy here: the
@@ -69,7 +89,7 @@ export class Curve {
     private readonly engine: CurveEngine,
     readonly pins: number,
     readonly instruments: readonly Instrument[],
-    readonly shock?: CurveShock,
+    readonly shock?: AnyCurveShock,
   ) {}
 
   /** Puts this curve back in the module's slot if something displaced it. */
@@ -159,7 +179,7 @@ export class CurveEngine {
   }
 
   /** Builds into the module slot without wrapping the result. */
-  private install(instruments: readonly Instrument[], shock?: CurveShock): number {
+  private install(instruments: readonly Instrument[], shock?: AnyCurveShock): number {
     const w = this.exports;
     w.pc_curve_reset();
     for (const instrument of instruments) {
@@ -187,6 +207,16 @@ export class CurveEngine {
       );
     }
     if (!shock) return pins;
+    if (shock.shape === 'custom') {
+      w.pc_curve_shock_reset();
+      for (const point of shock.points) w.pc_curve_shock_point(point.tenor, point.bps);
+      const shocked = w.pc_curve_shock_custom();
+      if (shocked === -2) {
+        throw new Error('a drawn shock needs at least one point, in strictly increasing tenor');
+      }
+      if (shocked < 0) throw new Error('no curve to shock');
+      return shocked;
+    }
     const shocked = w.pc_curve_shock(SHAPE_CODE[shock.shape], shock.bps, shock.pivot ?? 0);
     if (shocked < 0) throw new Error('no curve to shock');
     return shocked;
@@ -209,7 +239,7 @@ export class CurveEngine {
    * Rebuilt rather than shocked in place, because shocking twice would compound:
    * a caller asking for +50bp twice means two scenarios, not +100bp.
    */
-  shocked(instruments: readonly Instrument[], shock: CurveShock): Curve {
+  shocked(instruments: readonly Instrument[], shock: AnyCurveShock): Curve {
     const pins = this.install(instruments, shock);
     const curve = new Curve(this, pins, [...instruments], shock);
     this.current = curve;

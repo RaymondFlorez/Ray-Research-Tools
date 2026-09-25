@@ -14,6 +14,7 @@ npm test --workspace @picasso/canvas-ink
 | `recognize.ts` | Scores line / rectangle / ellipse / arrow / bracket, or reports `unknown` |
 | `ribbon.ts` | Incremental tessellation into the SDF capsule buffer the GPU path draws |
 | `semantic.ts` | Schema validation of a model's reading, reference resolution, and the proposal nothing may skip |
+| `curve.ts` | PRD 5.3's ink-to-curve recognizer: a stroke drawn over a yield curve becomes tenor-point deltas |
 
 ## Model-free on purpose
 
@@ -117,8 +118,43 @@ rectangle. Widening suppression to the window width took accuracy from 79.5% to 
 45-degree oval a poor ellipse and a good nothing. Fitting in the stroke's own principal
 frame took accuracy to 99.5%.
 
+## Drawing a curve shock
+
+PRD 5.3: "the analyst can literally draw the shocked curve with the pen and the
+ink-to-curve recognizer converts the stroke to tenor-point deltas." The conversion
+is a coordinate change and an interpolation; the decisions are all refusals.
+
+**A stroke that doubles back is not a curve.** A hand that backs up traces two
+rates at one tenor, and last-sample, mean and topmost each silently invent a
+shock. It is refused by name and the analyst redraws. Backward movement within
+`JITTER_PX` (2px) is pen noise, not a reversal.
+
+**An undrawn tenor is absent, not zero.** Extending the stroke's ends flat would
+write a zero delta — "held here", the strongest claim on the chart — at tenors
+the analyst never touched. They are listed as uncovered and the affordance says
+"not drawn, and left alone".
+
+**Whole basis points, and the pixel's worth stated.** A 120Hz stroke resolves the
+rate axis to roughly a basis point, so 47.3bp would claim a precision the hand
+lacks. A kink in the curve falling between two samples is read across rather
+than through, worth about one basis point at the pin where the test curve bends
+most — the same order as the rounding.
+
+**Handing it to an engine means saying "left alone" out loud.** `pricing-core`
+holds a shock's end values flat beyond its last point, so a stroke that stopped
+at 10y, passed over as-is, moves 30y by 40bp after the analyst confirmed it
+would not move. `engineShockPoints` writes every undrawn pin as an explicit
+zero. Between the last drawn pin and the first undrawn one the engine
+interpolates: a taper nobody drew, and the smallest invention that keeps every
+untouched pin where it was. `canvas-integration`'s `drawn-curve.test.ts` shows
+both versions against the real engine.
+
 ## Known limitation
 
 `GROUP_GAP_MS` is 900ms: strokes further apart than that start a new group. A shape drawn
 in several strokes with a longer pause between them will be recognized as two shapes. The
 constant is a guess and wants a real captured set behind it.
+
+The curve recognizer assumes a linear chart in both axes and a stroke drawn on
+it; a log-tenor axis would need its own `CurveFrame`, which is supported, but no
+chart in this repo draws one, so that path is untested against a renderer.

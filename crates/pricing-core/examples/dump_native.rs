@@ -167,6 +167,19 @@ fn main() {
         }
     }
 
+    // A drawn shape (PRD 5.3): arbitrary tenor points, log-tenor interpolated
+    // between them, so the interpolation weight is a ratio of two logs.
+    ffi::pc_curve_bootstrap();
+    ffi::pc_curve_shock_reset();
+    for (tenor, bps) in [(1.0, 0.0), (2.0, 0.0), (3.0, 38.0), (5.0, 41.0), (7.0, 40.0), (10.0, 39.0), (20.0, 0.0)] {
+        ffi::pc_curve_shock_point(tenor, bps);
+    }
+    emit("custom_pins".to_string(), ffi::pc_curve_shock_custom() as f64);
+    for step in 0..=24 {
+        let t = 0.25 + step as f64 * 1.25;
+        emit(format!("custom_zero({t})"), ffi::pc_curve_zero(t));
+    }
+
     // Nelson-Siegel-Svensson: a grid search over two decay times, so every
     // candidate has to score identically on both targets or the search lands
     // somewhere else entirely.

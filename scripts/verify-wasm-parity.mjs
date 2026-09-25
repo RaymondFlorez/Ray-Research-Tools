@@ -124,6 +124,17 @@ function wasmCurves() {
     }
   }
 
+  w.pc_curve_bootstrap();
+  w.pc_curve_shock_reset();
+  for (const [tenor, bps] of [[1, 0], [2, 0], [3, 38], [5, 41], [7, 40], [10, 39], [20, 0]]) {
+    w.pc_curve_shock_point(tenor, bps);
+  }
+  rows.set('custom_pins', w.pc_curve_shock_custom());
+  for (let step = 0; step <= 24; step += 1) {
+    const t = 0.25 + step * 1.25;
+    rows.set(`custom_zero(${fmt(t)})`, w.pc_curve_zero(t));
+  }
+
   w.pc_nss_reset();
   for (const [tenor, zero] of [
     [0.25, 0.0521], [0.5, 0.0508], [1, 0.0472], [2, 0.0428], [3, 0.0404],
@@ -428,7 +439,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves, bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, ` +
     `Heston with its calibration, the pin and early-exercise thresholds, and the vol analytics` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

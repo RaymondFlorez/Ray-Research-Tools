@@ -11,3 +11,4 @@ export * from './recognize.js';
 export * from './stroke.js';
 export * from './ribbon.js';
 export * from './semantic.js';
+export * from './curve.js';

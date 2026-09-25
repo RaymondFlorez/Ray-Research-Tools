@@ -133,6 +133,17 @@ below anything a chart can show.
 standard cell are different numbers from different code, and serving one as the other is
 the flickering tick of PRD 7.1 in another costume.
 
+## A drawn shock is applied exactly as given
+
+`CurveEngine.shocked` takes the four named shapes and, since PRD 5.3's
+pen-drawn curve, a `custom` one: tenor-point deltas, log-tenor interpolated by
+the engine and held flat beyond the ends. Flat is right for a shock somebody
+typed to 30y and asked about at 40y, and wrong for a stroke that stopped at
+10y, so the points are applied as given and the conversion from a drawing
+(`canvas-ink`'s `engineShockPoints`) says where the drawing stopped. Points out
+of order are refused in the engine rather than trusted, because the
+interpolation walks them assuming order.
+
 ## Two ways to get a curve, and they are different objects
 
 A bootstrap *reproduces* its inputs — `Curve.residuals()` is how a node proves it rather

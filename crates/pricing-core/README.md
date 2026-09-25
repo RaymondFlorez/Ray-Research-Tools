@@ -236,7 +236,7 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,187 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,213 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
 Heston with its calibration, the pin and early-exercise thresholds, and the volatility
