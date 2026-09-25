@@ -16,6 +16,7 @@ npm test --workspace @picasso/canvas-data
 | `conflate.ts` | 7.3 | Server-side conflation to 4Hz per series, with per-field combine semantics |
 | `entitlements.ts` | 7.2 | Four data classes, per-user entitlement, and the two independent egress controls |
 | `timescrub.ts` | 3.8, 3.9 | Snapshot catalog and the canvas asof, propagated into provenance and cache keys |
+| `screener.ts` | 3.3, 5.8 | The `UniverseNode`'s screener: a hand-parsed expression, three-valued over missing data, resolved as of a date |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 
 ## Scope: what this is and is not
@@ -206,6 +207,30 @@ round lot from a fingerprint. The two are checked against each other in
 `canvas-integration/test/egress-parity.test.ts`: nothing the guard proxy blocks may be
 passed here. They are allowed to differ in the other direction, and they do on exactly one
 case — see that file for why it cannot be resolved.
+
+## A screen that tells the truth about what it could not read
+
+PRD 3.3's `UniverseNode` is a "screener expression that resolves to a set of
+instruments", and 5.8 has universes "resolve as of the historical date,
+including delisted names". `screener.ts` is a small expression language —
+comparisons, `in [...]`, `and`/`or`/`not` with SQL precedence, `10b` and `20%`
+as numbers — parsed by hand. There is no `eval` path, which the canvas's own CSP
+would refuse anyway.
+
+**An unknown field is refused.** `markte_cap > 10b` matches nothing, and an
+empty universe is a plausible answer to a strict screen, so the typo is refused
+with the nearest real field suggested before anything is evaluated.
+
+**Missing is unknown, not false.** Comparisons against an absent value are
+unknown under Kleene's three-valued logic, and only a definite true admits a
+name. With two-valued logic, `not short_interest > 5%` admits every name
+missing the figure as a low-short-interest one. Names the screen could not
+decide are counted and reported by field.
+
+**Membership is as of the date.** Listed on or before it, delisted after it or
+never: a 2019 screen includes the names trading then and since delisted, and
+excludes those listed later. The field values themselves must already be
+point-in-time for that date, which is the bitemporal store's job.
 
 ## Three detectors, because they see three different things
 
