@@ -18,6 +18,8 @@
  * across incomparable scores is a ranking of which detector shouts loudest.
  */
 
+import { createNode, type NodeID, type PicassoNode } from '@picasso/canvas-core';
+
 // ---------------------------------------------------------------------------
 // Shared pieces
 // ---------------------------------------------------------------------------
@@ -535,4 +537,51 @@ export function stlFirings(series: readonly number[], options: StlFiringOptions)
     firings.push(firing);
   }
   return firings;
+}
+
+// ---------------------------------------------------------------------------
+// Cross-sectional: the HeatmapNode's wash (PRD 3.3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Each name's move against the other names' moves on the same day.
+ *
+ * PRD 3.3's `HeatmapNode` is a "cross-sectional wash over a universe", and
+ * cross-sectional is the operative word. On a day the whole market falls three
+ * sigma, every name is at its own time-series extreme and a time-series wash
+ * paints the entire universe; what the analyst wants from a heatmap is the
+ * handful that moved differently from everything else. So the scale is the
+ * robust dispersion *across names*, centred on the cross-sectional median.
+ *
+ * Measured on a hundred names with a one-factor return model and a year of
+ * history, on a day the market falls 3.5 percent and one name falls 6 percent
+ * on news of its own: per-name time-series scoring puts 25 of the hundred past
+ * three sigma. Cross-sectional scoring puts two there — the name with the news,
+ * at -5.1, and one low-beta name that held up while everything else fell.
+ *
+ * A cross-section with no dispersion — every name moved the same — has no
+ * scale, and every score is `NaN` rather than an infinity: nothing stood out,
+ * which is a statement, not a division by zero.
+ */
+export function crossSectionalZ(moves: Readonly<Record<string, number>>): Record<string, number> {
+  const values = Object.values(moves).filter((v) => Number.isFinite(v));
+  const centre = median(values);
+  const scale = robustScale(values);
+  const out: Record<string, number> = {};
+  for (const [name, move] of Object.entries(moves)) {
+    out[name] = scale > 0 && Number.isFinite(move) ? (move - centre) / scale : Number.NaN;
+  }
+  return out;
+}
+
+/** A `HeatmapNode`: a universe in, one cross-sectional score per name out. */
+export function createHeatmapNode(id: NodeID, metric: string, threshold = 3): PicassoNode {
+  return createNode({
+    id,
+    kind: 'HeatmapNode',
+    binding: 'wired',
+    inputs: [{ id: 'universe', name: 'Universe', type: 'universe', cardinality: 'one', required: true }],
+    outputs: [{ id: 'wash', name: 'Cross-sectional wash', type: 'table', cardinality: 'one', required: false }],
+    params: { metric, threshold, scale: 'cross_sectional_robust_z' },
+  });
 }

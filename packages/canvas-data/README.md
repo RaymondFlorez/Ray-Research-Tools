@@ -280,6 +280,15 @@ anywhere but the last index used points that arrived after it and carries
 `retrospective`. BOCPD scores a firing only from points that had arrived, and a
 test changes everything after one to confirm it.
 
+The `HeatmapNode`'s "cross-sectional wash over a universe" scores each name
+against the other names on the same day, not against its own history. Measured
+on a hundred names over a day the market fell 3.5 percent and one name fell 6
+percent on its own news: scored name by name, 25 of the hundred are past three
+sigma and the wash paints a quarter of the universe; scored across names, two
+are — the one with the news, at -5.1, and a low-beta name that held up. A
+cross-section where every name moved alike has no scale and scores `NaN`:
+nothing stood out.
+
 Not covered: the detectors are functions over an array, not the `alert-engine`
 service that runs them over every watched series; there is no per-node
 threshold store, and the live wash's z-threshold in `canvas-render` does not

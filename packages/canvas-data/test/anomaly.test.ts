@@ -3,7 +3,10 @@ import {
   MAD_TO_SIGMA,
   bocpd,
   bocpdFirings,
+  createHeatmapNode,
+  crossSectionalZ,
   logGamma,
+  median as med,
   robustScale,
   robustZ,
   robustZFirings,
@@ -244,5 +247,50 @@ describe('STL', () => {
 
   it('refuses fewer than two cycles', () => {
     expect(() => stl(seasonal(4).slice(0, 30), { period: PERIOD })).toThrow(/two full cycles/);
+  });
+});
+
+
+describe('the cross-sectional wash', () => {
+  // A hundred names, one market factor with betas around one, a year of daily
+  // history; today the market falls 3.5% and name 7 falls 6% on its own news.
+  const N = 100;
+  const T = 250;
+  const market = normals(T + 1, 1).map((x) => x * 0.01);
+  const betas = normals(N, 2).map((x) => 1 + 0.2 * x);
+  const idio = Array.from({ length: N }, (_, i) => normals(T + 1, 100 + i).map((x) => x * 0.01));
+  market[T] = -0.035;
+  idio[7]![T] = -0.06;
+  const r = (i: number, t: number) => betas[i]! * market[t]! + idio[i]![t]!;
+
+  it('paints a quarter of the universe when scored name by name', () => {
+    let flagged = 0;
+    for (let i = 0; i < N; i++) {
+      const history = Array.from({ length: T }, (_, t) => r(i, t));
+      const z = (r(i, T) - med(history)) / robustScale(history);
+      if (Math.abs(z) >= 3) flagged += 1;
+    }
+    expect(flagged).toBe(25);
+  });
+
+  it('picks out the name that moved on its own news when scored across names', () => {
+    const moves: Record<string, number> = {};
+    for (let i = 0; i < N; i++) moves[`n${i}`] = r(i, T);
+    const z = crossSectionalZ(moves);
+    const flagged = Object.entries(z).filter(([, v]) => Math.abs(v) >= 3).map(([k]) => k).sort();
+    expect(flagged).toEqual(['n7', 'n97']);
+    expect(z.n7).toBeCloseTo(-5.1, 1);
+  });
+
+  it('says nothing stood out when every name moved the same', () => {
+    const z = crossSectionalZ({ a: -0.02, b: -0.02, c: -0.02 });
+    expect(Object.values(z).every(Number.isNaN)).toBe(true);
+  });
+
+  it('is a node that takes a universe', () => {
+    const node = createHeatmapNode('h1', 'return_1d');
+    expect(node.kind).toBe('HeatmapNode');
+    expect(node.inputs.map((p) => p.type)).toEqual(['universe']);
+    expect(node.params.scale).toBe('cross_sectional_robust_z');
   });
 });
