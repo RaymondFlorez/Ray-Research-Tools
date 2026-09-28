@@ -27,6 +27,7 @@ import {
 } from '@picasso/canvas-core';
 import type { GridPricer, GridResult, GridSpec, Leg, Market } from './grid.js';
 import { bookRisk, type BookRisk } from './risk.js';
+import { legsOnSurface, type SviSurface } from './svi.js';
 
 /** PRD's worked example: 25 spots by 15 vols. */
 export const DEFAULT_GRID: GridSpec = {
@@ -155,6 +156,13 @@ export function evaluateStrategy(
   node: PicassoNode,
   pricer: GridPricer,
   now: () => number = () => Date.now(),
+  /**
+   * A fitted surface. When given, every leg's vol is read off it rather than
+   * taken from the leg, so the book is priced on the smile the market quotes.
+   * A leg past the surface's last expiry throws `OutsideSurface` rather than
+   * being priced on an extrapolation.
+   */
+  surface?: SviSurface,
 ): Evaluation {
   if (node.binding === 'loose') {
     // Not an error. A sketch is allowed to be a sketch, and the caller should
@@ -167,7 +175,9 @@ export function evaluateStrategy(
     };
   }
 
-  const { legs, market, grid } = readBook(node);
+  const book = readBook(node);
+  const { market, grid } = book;
+  const legs = surface ? legsOnSurface(pricer.exports, surface, book.legs, market) : book.legs;
   if (legs.length === 0) {
     node.state = {
       status: 'error',

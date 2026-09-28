@@ -199,3 +199,96 @@ export function fitSviSurface(
     arbitrageFree: calendar.length === 0 && slices.every((s) => s.fit.minDensity >= 0),
   };
 }
+
+// ---------------------------------------------------------------------------
+// Reading a leg's vol off the surface
+// ---------------------------------------------------------------------------
+
+export class OutsideSurface extends Error {
+  constructor(readonly time: number, readonly lastTime: number) {
+    super(
+      `a leg expiring in ${(time * 365).toFixed(0)}d is past the last fitted expiry ` +
+        `(${(lastTime * 365).toFixed(0)}d); the surface says nothing that far out, and a vol ` +
+        'extrapolated from it would be priced as if it did',
+    );
+    this.name = 'OutsideSurface';
+  }
+}
+
+/**
+ * The forward for an expiry, through the crate's own discount factors.
+ *
+ * `S * e^{-qT} / e^{-rT}`: two values that crossed the boundary and a division,
+ * so the forward is the same number on both targets.
+ */
+export function forwardPrice(
+  exports: PricingExports,
+  spot: number,
+  rate: number,
+  dividend: number,
+  time: number,
+): number {
+  return (spot * exports.pc_discount(dividend, time)) / exports.pc_discount(rate, time);
+}
+
+/**
+ * Implied vol at a strike and expiry, read off a fitted surface.
+ *
+ * Between two fitted expiries the total variance is interpolated linearly in
+ * time at fixed log-moneyness — each slice's own forward, so a strike is
+ * compared with the right forward on each side. Linear in total variance is
+ * the choice that keeps a calendar-free surface calendar-free between its
+ * slices: a straight line between two points where the far one is higher
+ * never dips below the near one. Interpolating in *vol* instead can.
+ *
+ * Before the first slice, total variance shrinks in proportion to time — the
+ * variance rate of the first slice, carried to zero — which is the only
+ * reading that goes to zero at zero time. Past the last slice the surface is
+ * silent and the leg is refused, not extrapolated.
+ */
+export function surfaceVol(
+  exports: PricingExports,
+  surface: SviSurface,
+  strike: number,
+  time: number,
+  market: { spot: number; rate: number; dividend: number },
+): number {
+  const slices = surface.slices;
+  if (slices.length === 0) throw new Error('an empty surface has no vol to read');
+  const last = slices[slices.length - 1]!;
+  if (time > last.time + 1e-12) throw new OutsideSurface(time, last.time);
+
+  const wAt = (slice: SviSlice) => {
+    const forward = forwardPrice(exports, market.spot, market.rate, market.dividend, slice.time);
+    return totalVariance(exports, slice.fit.params, exports.pc_log_moneyness(strike, forward));
+  };
+
+  const first = slices[0]!;
+  let w: number;
+  if (time <= first.time) {
+    w = (wAt(first) * time) / first.time;
+  } else {
+    let i = 1;
+    while (slices[i]!.time < time) i++;
+    const near = slices[i - 1]!;
+    const far = slices[i]!;
+    const weight = (time - near.time) / (far.time - near.time);
+    w = wAt(near) + weight * (wAt(far) - wAt(near));
+  }
+  return Math.sqrt(w / time);
+}
+
+/**
+ * The same legs with their vols read off the surface.
+ *
+ * A leg's own vol is replaced, not blended: a book priced half off the surface
+ * and half off whatever was typed into each leg would agree with neither.
+ */
+export function legsOnSurface<L extends { strike: number; time: number; vol: number }>(
+  exports: PricingExports,
+  surface: SviSurface,
+  legs: readonly L[],
+  market: { spot: number; rate: number; dividend: number },
+): L[] {
+  return legs.map((leg) => ({ ...leg, vol: surfaceVol(exports, surface, leg.strike, leg.time, market) }));
+}

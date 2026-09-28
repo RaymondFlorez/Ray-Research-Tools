@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 179 tests
+npm test --workspace @picasso/canvas-pricing    # 187 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -302,6 +302,16 @@ Vogt's counterexample that is 0.44 vol points of RMSE, and the message says so
 in those words. The crate's README has the reasoning, including the two times
 the optimizer found a gap in the grid the constraint was checked on.
 
+`surfaceVol` reads a leg's vol off the fitted surface and `evaluateStrategy`
+takes a surface to price a whole book on it. Between fitted expiries total
+variance is linear in time at fixed log-moneyness, each slice against its own
+forward: a straight line between two points where the later one is higher
+cannot dip below the earlier, so a calendar-free surface stays calendar-free
+between its slices, which interpolating in vol does not guarantee. Before the
+first slice the first slice's variance rate is carried to zero time. Past the
+last slice the leg is refused rather than priced on an extrapolation. Forwards
+come from the crate's own discount factors.
+
 ## Vol analytics
 
 PRD 5.4's last bullet — term structure, skew, realized versus implied, the
@@ -364,10 +374,11 @@ against nothing at all.
 
 ## What is not covered
 
-- **The SVI surface is fitted but not yet used for pricing.** `fitSviSurface`
-  fits and checks each expiry; a leg still carries its own vol and the grid
-  shifts it. Reading a leg's vol off the fitted surface is a wiring step that
-  has not been made. Calendar violations are reported, never repaired.
+- **Pricing off the surface is opt-in.** `evaluateStrategy` reads every
+  leg's vol off a fitted surface when given one and uses each leg's own vol
+  otherwise; nothing fits or refreshes a surface automatically from a chain.
+  Calendar violations are reported, never repaired, and a surface with one
+  will still be interpolated across.
 - **SVI is raw SVI, fitted per slice.** There is no SSVI or eSSVI
   parameterization, which would make the calendar condition hold by
   construction rather than be checked afterwards.

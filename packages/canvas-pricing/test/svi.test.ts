@@ -1,9 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { PricingExports } from '../src/module.js';
+import { GridPricer } from '../src/grid.js';
+import { atTheMoney, createStrategyNode, evaluateStrategy } from '../src/strategy.js';
 import {
   NotEnoughQuotes,
+  OutsideSurface,
   fitSviSlice,
   fitSviSurface,
+  forwardPrice,
+  legsOnSurface,
+  surfaceVol,
   sviVol,
   type ExpiryQuotes,
   type SviParams,
@@ -91,5 +97,99 @@ describe('the surface', () => {
     expect(violation!.decrease).toBeGreaterThan(0);
     expect(violation!.message).toContain('less total variance');
     expect(surface.arbitrageFree).toBe(false);
+  });
+});
+
+describe('pricing off the surface', () => {
+  // Zero carry, so every forward is the spot and the fixtures' strikes line up.
+  const market = { spot: 100, rate: 0, dividend: 0 };
+  const NEAR: SviParams = CLEAN;
+  const FAR: SviParams = { ...CLEAN, a: CLEAN.a + 0.02, b: CLEAN.b * 1.3 };
+  let surface: ReturnType<typeof fitSviSurface>;
+
+  beforeAll(() => {
+    surface = fitSviSurface(wasm, [
+      quotesFrom(NEAR, 0.25, -0.5, 0.3, 13, 'Mar'),
+      quotesFrom(FAR, 0.75, -0.6, 0.4, 13, 'Sep'),
+    ]);
+  });
+
+  it('reads a quoted vol back at a fitted expiry', () => {
+    for (const k of [-0.4, -0.1, 0, 0.2]) {
+      const quoted = Math.sqrt(w(NEAR, k) / 0.25);
+      expect(surfaceVol(wasm, surface, 100 * Math.exp(k), 0.25, market)).toBeCloseTo(quoted, 3);
+    }
+  });
+
+  it('interpolates total variance linearly in time between slices', () => {
+    const k = -0.2;
+    const strike = 100 * Math.exp(k);
+    const wNear = surfaceVol(wasm, surface, strike, 0.25, market) ** 2 * 0.25;
+    const wFar = surfaceVol(wasm, surface, strike, 0.75, market) ** 2 * 0.75;
+    const mid = surfaceVol(wasm, surface, strike, 0.5, market) ** 2 * 0.5;
+    expect(mid).toBeCloseTo((wNear + wFar) / 2, 12);
+  });
+
+  it('keeps a calendar-free surface calendar-free between its slices', () => {
+    for (const k of [-0.5, -0.2, 0, 0.3]) {
+      const strike = 100 * Math.exp(k);
+      let previous = 0;
+      for (let t = 0.05; t <= 0.75; t += 0.05) {
+        const total = surfaceVol(wasm, surface, strike, t, market) ** 2 * t;
+        expect(total).toBeGreaterThan(previous);
+        previous = total;
+      }
+    }
+  });
+
+  it("carries the first slice's variance rate back towards zero time", () => {
+    const strike = 90;
+    expect(surfaceVol(wasm, surface, strike, 0.05, market)).toBeCloseTo(
+      surfaceVol(wasm, surface, strike, 0.25, market),
+      12,
+    );
+  });
+
+  it('refuses a leg past the last fitted expiry', () => {
+    expect(() => surfaceVol(wasm, surface, 100, 1.5, market)).toThrow(OutsideSurface);
+  });
+
+  it("places strikes against each expiry's own forward", () => {
+    const carry = { spot: 100, rate: 0.05, dividend: 0.01 };
+    const f = forwardPrice(wasm, 100, 0.05, 0.01, 0.75);
+    expect(f).toBeCloseTo(100 * Math.exp(0.04 * 0.75), 10);
+    // At-the-forward reads the slice's own at-the-money vol, whatever the carry.
+    expect(surfaceVol(wasm, surface, f, 0.75, carry)).toBeCloseTo(
+      surfaceVol(wasm, surface, 100, 0.75, market),
+      12,
+    );
+  });
+
+  it('prices a put wing richer on a skewed surface than at one flat vol', () => {
+    const pricer = new GridPricer(wasm);
+    const put = { strike: 80, time: 0.5, kind: 'put' as const, style: 'european' as const, quantity: 1, multiplier: 100, vol: 0 };
+    const atm = surfaceVol(wasm, surface, 100, 0.5, market);
+    const [onSurface] = legsOnSurface(wasm, surface, [put], market);
+    expect(onSurface!.vol).toBeGreaterThan(atm);
+    const point = { spotSteps: 1, spotRange: 0, volSteps: 1, volRange: 0 };
+    const skewed = pricer.reprice([onSurface!], market, point).cell(0, 0).value;
+    const flat = pricer.reprice([{ ...put, vol: atm }], market, point).cell(0, 0).value;
+    expect(skewed).toBeGreaterThan(flat);
+  });
+
+  it('prices a StrategyNode on the surface when one is given', () => {
+    const pricer = new GridPricer(wasm);
+    const legs = [
+      { strike: 80, time: 0.5, kind: 'put' as const, style: 'european' as const, quantity: 1, multiplier: 100, vol: 0.3 },
+    ];
+    const node = createStrategyNode({ id: 's', legs, market });
+    const typed = evaluateStrategy(node, pricer, () => 1);
+    const onSurface = evaluateStrategy(createStrategyNode({ id: 's2', legs, market }), pricer, () => 1, surface);
+    expect(typed.ok && onSurface.ok).toBe(true);
+    if (typed.ok && onSurface.ok) {
+      expect(atTheMoney(onSurface.result).value).not.toBe(atTheMoney(typed.result).value);
+    }
+    const tooLong = createStrategyNode({ id: 's3', legs: [{ ...legs[0]!, time: 2 }], market });
+    expect(() => evaluateStrategy(tooLong, pricer, () => 1, surface)).toThrow(OutsideSurface);
   });
 });
