@@ -119,8 +119,8 @@ it.
 
 - **No painting.** This package produces draw lists and layouts; the ribbon,
   the wash and the halos are drawn by whichever surface consumes them. The
-  Canvas2D reference painter in `apps/canvas-demo` draws the wash; it does not
-  yet draw the ribbon.
+  Canvas2D reference painter in `apps/canvas-demo` draws the wash and the
+  ribbon; the GPU path draws neither yet.
 - **No detector.** The wash takes a z-score and the ribbon takes firings;
   computing either is `canvas-data`'s `anomaly.ts`, and nothing here subscribes
   to a series.

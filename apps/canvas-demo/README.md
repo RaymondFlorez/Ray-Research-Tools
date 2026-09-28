@@ -68,6 +68,18 @@ presence rather than document, so it keeps flowing even while the document link 
 both clients start equal, the peer cursor arrives, offline each client sees only its own
 work (7 vs 6 nodes), and reconnecting leaves both with all 8.
 
+## The event ribbon
+
+The main canvas draws PRD 3.6's event ribbon along its top edge: every node the
+fixture heats in the wash also has a firing on the ribbon, placed by time over
+the last ninety minutes and coloured by severity. Clicking a mark flies the
+viewport to the nodes that fired and selects them. `scripts/screenshot.mjs`
+checks it in Chromium — 25 marks for 71 firings on the 2,000-node canvas, a
+click that lands, a selection equal to the mark's nodes, a viewport that moved,
+and pixels in the strip that differ from its empty end. The fixture draws its
+random numbers in the same order as before the ribbon existed, so the layout
+and every figure measured on it are unchanged.
+
 ## Under PRD 7.2's content security policy
 
 Every page is served with a strict CSP, `COOP: same-origin` and

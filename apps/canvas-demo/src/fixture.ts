@@ -19,7 +19,7 @@ import {
   type NodeStatus,
   type Port,
 } from '@picasso/canvas-core';
-import { WashLayer } from '@picasso/canvas-render';
+import { EventRibbon, WashLayer } from '@picasso/canvas-render';
 
 /** Deterministic PRNG so the demo and its screenshots are reproducible. */
 function mulberry32(seed: number): () => number {
@@ -61,6 +61,8 @@ export interface DemoCanvas {
   doc: CanvasDocument;
   index: CanvasIndex;
   wash: WashLayer;
+  /** PRD 3.6's event ribbon, holding the same firings the wash shows. */
+  ribbon: EventRibbon;
   /** World bounds of the generated content, for the initial fit. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
 }
@@ -69,6 +71,7 @@ export function buildDemoCanvas(nodeCount = 2_000, seed = 7): DemoCanvas {
   const rand = mulberry32(seed);
   const doc = createDocument('demo');
   const wash = new WashLayer();
+  const ribbon = new EventRibbon();
 
   // Lay the canvas out in loose clusters rather than a grid, so pan and zoom
   // have something with structure to move through.
@@ -127,8 +130,16 @@ export function buildDemoCanvas(nodeCount = 2_000, seed = 7): DemoCanvas {
     maxX = Math.max(maxX, x + w);
     maxY = Math.max(maxY, y + h);
 
-    // A few nodes are hot in the wash, as if the session had been running.
-    if (rand() < 0.04) wash.bump(id, 2 + rand() * 6, -rand() * 15 * 60_000);
+    // A few nodes are hot in the wash, as if the session had been running,
+    // and each one's firing is on the event ribbon. The draws are taken in
+    // the same order as before the ribbon existed, so the layout and every
+    // measured figure that depends on it are unchanged.
+    if (rand() < 0.04) {
+      const z = 2 + rand() * 6;
+      const at = -rand() * 15 * 60_000;
+      wash.bump(id, z, at);
+      ribbon.add({ nodeId: id, family: 'robust_z', severity: z, at });
+    }
   }
 
   // Wire each cluster into a shallow local subgraph, and draw a few causal and
@@ -175,6 +186,7 @@ export function buildDemoCanvas(nodeCount = 2_000, seed = 7): DemoCanvas {
     doc,
     index: new CanvasIndex(doc),
     wash,
+    ribbon,
     bounds: { minX, minY, maxX, maxY },
   };
 }

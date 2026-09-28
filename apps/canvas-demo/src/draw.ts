@@ -8,7 +8,9 @@
  */
 
 import {
+  haloColor,
   pulsePhase,
+  type RibbonMark,
   sampleQuadratic,
   type Scene,
   type SceneEdge,
@@ -346,4 +348,42 @@ function clip(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): st
   let out = text;
   while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
   return `${out}…`;
+}
+
+/** Height of the event ribbon strip along the top of the canvas, in CSS pixels. */
+export const RIBBON_HEIGHT = 18;
+
+/**
+ * PRD 3.6's event ribbon: the last ninety minutes of firings, oldest at the
+ * left. A merged mark is drawn wider with its count; a mark whose node has
+ * gone is hollow, because it cannot be flown to.
+ */
+export function drawRibbon(
+  ctx: CanvasRenderingContext2D,
+  marks: readonly RibbonMark[],
+  width: number,
+  theme: Theme,
+): void {
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = theme.background;
+  ctx.fillRect(0, 0, width, RIBBON_HEIGHT);
+  ctx.globalAlpha = 1;
+  ctx.strokeStyle = theme.textMuted;
+  ctx.beginPath();
+  ctx.moveTo(0, RIBBON_HEIGHT - 0.5);
+  ctx.lineTo(width, RIBBON_HEIGHT - 0.5);
+  ctx.stroke();
+  for (const mark of marks) {
+    const colour = haloColor(mark.severity, theme);
+    const w = mark.events.length > 1 ? 5 : 3;
+    if (mark.nodeIds.length === 0) {
+      ctx.strokeStyle = colour;
+      ctx.strokeRect(mark.x - w / 2, 4, w, RIBBON_HEIGHT - 8);
+    } else {
+      ctx.fillStyle = colour;
+      ctx.fillRect(mark.x - w / 2, 4, w, RIBBON_HEIGHT - 8);
+    }
+  }
+  ctx.restore();
 }

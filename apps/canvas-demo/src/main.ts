@@ -18,6 +18,9 @@ import {
 } from '@picasso/canvas-core';
 import {
   DomMountManager,
+  flyToMark,
+  markAt,
+  type RibbonMark,
   buildScene,
   darkTheme,
   lightTheme,
@@ -25,7 +28,7 @@ import {
   type Scene,
 } from '@picasso/canvas-render';
 import { buildDemoCanvas } from './fixture.js';
-import { drawScene } from './draw.js';
+import { RIBBON_HEIGHT, drawRibbon, drawScene } from './draw.js';
 
 const params = new URLSearchParams(location.search);
 const nodeCount = Number(params.get('nodes') ?? 2_000);
@@ -44,7 +47,7 @@ function mustGetContext(target: HTMLCanvasElement): CanvasRenderingContext2D {
   return context;
 }
 
-const { doc, index, wash, bounds } = buildDemoCanvas(nodeCount);
+const { doc, index, wash, ribbon, bounds } = buildDemoCanvas(nodeCount);
 const mounts = new DomMountManager();
 const selection = new Set<NodeID>();
 
@@ -106,8 +109,25 @@ canvas.addEventListener(
   { passive: false },
 );
 
-// Click selects the topmost node under the cursor.
+let lastMarks: RibbonMark[] = [];
+
+/** A click on the ribbon flies to what fired; returns whether it hit a mark. */
+function clickRibbon(x: number): boolean {
+  const mark = markAt(lastMarks, x);
+  if (!mark || mark.nodeIds.length === 0) return false;
+  viewport = flyToMark(doc, viewport, mark);
+  lodTracker = new LodTracker(viewport.scale, 0);
+  selection.clear();
+  for (const id of mark.nodeIds) selection.add(id);
+  return true;
+}
+
+// Click selects the topmost node under the cursor, or follows a ribbon mark.
 canvas.addEventListener('click', (e) => {
+  if (e.clientY < RIBBON_HEIGHT) {
+    clickRibbon(e.clientX);
+    return;
+  }
   const world = screenToWorld(viewport, { x: e.clientX, y: e.clientY });
   const hit = index.hit(doc, world);
   selection.clear();
@@ -161,6 +181,8 @@ function frame(timestamp: number): void {
   );
 
   drawScene(ctx, scene, { theme, now, dpr });
+  lastMarks = ribbon.layout(doc, now, viewport.width);
+  drawRibbon(ctx, lastMarks, viewport.width, theme);
 
   const elapsed = performance.now() - started;
   frameTimes.push(elapsed);
@@ -188,6 +210,8 @@ declare global {
       lod: () => number;
       mounted: () => number;
       setViewport: (next: Partial<Viewport>) => void;
+      ribbon: () => Array<{ x: number; events: number; nodes: number }>;
+      clickRibbon: (x: number) => { hit: boolean; selected: string[]; viewport: Viewport };
     };
   }
 }
@@ -198,5 +222,10 @@ window.__picasso = {
   setViewport: (next) => {
     viewport = { ...viewport, ...next };
     lodTracker = new LodTracker(viewport.scale, 0);
+  },
+  ribbon: () => lastMarks.map((m) => ({ x: m.x, events: m.events.length, nodes: m.nodeIds.length })),
+  clickRibbon: (x) => {
+    const hit = clickRibbon(x);
+    return { hit, selected: [...selection], viewport: { ...viewport } };
   },
 };

@@ -118,6 +118,48 @@ try {
     );
   }
 
+  // PRD 3.6's event ribbon: marks on the strip, and a click on one flies the
+  // viewport to the node that fired and selects it.
+  {
+    await page.goto(`http://localhost:${PORT}/apps/canvas-demo/index.html?nodes=${NODES}&scale=0.3&now=1000`, {
+      waitUntil: 'load',
+    });
+    await page.waitForFunction(() => window.__picasso?.stats() !== null, null, { timeout: 10_000 });
+    await page.waitForTimeout(400);
+    const marks = await page.evaluate(() => window.__picasso.ribbon());
+    const events = marks.reduce((a, m) => a + m.events, 0);
+    const target = marks.find((m) => m.nodes > 0);
+    const clicked = target ? await page.evaluate((x) => window.__picasso.clickRibbon(x), target.x) : undefined;
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: `${OUT}/ribbon.png` });
+    // The ribbon pixels themselves: something other than background is drawn
+    // in the strip where the mark is.
+    const painted = target
+      ? await page.evaluate((x) => {
+          const c = document.getElementById('canvas');
+          const ctx = c.getContext('2d');
+          const dpr = c.width / c.clientWidth;
+          const [r, g, b] = ctx.getImageData(Math.round(x * dpr), Math.round(9 * dpr), 1, 1).data;
+          // The strip's left end: every fixture firing is in the last fifteen
+          // minutes, so the first three-quarters of the ribbon is empty.
+          const [br, bg, bb] = ctx.getImageData(Math.round(2 * dpr), Math.round(9 * dpr), 1, 1).data;
+          return `${r},${g},${b}` !== `${br},${bg},${bb}`;
+        }, target.x)
+      : false;
+    const problems = [];
+    if (marks.length === 0) problems.push('no marks on the ribbon');
+    if (!target) problems.push('no mark with a live node');
+    if (!clicked?.hit) problems.push('the click did not land on a mark');
+    if (clicked && clicked.selected.length !== target.nodes) problems.push('selection is not the mark\'s nodes');
+    if (clicked && clicked.viewport.scale === 0.3) problems.push('the viewport did not move');
+    if (!painted) problems.push('the mark is not visibly drawn');
+    failures += problems.length === 0 ? 0 : 1;
+    console.log(
+      `ribbon           ${marks.length} marks for ${events} firings; click flew to ${clicked?.selected.join(', ')} ` +
+        `at zoom ${clicked?.viewport.scale.toFixed(3)} ${problems.length === 0 ? 'ok' : `FAIL (${problems.join('; ')})`}`,
+    );
+  }
+
   if (consoleErrors.length > 0) {
     failures += 1;
     console.error(`\nconsole errors:\n${consoleErrors.join('\n')}`);
