@@ -382,9 +382,9 @@ against nothing at all.
 - **SVI is raw SVI, fitted per slice.** There is no SSVI or eSSVI
   parameterization, which would make the calendar condition hold by
   construction rather than be checked afterwards.
-- **No skew history.** `skew()` reads one smile. PRD 5.4 asks for "skew and
-  its history", and the storage that would make a history is `canvas-data`'s,
-  not this package's.
+- **Skew history is kept elsewhere.** `skew()` reads one smile; the history
+  is `canvas-data`'s `skewHistory`, bitemporal, and nothing here writes to it
+  on a schedule.
 - **Margin is an estimate, and a rough one.** Reg-T recognises long premium,
   naked shorts and verticals; every other recognised strategy is margined more
   conservatively than an account would be. Portfolio margin is the CBOE equity

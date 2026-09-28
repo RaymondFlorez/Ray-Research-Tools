@@ -38,7 +38,7 @@ fixture gives every fact its own node. A reading is now identified by node
 *and* port, with the cache key dating it rather than identifying it — and
 `test/reconciler.test.ts` carries the regression.
 
-## Eight suites, eight seams
+## Nine suites, nine seams
 
 | Suite | Seam |
 |---|---|
@@ -49,6 +49,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `margin.test.ts` | `canvas-ink` → `canvas-core` → `canvas-agents`: a handwritten note reaching the model without becoming data. |
 | `drawn-curve.test.ts` | `canvas-ink` → `canvas-pricing` → `pricing-core`: a pen stroke becoming a shocked curve. |
 | `sketch-to-code.test.ts` | `canvas-ink` → `canvas-pricing`: candidate books re-rendered by the engine and verified against a drawn payoff before anything is offered. |
+| `skew-history.test.ts` | `canvas-pricing` → `canvas-data`: a risk reversal read by the engine, kept bitemporally, the two shapes held equal by the compiler. |
 | `alerts.test.ts` | `canvas-data` → `canvas-agents`: detector firings ranked in the return digest, and the two packages' family names held equal by the compiler. |
 
 ## The second bug, found the same way

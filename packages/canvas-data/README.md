@@ -17,6 +17,7 @@ npm test --workspace @picasso/canvas-data
 | `entitlements.ts` | 7.2 | Four data classes, per-user entitlement, and the two independent egress controls |
 | `timescrub.ts` | 3.8, 3.9 | Snapshot catalog and the canvas asof, propagated into provenance and cache keys |
 | `screener.ts` | 3.3, 5.8 | The `UniverseNode`'s screener: a hand-parsed expression, three-valued over missing data, resolved as of a date |
+| `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 
 ## Scope: what this is and is not
@@ -231,6 +232,21 @@ decide are counted and reported by field.
 never: a 2019 screen includes the names trading then and since delisted, and
 excludes those listed later. The field values themselves must already be
 point-in-time for that date, which is the bitemporal store's job.
+
+## Skew has a history, and the history is restated
+
+PRD 5.4 asks for "skew and its history". `canvas-pricing` reads one day's risk
+reversal off one day's smile; the series lives here, in the bitemporal store,
+because smiles are corrected — a close marked at 16:00 and fixed overnight has
+two risk reversals for one day, and a history read that evening must show the
+first. The delta is part of the series key, so a 25-delta history and a
+10-delta one cannot be spliced into what would look like a regime change.
+
+"Where is skew against its history" is ranked against the prior days only.
+Including today pulls every extreme towards the middle: the widest skew on
+record reads 0.99 of a fifty-day sample that contains it and 1.0 of the
+forty-nine before it. Below twenty prior days no percentile is reported, and a
+flat history ranks today at the median rather than at either end.
 
 ## Three detectors, because they see three different things
 
