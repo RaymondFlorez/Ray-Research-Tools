@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { addNode, createDocument, createNode } from '@picasso/canvas-core';
 import { Blackboard } from '../src/blackboard.js';
+import { assembleContext } from '../src/context.js';
 import { run } from '../src/coordinator.js';
 import {
   APPROVAL_CENTS,
@@ -7,7 +9,9 @@ import {
   changeMethod,
   criticalPath,
   deleteStep,
+  openQueryNode,
   plan,
+  queryScope,
   scope,
   toPlanSteps,
   type PlannedStep,
@@ -266,5 +270,58 @@ describe('handing the approved plan to the coordinator', () => {
     // retrieve+portfolio, subtext+shock, scribe.
     expect(result.waves).toBe(3);
     expect(board.budgetState().spentCents).toBe(approved.totalCents);
+  });
+});
+
+describe('Cmd J: a query at the cursor, scoped to the selection (PRD 3.8)', () => {
+  function canvas() {
+    const doc = createDocument('c');
+    for (const id of ['curve', 'book', 'vol']) {
+      addNode(doc, createNode({ id, kind: 'TransformNode', binding: 'wired' }));
+    }
+    return doc;
+  }
+  const viewport = { x: 1000, y: 500, scale: 0.5, width: 1440, height: 900 };
+
+  it('lands where the cursor is, in world space', () => {
+    const { node } = openQueryNode({ id: 'q1', doc: canvas(), viewport, cursor: { x: 200, y: 100 }, selection: [] });
+    expect(node.kind).toBe('QueryNode');
+    expect(node.position).toEqual({ x: 1400, y: 700 });
+    expect(node.binding).toBe('bound');
+  });
+
+  it('takes a copy of the selection, so clicking on while typing does not change the question', () => {
+    const selection = new Set(['book', 'curve']);
+    const { node } = openQueryNode({ id: 'q2', doc: canvas(), viewport, cursor: { x: 0, y: 0 }, selection });
+    selection.clear();
+    selection.add('vol');
+    expect(queryScope(node)).toEqual(['book', 'curve']);
+  });
+
+  it('reports a selected node a peer has just deleted rather than scoping it', () => {
+    const doc = canvas();
+    const { node, dropped } = openQueryNode({ id: 'q3', doc, viewport, cursor: { x: 0, y: 0 }, selection: ['book', 'gone'] });
+    expect(queryScope(node)).toEqual(['book']);
+    expect(dropped).toEqual(['gone']);
+  });
+
+  it('carries the scope into planning and into the context', () => {
+    const doc = canvas();
+    const { node } = openQueryNode({ id: 'q4', doc, viewport, cursor: { x: 0, y: 0 }, selection: ['book'] });
+    const scoped = scope({ question: 'stress this against 50bps', resolve: resolver, selectedNodes: queryScope(node) });
+    expect(scoped.selectedNodes).toEqual(['book']);
+    const context = assembleContext({
+      doc,
+      question: scoped.question,
+      selected: queryScope(node),
+      policy: { ceiling: 1000 },
+    });
+    expect(context.items.map((i) => i.nodeId)).toContain('book');
+  });
+
+  it('carries the scope as a param, where the cache key reads it', () => {
+    const a = openQueryNode({ id: 'q5', doc: canvas(), viewport, cursor: { x: 0, y: 0 }, selection: ['book'] }).node;
+    const b = openQueryNode({ id: 'q5', doc: canvas(), viewport, cursor: { x: 0, y: 0 }, selection: ['book', 'vol'] }).node;
+    expect(a.params.scope).not.toEqual(b.params.scope);
   });
 });

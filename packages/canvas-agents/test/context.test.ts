@@ -482,6 +482,21 @@ describe('the analyst margin (PRD 3.2.5)', () => {
     expect(item.role).toBe('intent');
   });
 
+  it('arrives as intent when the analyst selects it, too', () => {
+    // The Cmd J path: a query opened on a selection that includes a note. The
+    // rule was first written into the neighborhood loop alone, and a selected
+    // note reached the prompt as `text=GM probably 71` with role data.
+    const doc = chain();
+    addNode(doc, note('margin', 'GM probably 71'));
+    const assembled = assembleContext({ doc, question: 'q', selected: ['margin', 'beta'], policy: roomy });
+    const item = assembled.items.find((i) => i.nodeId === 'margin')!;
+    expect(item.role).toBe('intent');
+    expect(item.category).toBe('question');
+    expect(item.text).not.toContain('text=');
+    expect(item.text).toContain(NOTE_FRAMING);
+    expect(assembled.items.filter((i) => i.nodeId === 'margin')).toHaveLength(1);
+  });
+
   it('is the only producer of an intent item', () => {
     const doc = chain();
     addNode(doc, note('margin', 'watch the March expiry'));

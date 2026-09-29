@@ -32,6 +32,15 @@
  * wave boundary with nothing to show for it.
  */
 
+import {
+  createNode,
+  screenToWorld,
+  type CanvasDocument,
+  type NodeID,
+  type PicassoNode,
+  type Vec2,
+  type Viewport,
+} from '@picasso/canvas-core';
 import type { TaskClass } from '@picasso/canvas-router';
 import type { AgentRole, PlanStep } from './blackboard.js';
 
@@ -347,4 +356,70 @@ export function toPlanSteps(approved: Plan): Array<Omit<PlanStep, 'status'>> {
     dependsOn: [...step.dependsOn],
     budgetCents: step.estimatedCents,
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Cmd J: a QueryNode at the cursor, pre-scoped to the selection (PRD 3.8)
+// ---------------------------------------------------------------------------
+
+export interface OpenQueryInput {
+  id: NodeID;
+  doc: CanvasDocument;
+  viewport: Viewport;
+  /** Where the cursor was, in screen pixels. */
+  cursor: Vec2;
+  /** The selection when the key was pressed. */
+  selection: Iterable<NodeID>;
+  question?: string;
+}
+
+export interface OpenedQuery {
+  node: PicassoNode;
+  /** Selected ids that were no longer on the canvas, reported rather than scoped. */
+  dropped: NodeID[];
+}
+
+/** Default QueryNode footprint, in world units. */
+export const QUERY_SIZE = { w: 360, h: 200 } as const;
+
+/**
+ * PRD 3.8: "`Cmd J` — Opens a `QueryNode` at cursor, pre-scoped to the
+ * current selection."
+ *
+ * The scope is a *copy* of the selection, taken now. The analyst goes on
+ * clicking while they type the question, and a query whose scope followed the
+ * live selection would be answered about whatever happened to be selected when
+ * they pressed return. Ids in the selection that are no longer on the canvas —
+ * a peer deleted the node a moment ago — are left out and reported.
+ *
+ * The node is `bound`: it resolves against real data when run, and nothing is
+ * wired into it; the scope is carried as a param, which is also what puts it
+ * in the node's cache key.
+ */
+export function openQueryNode(input: OpenQueryInput): OpenedQuery {
+  const world = screenToWorld(input.viewport, input.cursor);
+  const scoped: NodeID[] = [];
+  const dropped: NodeID[] = [];
+  for (const id of new Set(input.selection)) {
+    if (input.doc.nodes.has(id)) scoped.push(id);
+    else dropped.push(id);
+  }
+  scoped.sort();
+  const node = createNode({
+    id: input.id,
+    kind: 'QueryNode',
+    binding: 'bound',
+    position: { x: world.x, y: world.y },
+    size: { ...QUERY_SIZE },
+    inputs: [],
+    outputs: [{ id: 'answer', name: 'Answer', type: 'text', cardinality: 'one', required: false }],
+    params: { question: input.question ?? '', scope: scoped },
+  });
+  return { node, dropped };
+}
+
+/** The node ids a QueryNode was opened on, for `scope()` and the context builder. */
+export function queryScope(node: PicassoNode): NodeID[] {
+  const scoped = node.params.scope;
+  return Array.isArray(scoped) ? scoped.filter((v): v is string => typeof v === 'string') : [];
 }

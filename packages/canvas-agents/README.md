@@ -180,6 +180,12 @@ the edge by `canvas-core`) are filed in the category of the node they point at
 rather than in the neighborhood, so a note explaining why a param is 1.4 is
 budgeted beside that node instead of behind every other nearby object.
 
+The rule is enforced in one place. It was first written into the
+neighborhood loop alone, and a note the analyst *selected* still reached the
+prompt as `text=GM probably 71` with role `data` — found while adding Cmd J,
+whose query is scoped to exactly the selection. Every path from a node to a
+context item now goes through one helper, so a new path cannot forget it.
+
 **The classification travels.** Every item carries the classification of what
 it came from and the assembled context reports the most sensitive one *that
 was kept* — a class that got dropped at the ceiling is not reported, because
@@ -240,6 +246,16 @@ The answer node arrives `loose`. Prose computes nothing and has nothing to
 invalidate; binding it would put it in the scheduler with no work to do. The
 handles are what connect it to the canvas, and they point at nodes that are
 themselves live.
+
+## Cmd J
+
+PRD 3.8: "Opens a `QueryNode` at cursor, pre-scoped to the current selection."
+`openQueryNode` places it at the cursor's world position and scopes it to a
+*copy* of the selection taken when the key was pressed — the analyst keeps
+clicking while typing, and a scope that followed the live selection would be
+answered about whatever was selected at return. Selected ids a peer has just
+deleted are reported, not scoped. `queryScope` hands the scope to `scope()` and
+to the context builder.
 
 ## Persistent agents
 

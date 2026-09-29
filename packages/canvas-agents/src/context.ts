@@ -544,6 +544,39 @@ export function assembleContext(input: ContextInput): AssembledContext {
   const classify = input.classify ?? (() => 'public' as ContextClassification);
   const latest = input.latestValue ?? (() => undefined);
   const items: ContextItem[] = [];
+  const noted = new Set<NodeID>();
+
+  /**
+   * The one way a node becomes a context item.
+   *
+   * Every path — selected, lineage, neighborhood — comes through here, so
+   * none of them can serialize a loose note as a param. That rule was first
+   * written into the neighborhood loop alone, and a note the analyst
+   * *selected* still reached the prompt as `text=GM probably 71` with role
+   * `data`: the path Cmd J takes, since it opens a query scoped to whatever is
+   * selected. One function cannot be forgotten by a fourth loop.
+   */
+  const itemFor = (
+    node: PicassoNode,
+    category: ContextCategory,
+    score: number,
+    label: string,
+  ): ContextItem => {
+    if (noteText(node) !== undefined) {
+      noted.add(node.id);
+      return analystNote(node, { category, score, classification: classify(node), countTokens: count });
+    }
+    const text = `${label}: ${summarizeNode(node, latest(node))}`;
+    return {
+      category,
+      role: 'data',
+      text,
+      tokens: count(text),
+      score,
+      classification: classify(node),
+      nodeId: node.id,
+    };
+  };
 
   const questionText = `Question: ${question}`;
   items.push({
@@ -563,16 +596,7 @@ export function assembleContext(input: ContextInput): AssembledContext {
     if (!node) continue;
     selectedSet.add(id);
     placed.set(id, { category: 'question', score: 1 });
-    const text = `Selected: ${summarizeNode(node, latest(node))}`;
-    items.push({
-      category: 'question',
-      role: 'data',
-      text,
-      tokens: count(text),
-      score: 1,
-      classification: classify(node),
-      nodeId: id,
-    });
+    items.push(itemFor(node, 'question', 1, 'Selected'));
   }
 
   // The lineage slice: ancestors only, nearest first.
@@ -581,51 +605,16 @@ export function assembleContext(input: ContextInput): AssembledContext {
     const node = doc.nodes.get(id);
     if (!node) continue;
     placed.set(id, { category: 'lineage', score: 1 / depth });
-    const text = `Lineage: ${summarizeNode(node, latest(node))}`;
-    items.push({
-      category: 'lineage',
-      role: 'data',
-      text,
-      tokens: count(text),
-      // Nearer ancestors first: the thing a value was computed from directly
-      // explains it better than its grandparent does.
-      score: 1 / depth,
-      classification: classify(node),
-      nodeId: id,
-    });
+    // Nearer ancestors first: the thing a value was computed from directly
+    // explains it better than its grandparent does.
+    items.push(itemFor(node, 'lineage', 1 / depth, 'Lineage'));
   }
 
-  const noted = new Set<NodeID>();
   for (const [id, signal] of Object.entries(input.neighborhood ?? {})) {
     if (selectedSet.has(id)) continue;
     const node = doc.nodes.get(id);
-    if (!node) continue;
-    // PRD 3.2.5. A loose object with recognized text is the analyst's margin,
-    // and summarizing it as a node would emit `text=GM probably 71` — a param
-    // assignment indistinguishable from a calibrated one. It goes through
-    // `analystNote` instead, which is the only producer of `role: 'intent'`.
-    if (noteText(node) !== undefined) {
-      noted.add(id);
-      items.push(
-        analystNote(node, {
-          category: 'neighborhood',
-          score: neighborhoodScore(signal),
-          classification: classify(node),
-          countTokens: count,
-        }),
-      );
-      continue;
-    }
-    const text = `Nearby: ${summarizeNode(node, latest(node))}`;
-    items.push({
-      category: 'neighborhood',
-      role: 'data',
-      text,
-      tokens: count(text),
-      score: neighborhoodScore(signal),
-      classification: classify(node),
-      nodeId: id,
-    });
+    if (!node || noted.has(id)) continue;
+    items.push(itemFor(node, 'neighborhood', neighborhoodScore(signal), 'Nearby'));
   }
 
   // Notes the analyst attached by arrow travel with the node they point at
