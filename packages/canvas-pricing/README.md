@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 200 tests
+npm test --workspace @picasso/canvas-pricing    # 204 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -85,6 +85,23 @@ serial dependence an iid draw destroys. It shares the module's one result slot w
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
 and the analyst who assembled them is the one who can fix it.
+
+## The shock's shape is estimated, not assumed
+
+PRD 5.7's rate-shock plan applies 50bp "defaulting to a historically-estimated shape
+conditional on a hawkish surprise rather than a naive parallel move". `estimateShockShape`
+is that estimate: an event study on the curve, regressing each standard tenor's event-day
+change on the policy surprise over hawkish days only, and dividing by the anchor tenor's
+loading so the anchor moves exactly the stated size. `shockFromShape` turns it into a drawn
+shock with every tenor explicit.
+
+Each tenor carries its loading, R² and a standard error on its multiple. The loadings
+share a regressor, so their errors correlate, and the multiple's error is the delta method
+with the residual covariance between equations; over 200 seeded samples its 95% interval
+covered 94.8% of 1,800 estimates. Conditioning matters: on simulated history where hawkish
+days bear-flatten and dovish days move the front, pooling every event puts the 3y multiple
+at 0.81 against a hawkish truth of 1.2, seven standard errors away. A tenor the surprise
+explains less than 20% of is named in `assumptions`.
 
 ## Discrete dividends
 
@@ -418,6 +435,9 @@ against nothing at all.
 
 ## What is not covered
 
+- **The surprise series is the caller's.** `estimateShockShape` takes event dates with a
+  policy surprise and the curve's moves; extracting surprises from futures, and choosing
+  which days count as policy events, happens before it.
 - **Discrete dividends price one option at a time.** `priceWithDividends` is a scalar
   call; the scenario grid, the strategy surface and the fast American path still take a
   continuous yield.

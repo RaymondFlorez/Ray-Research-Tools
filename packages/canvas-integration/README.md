@@ -102,6 +102,7 @@ fallback would make the ladder look more verified than it is.
 | guard → router | A positions-classified prompt is refused to a vendor model, and the same work routes to the self-hosted fleet with the hard rule named in `excluded`. |
 | guard (second control) | A mislabelled dump stamped `public` passes the router gate and is stopped at the wire. |
 | pricing → core | The bootstrapped curve moves exactly 50bp at the one-year point under a parallel shock. |
+| history → shock → core | The default shock is the shape forty past policy days give hawkish surprises: the three-month point moves exactly 50bp in the engine, two years more, thirty years under half. |
 | transmission | Every estimated channel carries an assumption line with its R-squared. |
 | scenario → pricing | Six cells, each a full revaluation in WASM; the unshocked corner is exactly zero P&L; the shocked corner is not the sum of its edges. |
 | scenario → attribution | Tail shares are taken over losses and every contributor is a loser. |

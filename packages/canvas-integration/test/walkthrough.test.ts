@@ -64,6 +64,9 @@ import {
   calibrateHeston,
   hestonImpliedVol,
   estimateCost,
+  estimateShockShape,
+  shockFromShape,
+  STANDARD_TENORS,
   DEFAULT_COST_CEILING,
   type HestonParams,
   type SurfaceQuote,
@@ -218,6 +221,39 @@ describe('3 · the curve, the shock, and what transmits', () => {
     const shocked = curves.shocked(INSTRUMENTS, { shape: 'parallel', bps: 50 });
     const shockedOneYear = shocked.zero(1);
     expect((shockedOneYear - baseOneYear) * 10_000).toBeCloseTo(50, 6);
+  });
+
+  // "apply a 50bps shock with a selectable shape, defaulting to a
+  // historically-estimated shape conditional on a hawkish surprise rather
+  // than a naive parallel move".
+  it('defaults the shock to the shape hawkish surprises have historically had', () => {
+    // Forty past policy days: surprises alternate hawkish and dovish with
+    // fixed sizes, and the curve's response is a bear flattener on hawkish
+    // days and a front-end move on dovish ones, plus a deterministic wobble.
+    const hawkish = [1.0, 1.1, 1.2, 1.3, 1.2, 1.0, 0.85, 0.7, 0.5, 0.4];
+    const dovish = [1.0, 0.9, 0.7, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.1];
+    const history = Array.from({ length: 40 }, (_, i) => {
+      const surprise = (i % 2 === 0 ? 1 : -1) * (2 + (i % 7));
+      const loads = surprise > 0 ? hawkish : dovish;
+      return {
+        date: `fomc-${i}`,
+        surprise,
+        changes: loads.map((l, t) => l * surprise + 0.4 * Math.sin(i * 1.7 + t)),
+      };
+    });
+    const shape = estimateShockShape(history);
+    expect(shape.events).toBe(20);
+    expect(shape.loadings.every((l) => Number.isFinite(l.standardError) && Number.isFinite(l.rSquared))).toBe(true);
+
+    const base = curves.bootstrap(INSTRUMENTS);
+    const shocked = curves.shocked(INSTRUMENTS, shockFromShape(shape, 50));
+    const move = (tenor: number) => (shocked.zero(tenor) - base.zero(tenor)) * 10_000;
+    // The anchor moves exactly as asked; the long end, by much less. A
+    // parallel shift would move every tenor 50.
+    expect(move(0.25)).toBeCloseTo(50, 6);
+    expect(move(30)).toBeLessThan(25);
+    expect(move(2)).toBeGreaterThan(move(0.25));
+    expect(shape.loadings.map((l) => l.tenor)).toEqual([...STANDARD_TENORS]);
   });
 
   // "it refuses to pretend a parallel shift is the honest default, and it
