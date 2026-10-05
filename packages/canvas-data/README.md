@@ -99,6 +99,16 @@ four ISINs, three CUSIPs, three FIGIs, plus a mutated digit of each. What a chec
 *cannot* do is tell that a valid identifier names the wrong security, and a test pins that
 limit so nobody reads more into the validation than it offers.
 
+Chain addresses have a check too, and it used to be thrown away. A mixed-case EVM address
+*is* its EIP-55 checksum, and the registry lower-cased addresses on ingest before anything
+looked at the case — which made a typo look canonical. The case is now checked first, at
+registration and at lookup, so "no such token" and "you mistyped the address" are different
+answers. All-lower and all-upper spellings carry no checksum and are accepted as such. The
+checksum needs Keccak-256, which is not NIST SHA3-256 — same permutation, different padding,
+and a platform SHA3 would produce well-formed wrong checksums — so `keccak.ts` implements it
+and checks it against published vectors that do not come from it: the empty string, `abc`,
+a two-block input, the four examples in EIP-55 itself, and real WETH and USDC addresses.
+
 **Tickers resolve as of a date, because they are re-let.** `FB` to `META` is the easy case:
 a rename keeps the internal id, so a ten-year chart does not become two charts. The hard
 case is a symbol freed by one issuer and taken by another. A backtest resolving it as of

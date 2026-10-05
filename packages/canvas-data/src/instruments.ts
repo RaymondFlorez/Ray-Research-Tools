@@ -46,6 +46,8 @@
  * pass already has, where an ambiguous mention produces a chip and not a chart.
  */
 
+import { isValidChainAddress } from './keccak.js';
+
 import type { Instant } from './bitemporal.js';
 
 export type AssetClass =
@@ -257,6 +259,12 @@ export class InstrumentRegistry {
       const held = this.byCusip.get(cusip);
       if (held !== undefined) throw new DuplicateIdentifier('cusip', cusip, held);
     }
+    // A mixed-case address is an EIP-55 checksum, and it is checked before the
+    // address is lower-cased for storage — lower-casing first is what made a
+    // typo look canonical.
+    if (chain !== undefined && !isValidChainAddress(chain.address)) {
+      throw new InvalidIdentifier('chain', chain.address, 'EIP-55 checksum or shape');
+    }
 
     const stored: Instrument = {
       ...instrument,
@@ -295,7 +303,15 @@ export class InstrumentRegistry {
     return instrument ? [{ instrument }] : [];
   }
 
+  /**
+   * Resolve a token by chain and address.
+   *
+   * A mixed-case address with a wrong checksum is refused rather than looked
+   * up: "no such token" and "you mistyped the address" are different answers,
+   * and the case is what tells them apart.
+   */
   resolveChain(chainId: number, address: string): Candidate[] {
+    if (!isValidChainAddress(address)) throw new InvalidIdentifier('chain', address, 'EIP-55 checksum or shape');
     const id = this.byChain.get(chainKey(chainId, address.toLowerCase()));
     const instrument = id === undefined ? undefined : this.byId.get(id);
     return instrument ? [{ instrument }] : [];

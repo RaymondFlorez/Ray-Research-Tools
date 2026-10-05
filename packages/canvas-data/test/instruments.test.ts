@@ -108,6 +108,22 @@ describe('registration', () => {
     ).toBe('crypto:weth');
   });
 
+  it('refuses a mixed-case address whose checksum is wrong, at registration and at lookup', () => {
+    // WETH with one letter's case flipped: a typo the checksum exists to catch.
+    const typo = '0xc02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
+    expect(() =>
+      new InstrumentRegistry().register({
+        id: 'crypto:weth-typo',
+        assetClass: 'crypto',
+        name: 'Wrapped Ether',
+        listings: [],
+        chain: { chainId: 1, address: typo },
+      }),
+    ).toThrow(InvalidIdentifier);
+    expect(() => new InstrumentRegistry().resolveChain(1, typo)).toThrow(/EIP-55/);
+    expect(() => new InstrumentRegistry().resolveChain(1, '0xa0b8')).toThrow(InvalidIdentifier);
+  });
+
   it('keys a token by chain and address together', () => {
     const registry = new InstrumentRegistry();
     registry.register({
@@ -115,7 +131,7 @@ describe('registration', () => {
       assetClass: 'crypto',
       name: 'USDC on Ethereum',
       listings: [],
-      chain: { chainId: 1, address: '0xa0b8' },
+      chain: { chainId: 1, address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
     });
     // The same address on another chain is another instrument, and must be.
     registry.register({
@@ -123,10 +139,10 @@ describe('registration', () => {
       assetClass: 'crypto',
       name: 'USDC on Arbitrum',
       listings: [],
-      chain: { chainId: 42161, address: '0xa0b8' },
+      chain: { chainId: 42161, address: '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48' },
     });
-    expect(registry.resolveChain(1, '0xa0b8')[0]?.instrument.id).toBe('crypto:usdc-eth');
-    expect(registry.resolveChain(42161, '0xa0b8')[0]?.instrument.id).toBe('crypto:usdc-arb');
+    expect(registry.resolveChain(1, '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48')[0]?.instrument.id).toBe('crypto:usdc-eth');
+    expect(registry.resolveChain(42161, '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48')[0]?.instrument.id).toBe('crypto:usdc-arb');
   });
 });
 
