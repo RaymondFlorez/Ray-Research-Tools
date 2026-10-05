@@ -35,6 +35,8 @@ export interface RoutingFeatures {
   latencyBudgetMs: number;
   /** This output feeds a compute node, so it must be reproducible. */
   determinismRequired: boolean;
+  /** Length of the audio, for a class whose latency scales with it (ASR). */
+  audioSeconds?: number;
   priorFailures: FailureRecord[];
 }
 
@@ -107,11 +109,17 @@ function estimateCost(model: Model, features: RoutingFeatures): number {
  * latency distribution of a model behind a queue is not symmetric, and the two
  * quantiles are what is actually observed.
  */
-function latencyRisk(model: Model, budgetMs: number): number {
-  if (budgetMs >= model.latencyMsP95) return 0.05 * Math.max(0, 1 - (budgetMs - model.latencyMsP95) / budgetMs);
-  if (budgetMs <= model.latencyMsP50) return 1 - 0.5 * (budgetMs / Math.max(1, model.latencyMsP50));
-  const span = model.latencyMsP95 - model.latencyMsP50;
-  const position = (budgetMs - model.latencyMsP50) / Math.max(1, span);
+function latencyRisk(model: Model, budgetMs: number, audioSeconds?: number): number {
+  if (!Number.isFinite(budgetMs)) return 0;
+  // A model whose time scales with the audio is measured against the same
+  // audio the budget was computed from.
+  const scaled = model.realtime !== undefined && audioSeconds !== undefined;
+  const p50 = scaled ? model.realtime!.p50 * audioSeconds! * 1000 : model.latencyMsP50;
+  const p95 = scaled ? model.realtime!.p95 * audioSeconds! * 1000 : model.latencyMsP95;
+  if (budgetMs >= p95) return 0.05 * Math.max(0, 1 - (budgetMs - p95) / budgetMs);
+  if (budgetMs <= p50) return 1 - 0.5 * (budgetMs / Math.max(1, p50));
+  const span = p95 - p50;
+  const position = (budgetMs - p50) / Math.max(1, span);
   return 0.5 - 0.45 * position;
 }
 
@@ -200,7 +208,7 @@ export function route(
     .map((model) => {
       const quality = model.quality[features.taskClass] ?? 0;
       const costCents = estimateCost(model, features);
-      const risk = latencyRisk(model, features.latencyBudgetMs);
+      const risk = latencyRisk(model, features.latencyBudgetMs, features.audioSeconds);
       return {
         model,
         quality,

@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 82 tests
+npm test --workspace @picasso/canvas-router    # 89 tests
 ```
 
 ## Phase 3's exit criterion
@@ -116,6 +116,33 @@ when it bites.
 Only verified dispatches count toward a model's acceptance rate. An unverified dispatch says
 nothing about quality, and folding it in as a pass would let a class with no verifier drift
 upward forever. A model with no verified dispatches reports `NaN`, not a number.
+
+## The SLO is stated in the table's own unit
+
+PRD 4.2 gives most rows a p95 in time, `asr` "0.15x realtime" and `embed` no
+SLO at all. The policy had one millisecond field for every row, which forced
+`asr` to a fixed ten seconds and `embed` to an invented 500ms; both rows also
+pointed at a general 8B model as a placeholder, since nothing in the fleet was
+scored for either. Each row's SLO is now `p95`, `realtime` or `none`, and
+`latencyBudgetFor` turns it into a budget: a sixty-minute call gets nine
+minutes, a thirty-second clip four and a half seconds, an ASR request with no
+duration is refused rather than given a typical-call guess, and embedding is
+unbounded.
+
+ASR models carry their latency as a fraction of the audio too, so the risk
+score compares like with like: whisper's 0.11x p95 is equally comfortable inside
+the budget for an hour as for thirty seconds, and the old fixed ten seconds
+applied to the hour scores above 0.95. The fleet now has the models the table
+names — `whisper-large-v3` self-hosted, `vendor-asr` as the fallback, an open
+embedding model — with the same placeholder status as every other fleet figure:
+the realtime fractions are stated, not measured. Positions-classified audio
+stays on the self-hosted model by the usual hard rule. The cascade's exit
+figures are unchanged: 86.8% cheap terminations, 0.00% quality delta.
+
+Not modelled: the table's escalation triggers that are inputs rather than
+verifier outcomes — low SNR for ASR, table ambiguity or footnote
+cross-references for `doc.extract` — which the cascade approximates as one
+failed verification.
 
 ## The canary
 

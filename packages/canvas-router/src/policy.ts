@@ -63,15 +63,36 @@ export interface Model {
    * candidate.
    */
   quality: Partial<Record<TaskClass, number>>;
+  /**
+   * Latency as a fraction of the audio's duration, for models whose work
+   * scales with the length of what they are given (ASR). When present and the
+   * request carries `audioSeconds`, it replaces the fixed p50/p95 in the
+   * latency risk: a fixed millisecond figure for transcription is right for
+   * one length of call and wrong for every other.
+   */
+  realtime?: { p50: number; p95: number };
   /** Supports a pinned version and temperature zero. */
   deterministic: boolean;
   contextTokens: number;
 }
 
+/**
+ * A row's latency SLO, in the unit the 4.2 table states it in.
+ *
+ * Most rows are a p95 in time. `asr` is "0.15x realtime" — a multiple of the
+ * audio's own duration, so a sixty-minute call has nine minutes and a
+ * thirty-second clip has four and a half seconds — and `embed` has none. A
+ * single millisecond field had forced both into numbers the PRD does not give.
+ */
+export type LatencySlo =
+  | { kind: 'p95'; ms: number }
+  | { kind: 'realtime'; factor: number }
+  | { kind: 'none' };
+
 /** One row of the 4.2 table. */
 export interface PolicyEntry {
   taskClass: TaskClass;
-  latencySloMs: number;
+  slo: LatencySlo;
   /** Model ids, in preference order. */
   primary: string[];
   fallback: string[];
@@ -178,6 +199,44 @@ export const DEFAULT_POLICY: RoutingPolicy = {
       contextTokens: 128_000,
     },
     {
+      id: 'open-embed',
+      vendor: 'open',
+      family: 'open-embed',
+      placement: 'self_hosted',
+      centsPerKiloToken: 0.001,
+      latencyMsP50: 40,
+      latencyMsP95: 120,
+      quality: { embed: 0.9 },
+      deterministic: true,
+      contextTokens: 8_000,
+    },
+    {
+      id: 'whisper-large-v3',
+      vendor: 'open',
+      family: 'open-asr',
+      placement: 'self_hosted',
+      centsPerKiloToken: 0.002,
+      latencyMsP50: 0,
+      latencyMsP95: 0,
+      realtime: { p50: 0.06, p95: 0.11 },
+      quality: { asr: 0.9 },
+      deterministic: true,
+      contextTokens: 0,
+    },
+    {
+      id: 'vendor-asr',
+      vendor: 'vendor-asr',
+      family: 'asr-vendor',
+      placement: 'vendor',
+      centsPerKiloToken: 0.02,
+      latencyMsP50: 0,
+      latencyMsP95: 0,
+      realtime: { p50: 0.04, p95: 0.09 },
+      quality: { asr: 0.92 },
+      deterministic: true,
+      contextTokens: 0,
+    },
+    {
       id: 'frontier-a',
       vendor: 'vendor-a',
       family: 'a-reasoning',
@@ -219,55 +278,63 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
   ],
   entries: [
-    { taskClass: 'intent.classify', latencySloMs: 120, primary: ['local-3b'], fallback: ['server-8b'] },
+    { taskClass: 'intent.classify', slo: { kind: 'p95', ms: 120 }, primary: ['local-3b'], fallback: ['server-8b'] },
     {
       taskClass: 'ink.semantic',
-      latencySloMs: 400,
+      slo: { kind: 'p95', ms: 400 },
       primary: ['local-3b', 'server-8b'],
       fallback: ['qwen-coder-32b'],
       escalateBelowConfidence: 0.7,
     },
     {
       taskClass: 'sql.generate',
-      latencySloMs: 800,
+      slo: { kind: 'p95', ms: 800 },
       primary: ['qwen-coder-32b'],
       fallback: ['frontier-a'],
       escalateAfterFailures: 2,
     },
     {
       taskClass: 'quant.codegen',
-      latencySloMs: 4_000,
+      slo: { kind: 'p95', ms: 4_000 },
       primary: ['qwen-coder-32b'],
       fallback: ['frontier-a'],
       escalateAfterFailures: 1,
     },
     {
       taskClass: 'doc.extract',
-      latencySloMs: 3_000,
+      slo: { kind: 'p95', ms: 3_000 },
       primary: ['qwen-coder-32b'],
       fallback: ['frontier-a'],
       escalateAfterFailures: 1,
     },
     {
       taskClass: 'doc.deep_read',
-      latencySloMs: 25_000,
+      slo: { kind: 'p95', ms: 25_000 },
       primary: ['frontier-a'],
       fallback: [],
       alwaysEscalate: true,
     },
     {
       taskClass: 'sentiment.subtext',
-      latencySloMs: 20_000,
+      slo: { kind: 'p95', ms: 20_000 },
       primary: ['frontier-a'],
       fallback: ['frontier-b'],
       alwaysEscalate: true,
     },
-    { taskClass: 'plan.decompose', latencySloMs: 6_000, primary: ['frontier-a'], fallback: ['open-70b'] },
-    { taskClass: 'synthesis.final', latencySloMs: 12_000, primary: ['frontier-a'], fallback: ['open-70b'] },
-    { taskClass: 'critique.redteam', latencySloMs: 15_000, primary: ['frontier-b'], fallback: ['open-70b'] },
-    { taskClass: 'summarize.bulk', latencySloMs: 6_000, primary: ['server-8b'], fallback: ['qwen-coder-32b'] },
-    { taskClass: 'embed', latencySloMs: 500, primary: ['server-8b'], fallback: [] },
-    { taskClass: 'asr', latencySloMs: 10_000, primary: ['server-8b'], fallback: [] },
+    { taskClass: 'plan.decompose', slo: { kind: 'p95', ms: 6_000 }, primary: ['frontier-a'], fallback: ['open-70b'] },
+    { taskClass: 'synthesis.final', slo: { kind: 'p95', ms: 12_000 }, primary: ['frontier-a'], fallback: ['open-70b'] },
+    { taskClass: 'critique.redteam', slo: { kind: 'p95', ms: 15_000 }, primary: ['frontier-b'], fallback: ['open-70b'] },
+    { taskClass: 'summarize.bulk', slo: { kind: 'p95', ms: 6_000 }, primary: ['server-8b'], fallback: ['qwen-coder-32b'] },
+    // PRD 4.2: "Open embedding model + ColPali-class for page images", no SLO.
+    { taskClass: 'embed', slo: { kind: 'none' }, primary: ['open-embed'], fallback: [] },
+    // PRD 4.2: "Whisper large-v3 with speaker diarization", fallback "vendor
+    // ASR", at 0.15x realtime.
+    {
+      taskClass: 'asr',
+      slo: { kind: 'realtime', factor: 0.15 },
+      primary: ['whisper-large-v3'],
+      fallback: ['vendor-asr'],
+    },
   ],
 };
 
@@ -277,4 +344,35 @@ export function entryFor(policy: RoutingPolicy, taskClass: TaskClass): PolicyEnt
 
 export function modelById(policy: RoutingPolicy, id: string): Model | undefined {
   return policy.models.find((m) => m.id === id);
+}
+
+export class NoLatencyBudget extends Error {
+  constructor(readonly taskClass: TaskClass) {
+    super(
+      `${taskClass} has a realtime SLO, which is a multiple of the audio's duration; ` +
+        'without the duration there is no budget to route against',
+    );
+    this.name = 'NoLatencyBudget';
+  }
+}
+
+/**
+ * The latency budget a row's SLO gives this request, in milliseconds.
+ *
+ * Unbounded for a row with no SLO. Refused for a realtime SLO without the
+ * audio's length rather than guessed: a transcription budget invented from a
+ * typical call is wrong for every other call.
+ */
+export function latencyBudgetFor(entry: PolicyEntry, request: { audioSeconds?: number } = {}): number {
+  switch (entry.slo.kind) {
+    case 'p95':
+      return entry.slo.ms;
+    case 'none':
+      return Number.POSITIVE_INFINITY;
+    case 'realtime':
+      if (!(request.audioSeconds !== undefined && request.audioSeconds > 0)) {
+        throw new NoLatencyBudget(entry.taskClass);
+      }
+      return entry.slo.factor * request.audioSeconds * 1000;
+  }
 }
