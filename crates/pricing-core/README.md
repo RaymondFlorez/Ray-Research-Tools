@@ -633,3 +633,20 @@ fit on one expiry against another, and that trade is the analyst's.
 Both SVI fits run through the parity harness: two full differential-evolution
 searches, every candidate scored at 201 grid points, bit-identical native and
 WASM.
+
+## What is not covered
+
+- **The cluster.** "100k paths x 252 steps x 40 assets runs on Ray ... result matrices
+  persist to S3": no Ray and no S3. What exists is the per-path arithmetic they would
+  distribute, at 3.3e7 asset-steps a second on one core.
+- **Andersen-Lake's Newton acceleration.** Three attempts diverged; the plain fixed-point
+  iteration ships (see *The method, and one thing that did not work*).
+- **Quasi-random sampling across assets.** Sobol with a Brownian bridge is single-asset;
+  the portfolio simulator is pseudorandom by design, for the dimension reason above.
+- **Mixed portfolios.** The parametric simulator (GBM, Heston, Merton, under a Gaussian or
+  t copula) and the joint bootstrap are separate runs, and variance gamma is in neither.
+- **Arbitrage-free surfaces by construction.** SVI is raw SVI fitted per slice, with the
+  butterfly condition penalised and the calendar condition checked afterwards, not SSVI.
+- **Discrete dividends in a price.** Every pricer takes a continuous yield. Discrete
+  dividends enter only `canvas-pricing`'s early-assignment check, never a price.
+

@@ -319,3 +319,16 @@ Not covered: the detectors are functions over an array, not the `alert-engine`
 service that runs them over every watched series; there is no per-node
 threshold store, and the live wash's z-threshold in `canvas-render` does not
 yet read these scores.
+
+## What is not covered
+
+- **The production data plane.** No ClickHouse, Iceberg, Redpanda, vendor feed or
+  DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
+  those implement; everything here runs against in-memory stores.
+- **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor
+  file or reconciles two vendors' corporate-action calendars.
+- **The alert engine.** The detectors are functions over an array, not the `alert-engine`
+  service that runs them over every watched series. There is no per-node threshold store,
+  and the live wash's z-threshold in `canvas-render` does not yet read these scores.
+- **Chain data.** Addresses are checked (EIP-55 checksums, via Keccak-256) but nothing reads
+  a chain: no RPC, no indexer, no block-time alignment with market data.

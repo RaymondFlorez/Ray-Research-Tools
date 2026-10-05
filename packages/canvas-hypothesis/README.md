@@ -67,3 +67,15 @@ halves are different skills:
 `brier = reliability − resolution + uncertainty` is an identity, and since the score comes
 from the raw predictions while the three parts come from bucket statistics, it only holds if
 both are right. That test is the self-check on the file.
+
+## What is not covered
+
+- **Persistence.** Hypotheses, observations and the scored record live where the caller
+  keeps them. The tracker that "logs the analyst's calibration history over time" needs a
+  store, and none is here; the base-rate lookup the Critic runs (`canvas-agents`) is over
+  whatever record it is handed.
+- **A trigger.** `resolve` is a pure function of a hypothesis, its observations and the
+  clock. Re-running it when a wired observable's data arrives is the scheduler's job; the
+  node resolves "whether or not she remembers it" only once something calls it.
+- **Observable extraction.** An observation is a number with a date and a source. Reading
+  "reported segment GM" out of a filing is ingest, not this package.

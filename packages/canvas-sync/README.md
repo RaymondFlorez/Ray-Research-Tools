@@ -123,3 +123,12 @@ Three limits, stated because they are easy to imply away:
 - **There is no IndexedDB here.** `CipherBacking` is the seam an IndexedDB
   object store implements; the tests run against `MemoryBacking`. Session
   secret issuance is the server's, and is not in this repository.
+
+## What is not covered
+
+- **A network.** `Link` and `Room` carry Yjs updates in process; there is no WebSocket
+  provider, no relay server and no authentication on a room. The convergence tests are
+  about the CRDT, not the wire.
+- **IndexedDB and S3.** `CipherBacking` and `ColdStore` are seams, run against memory.
+- **Roles inside a document.** Anyone in a room can change any node. There are no
+  per-node permissions and no read-only participants.

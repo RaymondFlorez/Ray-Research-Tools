@@ -111,3 +111,14 @@ Honestly: **partly verified.**
   SwiftShader rasterizes on the CPU and already clears the p50 bar, hardware should clear
   it by a wide margin — but that is an inference, not a measurement, and the criterion
   should be signed off on a real device.
+
+## What is not covered
+
+- **60fps on a real GPU.** Above: inferred from a software rasterizer, not measured.
+- **Text.** The GL path draws node bodies, edges, halos and ink; it draws no labels or
+  glyph text. Text belongs to the LOD2+ DOM layer, which `canvas-render` schedules and
+  nothing in the packages mounts.
+- **Context loss.** Nothing listens for `webglcontextlost`; a lost context leaves a blank
+  canvas until the page reloads, rather than falling back to the Canvas2D painter.
+- **A worker.** `instances.ts` holds no GL objects so it *can* move off the main thread; it
+  has not been moved.
