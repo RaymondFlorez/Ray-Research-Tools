@@ -133,3 +133,23 @@ describe('the surface output wires into the rest of the canvas', () => {
     expect(ports.inputs.find((p) => p.id === 'underlier')?.required).toBe(true);
   });
 });
+
+describe('a StrategyNode with cash dividends', () => {
+  const legs: Leg[] = [{ strike: 100, time: 0.5, kind: 'call', style: 'american', quantity: 1, multiplier: 100, vol: 0.3 }];
+  const market: Market = { spot: 100, rate: 0.045, dividend: 0 };
+  const grid = { spotSteps: 5, spotRange: 0.2, volSteps: 3, volRange: 0.1 };
+  const dividends = [{ time: 0.35, amount: 0.75 }, { time: 0.1, amount: 0.75 }];
+
+  it('carries the schedule through its params into the grid, and into its cache key', () => {
+    const withDivs = createStrategyNode({ id: 'b1', legs, market, grid: { ...grid, dividends } });
+    const without = createStrategyNode({ id: 'b2', legs, market, grid });
+    const evaluated = evaluateStrategy(withDivs, pricer);
+    expect(evaluated.ok && evaluated.result.guard.badge).toBe('cash dividends: American legs on a 200-step tree');
+    // Stored in date order, whatever order they were given in.
+    expect((withDivs.params.grid as { dividends: Array<{ time: number }> }).dividends.map((d) => d.time)).toEqual([0.1, 0.35]);
+    const doc = createDocument('d');
+    addNode(doc, withDivs);
+    addNode(doc, { ...without, id: 'b1-plain' });
+    expect(deriveCacheKey(doc, 'b1')).not.toBe(deriveCacheKey(doc, 'b1-plain'));
+  });
+});

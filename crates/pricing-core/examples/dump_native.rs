@@ -149,6 +149,20 @@ fn main() {
         emit(format!("guard{which}"), ffi::pc_guard_value(which));
     }
 
+    // The same book against cash dividends: a dividend ladder per (leg, vol),
+    // with an exercise decision at every node.
+    ffi::pc_div_reset();
+    ffi::pc_div_add(0.1, 0.5);
+    ffi::pc_div_add(0.35, 0.5);
+    ffi::pc_div_add(0.6, 0.5);
+    ffi::pc_grid_use_dividends(1);
+    let cells = ffi::pc_grid_reprice(100.0, 0.045, 0.0, 9, 0.2, 5, 0.1, 7.0, 0);
+    let data = unsafe { std::slice::from_raw_parts(ffi::pc_grid_data(), cells as usize * stride) };
+    for (i, value) in data.iter().enumerate() {
+        emit(format!("dgrid{}/{}", i / stride, i % stride), *value);
+    }
+    ffi::pc_div_reset();
+
     // Curves. The bootstrap is a bracketed solve that runs to the last
     // representable bit, so a single differing bit in the objective would send
     // the two targets to different pins — which makes this the sharpest test of

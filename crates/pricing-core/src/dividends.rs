@@ -123,6 +123,105 @@ pub fn american_price(inputs: &Inputs, dividends: &[CashDividend], steps: usize)
     values[0]
 }
 
+/// One option's American value under cash dividends, across a range of spots,
+/// from two trees rather than one per spot.
+///
+/// The scenario grid needs the same leg priced at 25 spots, and nothing short
+/// of the tree is accurate enough to stand in for it: measured over 160
+/// options against an averaged 8,000-step tree (`examples/div_fastpath_scan.rs`),
+/// the best closed-form stand-ins miss by 40 ticks on puts and 73 on calls —
+/// against a guard tolerance of half a tick.
+///
+/// So each tree is rooted `m` steps *before* today. Its layer at today then
+/// holds the option's value at `m + 1` spots, two log-steps apart, across the
+/// range the grid spans, and a spot between nodes is read by quadratic
+/// interpolation in log escrowed spot. Two trees, `n` and `n + 1` steps to
+/// expiry, are averaged, which cancels most of CRR's odd-even oscillation. At
+/// 200 steps the ladder is within 0.80 ticks of an averaged 4,000-step tree
+/// over 150 option-spots (`tests/pricing.rs`); on the scan's harsher
+/// schedules a single 200-step tree pair is within 1.5.
+pub struct DividendLadder {
+    escrowed_today: f64,
+    pv_today: f64,
+    reads: [(f64, usize, Vec<f64>); 2],
+}
+
+impl DividendLadder {
+    /// `inputs.spot` is the centre of the range; `log_span` the largest
+    /// distance, in log escrowed spot, a read will be asked for.
+    pub fn new(inputs: &Inputs, dividends: &[CashDividend], steps: usize, log_span: f64) -> Option<DividendLadder> {
+        let pv_today = pv_between(dividends, inputs.rate, 0.0, inputs.time);
+        let escrowed_today = inputs.spot - pv_today;
+        if !(escrowed_today > 0.0) || !(inputs.time > 0.0) || !(inputs.vol > 0.0) {
+            return None;
+        }
+        let build = |n: usize| -> Option<(f64, usize, Vec<f64>)> {
+            let dt = inputs.time / n as f64;
+            let u = libm::exp(inputs.vol * libm::sqrt(dt));
+            let d = 1.0 / u;
+            let p = (libm::exp(inputs.carry() * dt) - d) / (u - d);
+            if !(0.0..=1.0).contains(&p) {
+                return None;
+            }
+            let disc = libm::exp(-inputs.rate * dt);
+            // Layer m spans j in [-m, m] in steps of two log-steps each side,
+            // plus one node of margin for the interpolation stencil.
+            let mut m = (log_span / (inputs.vol * libm::sqrt(dt))) as usize + 3;
+            m += m % 2;
+            let total = n + m;
+            let exercise = |stock: f64| match inputs.kind {
+                OptionType::Call => stock - inputs.strike,
+                OptionType::Put => inputs.strike - stock,
+            };
+            let mut level = escrowed_today;
+            for _ in 0..total {
+                level *= d;
+            }
+            let ratio = u / d;
+            let mut levels = Vec::with_capacity(total + 1);
+            for _ in 0..=total {
+                levels.push(level);
+                level *= ratio;
+            }
+            let mut values: Vec<f64> = levels.iter().map(|&s| exercise(s).max(0.0)).collect();
+            let mut scale = 1.0;
+            for step in (m..total).rev() {
+                scale *= u;
+                let t = (step - m) as f64 * dt;
+                let ahead = pv_between(dividends, inputs.rate, t, inputs.time);
+                for i in 0..=step {
+                    let hold = disc * (p * values[i + 1] + (1.0 - p) * values[i]);
+                    values[i] = hold.max(exercise(levels[i] * scale + ahead));
+                }
+            }
+            values.truncate(m + 1);
+            Some((libm::log(u), m, values))
+        };
+        Some(DividendLadder { escrowed_today, pv_today, reads: [build(steps)?, build(steps + 1)?] })
+    }
+
+    /// The value at `spot`, or NaN outside the span or with no escrowed stock left.
+    pub fn value(&self, spot: f64) -> f64 {
+        let escrowed = spot - self.pv_today;
+        if !(escrowed > 0.0) {
+            return f64::NAN;
+        }
+        let mut total = 0.0;
+        for (log_u, m, values) in &self.reads {
+            // Node i at today sits at log-step 2i - m from the centre.
+            let x = (libm::log(escrowed / self.escrowed_today) / log_u + *m as f64) / 2.0;
+            if !(x >= 0.5 && x <= *m as f64 - 0.5) {
+                return f64::NAN;
+            }
+            let i = (libm::floor(x + 0.5) as usize).clamp(1, m - 1);
+            let f = x - i as f64;
+            let (a, b, c) = (values[i - 1], values[i], values[i + 1]);
+            total += b + 0.5 * f * (c - a) + 0.5 * f * f * (c - 2.0 * b + a);
+        }
+        0.5 * total
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

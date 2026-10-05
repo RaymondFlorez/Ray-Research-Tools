@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 231 tests
+cargo test --release                              # 235 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -280,7 +280,7 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,410 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,680 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
 Heston with its calibration, the pin and early-exercise thresholds, the volatility
@@ -572,6 +572,31 @@ volatility: every vol across a wide band reproduces it to the last bit of a doub
 early version happily returned 0.5 for an option whose true vol was 0.08, with a residual
 below 1e-10. A chain shows "--" there, and so does this.
 
+## Cash dividends on the grid, and why there is no fast path
+
+The grid's American legs have a fast approximation and a guard that checks it. With cash
+dividends there is no fast approximation worth guarding. Measured over 160 options against
+an averaged 8,000-step tree (`examples/div_fastpath_scan.rs`), the best closed-form
+stand-ins — Andersen-Lake on a continuous yield with the same forward, or that with Black's
+pseudo-American for calls — miss by 40 ticks on puts and 73 on calls, against a guard
+tolerance of half a tick. Andersen-Lake on the escrowed spot is the worst at 378, because a
+put on the escrowed spot exercises at a price below the stock by the dividends still to
+come. A guard over any of them would escalate nearly every cell.
+
+So dividend-paying American legs are the tree. A tree per cell would cost 375 trees per leg;
+instead each `DividendLadder` roots its tree a few steps before today, so its layer at today
+holds the value across the whole spot axis, read by quadratic interpolation, and two trees
+(n and n + 1 steps) are averaged against CRR's odd-even oscillation. Standard quality is
+200 steps because that is what fits the PRD's 90ms on the worst book — 40 American legs, all
+paying dividends, 25×15 cells: 59ms native, 95ms at 250 steps
+(`examples/div_grid_bench.rs`). At 200 steps a single option is within 0.80 ticks of an
+averaged 4,000-step tree on the tests' schedule and within 1.5 on the scan's harsher ones;
+across a book's cells the errors partly cancel, to 0.24 ticks per contract. The badge says
+the legs were priced on the tree, not that a guard passed. In WASM under V8 the same book
+takes 125–132ms at Standard and 76–80ms at Draft across runs (`scripts/bench-dividend-grid-wasm.mjs`), so a
+browser drags at Draft, as it already does for the plain American grid, and the server
+settles at Standard.
+
 ## Pin and early exercise, and why they are here
 
 `risk.rs` is four small functions and none of them is interesting arithmetic:
@@ -653,8 +678,7 @@ WASM.
   t copula) and the joint bootstrap are separate runs, and variance gamma is in neither.
 - **Arbitrage-free surfaces by construction.** SVI is raw SVI fitted per slice, with the
   butterfly condition penalised and the calendar condition checked afterwards, not SSVI.
-- **Discrete dividends beyond the scalar pricers.** `dividends.rs` prices one option
-  against a cash-dividend schedule (escrowed model; European closed form, American CRR,
-  checked against Roll-Geske-Whaley). The grid, Andersen-Lake and the Monte Carlo paths
-  still take a continuous yield.
+- **Discrete dividends in Monte Carlo and Andersen-Lake.** The scalar pricers and the
+  grid take a cash-dividend schedule (escrowed model, checked against Roll-Geske-Whaley);
+  Andersen-Lake and the Monte Carlo paths take a continuous yield only.
 

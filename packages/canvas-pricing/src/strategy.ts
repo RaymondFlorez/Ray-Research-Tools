@@ -93,6 +93,17 @@ function toParams(input: StrategyNodeInput): Record<string, ParamValue> {
       volSteps: grid.volSteps,
       volRange: grid.volRange,
       decayDays: grid.decayDays ?? 0,
+      // Copied field by field like the rest, so it has to be named here: an
+      // earlier version listed every field but this one, and a StrategyNode
+      // priced a dividend-paying book on a continuous yield without a word.
+      // In params, the schedule is also in the cache key.
+      ...(grid.dividends && grid.dividends.length > 0
+        ? {
+            dividends: [...grid.dividends]
+              .sort((a, b) => a.time - b.time)
+              .map((d) => ({ time: d.time, amount: d.amount })),
+          }
+        : {}),
     },
   };
 }

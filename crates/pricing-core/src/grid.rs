@@ -10,6 +10,7 @@
 use crate::american;
 use crate::andersen_lake::{self as al, Boundary, Solver};
 use crate::bsm::{self, Greeks, Inputs, OptionType};
+use crate::dividends::{CashDividend, DividendLadder};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Style {
@@ -344,6 +345,150 @@ fn price_book(
 
 /// Reprices the book across the grid, then checks itself.
 pub fn reprice_grid(
+    book: &[Leg],
+    market: &Market,
+    grid: &GridSpec,
+    config: &GuardConfig,
+) -> GridResult {
+    reprice_grid_with_dividends(book, market, grid, config, &[])
+}
+
+/// Tree steps to expiry for the dividend ladder at each quality.
+///
+/// Standard is 200 because that is what fits the 90ms budget on the worst
+/// book there is — 40 American legs, all dividend-paying, 25×15 cells: 59ms
+/// native at 200 steps, 95ms at 250 (`examples/div_grid_bench.rs`). Per
+/// option it is within 0.80 ticks of an averaged 4,000-step tree on the
+/// tests' schedule and 1.5 on the harsher ones in `div_fastpath_scan`; a
+/// book's cells within 0.24 ticks per contract (`tests/pricing.rs`). Draft
+/// is 150, Exact 600 for a pinned position.
+fn dividend_steps(quality: Quality) -> usize {
+    match quality {
+        Quality::Draft => 150,
+        Quality::Standard => 200,
+        Quality::Exact => 600,
+    }
+}
+
+/// The grid against a schedule of cash dividends (PRD 5.4).
+///
+/// With an empty schedule this is `reprice_grid`, bit for bit. With one,
+/// European legs are Black-Scholes on the escrowed spot — exact under the
+/// escrowed model — and American legs are read off a `DividendLadder`, one per
+/// leg and vol level, because no closed-form stand-in comes within tens of
+/// ticks of the tree (see `DividendLadder`). There is then nothing for the
+/// guard to check: the American legs *are* the tree, at a step count the
+/// quality sets, and the badge says so rather than reporting a guard pass it
+/// did not run. Greeks keep the grid's convention: Black-Scholes on the
+/// escrowed spot carries the shape, the tree the price.
+///
+/// Dividends are dated from today; a grid with time decay moves today forward,
+/// so a dividend that went ex in the decay period is gone from it.
+pub fn reprice_grid_with_dividends(
+    book: &[Leg],
+    market: &Market,
+    grid: &GridSpec,
+    config: &GuardConfig,
+    dividends: &[CashDividend],
+) -> GridResult {
+    let decay = grid.time_decay_days / 365.0;
+    let ahead: Vec<CashDividend> = dividends
+        .iter()
+        .filter(|d| d.time > decay && d.amount > 0.0)
+        .map(|d| CashDividend { time: d.time - decay, amount: d.amount })
+        .collect();
+    if ahead.is_empty() {
+        return reprice_grid_inner(book, market, grid, config);
+    }
+
+    let spot_count = grid.spot_shocks.len();
+    let vol_count = grid.vol_shifts.len();
+    let steps = dividend_steps(grid.quality);
+    let low = grid.spot_shocks.iter().copied().fold(f64::INFINITY, f64::min) * market.spot;
+    let high = grid.spot_shocks.iter().copied().fold(0.0, f64::max) * market.spot;
+
+    // One ladder per (American leg, vol level), centred on today's spot and
+    // spanning the grid's spot axis in escrowed terms.
+    let mut ladders: Vec<Option<DividendLadder>> = Vec::with_capacity(book.len() * vol_count);
+    for leg in book {
+        for &shift in &grid.vol_shifts {
+            ladders.push(if leg.style == Style::American {
+                let inputs = leg_inputs(leg, market, market.spot, shift, decay);
+                let pv: f64 = ahead
+                    .iter()
+                    .filter(|d| d.time <= inputs.time)
+                    .map(|d| d.amount * libm::exp(-inputs.rate * d.time))
+                    .sum();
+                let centre = market.spot - pv;
+                let span = [low - pv, high - pv]
+                    .iter()
+                    .filter(|&&s| s > 0.0)
+                    .map(|&s| libm::fabs(libm::log(s / centre)))
+                    .fold(0.0, f64::max);
+                DividendLadder::new(&inputs, &ahead, steps, span)
+            } else {
+                None
+            });
+        }
+    }
+
+    let mut cells = Vec::with_capacity(spot_count * vol_count);
+    for &shock in &grid.spot_shocks {
+        let spot = market.spot * shock;
+        for (vol_index, &shift) in grid.vol_shifts.iter().enumerate() {
+            let mut cell = Cell::default();
+            for (index, leg) in book.iter().enumerate() {
+                let inputs = leg_inputs(leg, market, spot, shift, decay);
+                let pv: f64 = ahead
+                    .iter()
+                    .filter(|d| d.time <= inputs.time)
+                    .map(|d| d.amount * libm::exp(-inputs.rate * d.time))
+                    .sum();
+                let escrowed = Inputs { spot: spot - pv, ..inputs };
+                let mut g = if escrowed.spot > 0.0 { bsm::greeks(&escrowed) } else { Greeks { price: f64::NAN, ..Default::default() } };
+                if leg.style == Style::American {
+                    g.price = match &ladders[index * vol_count + vol_index] {
+                        Some(ladder) => ladder.value(spot),
+                        // Expired, or no vol: the option is its intrinsic value.
+                        None => inputs.intrinsic(),
+                    };
+                }
+                let scale = leg.quantity * leg.multiplier;
+                cell.value += g.price * scale;
+                cell.delta += g.delta * scale;
+                cell.gamma += g.gamma * scale;
+                cell.vega += g.vega * scale;
+                cell.theta += g.theta * scale;
+            }
+            cells.push(cell);
+        }
+    }
+
+    let american = book.iter().filter(|l| l.style == Style::American).count();
+    let badge = if american > 0 {
+        format!("cash dividends: American legs on a {steps}-step tree")
+    } else {
+        "cash dividends: escrowed, exact".to_string()
+    };
+    let repricings = cells.len() * book.len();
+    GridResult {
+        cells,
+        spot_count,
+        vol_count,
+        quality: grid.quality,
+        guard: GuardReport {
+            outcome: GuardOutcome::NotNeeded,
+            sampled_cells: 0,
+            max_error: 0.0,
+            tolerance: 0.0,
+            escalated_cells: 0,
+            badge,
+        },
+        repricings,
+    }
+}
+
+fn reprice_grid_inner(
     book: &[Leg],
     market: &Market,
     grid: &GridSpec,

@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 221 tests
+npm test --workspace @picasso/canvas-pricing    # 225 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -161,6 +161,13 @@ the 11.58 is the right to exercise early.
 
 The escrowed model uses the vol of the stock-less-dividends, so a vol quoted on the stock
 itself understates the option a little, more for long-dated options with large dividends.
+
+The grid takes the same schedule (`GridSpec.dividends`), and so does a StrategyNode, whose
+params carry it into the cache key. The first version of that plumbing dropped it: the node
+copies its grid field by field and the new field was not on the list, so a dividend-paying
+book priced on a continuous yield without a word. A test now fails if it ever does again.
+How the grid prices American legs under dividends, and why there is no guarded fast path,
+is in the crate's README.
 
 ## Heston, and where it belongs
 
@@ -484,9 +491,10 @@ against nothing at all.
 - **The surprise series is the caller's.** `estimateShockShape` takes event dates with a
   policy surprise and the curve's moves; extracting surprises from futures, and choosing
   which days count as policy events, happens before it.
-- **Discrete dividends price one option at a time.** `priceWithDividends` is a scalar
-  call; the scenario grid, the strategy surface and the fast American path still take a
-  continuous yield.
+- **Cash dividends on the grid are over budget in the browser at Standard.** A book of
+  40 dividend-paying American legs reprices in 59ms native but 125–132ms in WASM at Standard,
+  76–80ms at Draft; the browser should drag at Draft. Monte Carlo still takes a continuous
+  yield only.
 - **Pricing off the surface is opt-in.** `evaluateStrategy` reads every
   leg's vol off a fitted surface when given one and uses each leg's own vol
   otherwise; nothing fits or refreshes a surface automatically from a chain.

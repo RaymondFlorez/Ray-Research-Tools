@@ -75,6 +75,16 @@ function wasmGrid() {
     rows.set(`cell${Math.floor(i / stride)}/${i % stride}`, data[i]);
   }
   for (let which = 0; which < 5; which += 1) rows.set(`guard${which}`, w.pc_guard_value(which));
+
+  w.pc_div_reset();
+  w.pc_div_add(0.1, 0.5);
+  w.pc_div_add(0.35, 0.5);
+  w.pc_div_add(0.6, 0.5);
+  w.pc_grid_use_dividends(1);
+  const dcells = w.pc_grid_reprice(100, 0.045, 0, 9, 0.2, 5, 0.1, 7, 0);
+  const ddata = new Float64Array(w.memory.buffer, w.pc_grid_data(), dcells * stride).slice();
+  for (let i = 0; i < ddata.length; i += 1) rows.set(`dgrid${Math.floor(i / stride)}/${i % stride}`, ddata[i]);
+  w.pc_div_reset();
   return rows;
 }
 
@@ -549,7 +559,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends, ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends (scalar and on the grid), ` +
     `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

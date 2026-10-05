@@ -1389,6 +1389,104 @@ mod scenario_tests {
     }
 }
 
+mod dividend_grid_tests {
+    //! The scenario grid against cash dividends (PRD 5.4).
+
+    use pricing_core::bsm::{Inputs, OptionType};
+    use pricing_core::dividends::{american_price, european_price, CashDividend, DividendLadder};
+    use pricing_core::grid::{self, GridSpec, GuardConfig, Leg, Market, Quality, Style};
+
+    fn legs() -> Vec<Leg> {
+        let mut out = Vec::new();
+        for (i, &kind) in [OptionType::Call, OptionType::Put].iter().enumerate() {
+            for &style in &[Style::American, Style::European] {
+                out.push(Leg { strike: 95.0 + 10.0 * i as f64, time: 0.6, kind, style, quantity: 3.0, multiplier: 100.0, vol: 0.3 });
+            }
+        }
+        out
+    }
+
+    fn quarterly() -> Vec<CashDividend> {
+        vec![CashDividend { time: 0.1, amount: 1.0 }, CashDividend { time: 0.35, amount: 1.0 }, CashDividend { time: 0.58, amount: 1.0 }]
+    }
+
+    #[test]
+    fn no_dividends_is_the_plain_grid() {
+        let market = Market { spot: 100.0, rate: 0.04, dividend: 0.01 };
+        let spec = GridSpec::linear(9, 0.2, 5, 0.1);
+        let plain = grid::reprice_grid(&legs(), &market, &spec, &GuardConfig::default());
+        let empty = grid::reprice_grid_with_dividends(&legs(), &market, &spec, &GuardConfig::default(), &[]);
+        assert_eq!(plain.cells.iter().map(|c| c.value.to_bits()).collect::<Vec<_>>(), empty.cells.iter().map(|c| c.value.to_bits()).collect::<Vec<_>>());
+        assert_eq!(plain.guard.badge, empty.guard.badge);
+    }
+
+    #[test]
+    fn the_ladder_matches_a_tree_per_spot() {
+        // Each option across 25 spots against an averaged 4,000-step tree per
+        // spot, at the Standard step count.
+        let divs = quarterly();
+        let mut worst: f64 = 0.0;
+        for &kind in &[OptionType::Call, OptionType::Put] {
+            for &k in &[85.0, 100.0, 115.0] {
+                let base = Inputs { spot: 100.0, strike: k, time: 0.6, rate: 0.04, dividend: 0.0, vol: 0.3, kind };
+                let ladder = DividendLadder::new(&base, &divs, 200, 0.3).unwrap();
+                for i in 0..25 {
+                    let spot = 80.0 + 40.0 * i as f64 / 24.0;
+                    let at = Inputs { spot, ..base };
+                    let reference = 0.5 * (american_price(&at, &divs, 4_000) + american_price(&at, &divs, 4_001));
+                    worst = worst.max((ladder.value(spot) - reference).abs());
+                }
+            }
+        }
+        // Measured 0.0080: 0.80 ticks on the worst of 150 option-spots.
+        assert!(worst < 0.0085, "{worst}");
+    }
+
+    #[test]
+    fn grid_cells_price_each_leg_under_the_escrowed_model() {
+        let market = Market { spot: 100.0, rate: 0.04, dividend: 0.0 };
+        let spec = GridSpec::linear(5, 0.15, 3, 0.05);
+        let divs = quarterly();
+        let r = grid::reprice_grid_with_dividends(&legs(), &market, &spec, &GuardConfig::default(), &divs);
+        assert_eq!(r.guard.badge, "cash dividends: American legs on a 200-step tree");
+        let mut worst: f64 = 0.0;
+        for si in 0..5 {
+            for vi in 0..3 {
+                let spot = 100.0 * spec.spot_shocks[si];
+                let mut reference = 0.0;
+                for leg in legs() {
+                    let at = Inputs { spot, strike: leg.strike, time: leg.time, rate: 0.04, dividend: 0.0, vol: leg.vol + spec.vol_shifts[vi], kind: leg.kind };
+                    let value = match leg.style {
+                        // European legs are exact under the model.
+                        Style::European => european_price(&at, &divs),
+                        Style::American => 0.5 * (american_price(&at, &divs, 4_000) + american_price(&at, &divs, 4_001)),
+                    };
+                    reference += value * leg.quantity * leg.multiplier;
+                }
+                // 12 contracts of 100 shares: a tick on every contract is 12.0
+                // of book value, and the guard's tolerance is half that.
+                let error = (r.cell(si, vi).value - reference).abs();
+                worst = worst.max(error / 12.0);
+                assert!(error < 6.0, "cell {si},{vi}: {} vs {reference}", r.cell(si, vi).value);
+            }
+        }
+        // Measured 0.24 ticks per contract on the worst cell.
+        assert!(worst < 0.25, "{worst}");
+    }
+
+    #[test]
+    fn a_dividend_inside_the_decay_period_is_gone() {
+        let market = Market { spot: 100.0, rate: 0.04, dividend: 0.0 };
+        let mut spec = GridSpec::linear(5, 0.15, 3, 0.05);
+        spec.time_decay_days = 30.0;
+        // Ex in nine days: by the grid's "today", thirty days on, it has paid.
+        let gone = grid::reprice_grid_with_dividends(&legs(), &market, &spec, &GuardConfig::default(), &[CashDividend { time: 9.0 / 365.0, amount: 2.0 }]);
+        let plain = grid::reprice_grid(&legs(), &market, &spec, &GuardConfig::default());
+        assert_eq!(gone.cells.iter().map(|c| c.value.to_bits()).collect::<Vec<_>>(), plain.cells.iter().map(|c| c.value.to_bits()).collect::<Vec<_>>());
+        let _ = Quality::Draft;
+    }
+}
+
 mod complex_tests {
     use pricing_core::complex::Complex;
 

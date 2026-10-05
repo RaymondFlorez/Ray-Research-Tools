@@ -248,3 +248,34 @@ describe('reading out of linear memory', () => {
     expect(() => grid.reprice([], market, spec)).toThrow(/empty book/);
   });
 });
+
+describe('cash dividends on the grid (PRD 5.4)', () => {
+  const plain: Market = { spot: 100, rate: 0.045, dividend: 0 };
+  const dividends = [{ time: 0.1, amount: 0.75 }, { time: 0.35, amount: 0.75 }];
+  const centre = { spotSteps: 5, spotRange: 0.2, volSteps: 3, volRange: 0.1 };
+  const one = (style: Leg['style'], kind: Leg['kind']): Leg[] => [
+    { strike: 100, time: 0.5, kind, style, quantity: 1, multiplier: 1, vol: 0.3 },
+  ];
+
+  it('prices a European leg exactly as the scalar pricer does', () => {
+    const r = grid.reprice(one('european', 'put'), plain, { ...centre, dividends });
+    const scalar = pricer.priceWithDividends({ spot: 100, strike: 100, time: 0.5, rate: 0.045, dividend: 0, vol: 0.3, kind: 'put' }, dividends, { style: 'european' });
+    expect(r.cell(2, 1).value).toBeCloseTo(scalar, 12);
+  });
+
+  it('prices an American leg within a tick of the scalar tree, and says how', () => {
+    for (const kind of ['call', 'put'] as const) {
+      const r = grid.reprice(one('american', kind), plain, { ...centre, dividends });
+      const scalar = pricer.priceWithDividends({ spot: 100, strike: 100, time: 0.5, rate: 0.045, dividend: 0, vol: 0.3, kind }, dividends, { style: 'american', steps: 4_000 });
+      expect(Math.abs(r.cell(2, 1).value - scalar)).toBeLessThan(0.01);
+      expect(r.guard.badge).toBe('cash dividends: American legs on a 200-step tree');
+    }
+  });
+
+  it('does not leak the schedule into the next grid', () => {
+    const before = grid.reprice(bigBook(10, 'american'), market, spec).cells.map((c) => c.value);
+    grid.reprice(bigBook(10, 'american'), market, { ...spec, dividends });
+    const after = grid.reprice(bigBook(10, 'american'), market, spec).cells.map((c) => c.value);
+    expect(after).toEqual(before);
+  });
+});

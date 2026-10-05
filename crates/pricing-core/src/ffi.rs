@@ -440,7 +440,8 @@ pub extern "C" fn pc_grid_reprice(
         if book.is_empty() {
             return -1;
         }
-        let result = grid::reprice_grid(&book, &market, &spec, &GuardConfig::default());
+        let schedule = if GRID_DIVIDENDS.with(|g| g.get()) { DIVIDENDS.with(|d| d.borrow().clone()) } else { Vec::new() };
+        let result = grid::reprice_grid_with_dividends(&book, &market, &spec, &GuardConfig::default(), &schedule);
 
         SPOT_AXIS.with(|axis| {
             *axis.borrow_mut() = spec.spot_shocks.iter().map(|s| market.spot * s).collect();
@@ -1748,12 +1749,22 @@ pub extern "C" fn pc_heston_fit() -> *const f64 {
 
 thread_local! {
     static DIVIDENDS: RefCell<Vec<crate::dividends::CashDividend>> = const { RefCell::new(Vec::new()) };
+    static GRID_DIVIDENDS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
 }
 
-/// Clears the dividend schedule.
+/// Clears the dividend schedule, and stops the grid using it.
 #[no_mangle]
 pub extern "C" fn pc_div_reset() {
     DIVIDENDS.with(|d| d.borrow_mut().clear());
+    GRID_DIVIDENDS.with(|g| g.set(false));
+}
+
+/// Makes `pc_grid_reprice` price against the dividend schedule (1) or ignore
+/// it (0). Off by default and after `pc_div_reset`, so a schedule set up for
+/// one scalar price does not leak into a grid that never asked for it.
+#[no_mangle]
+pub extern "C" fn pc_grid_use_dividends(on: i32) {
+    GRID_DIVIDENDS.with(|g| g.set(on != 0));
 }
 
 /// Adds a cash dividend going ex `time` years from now.

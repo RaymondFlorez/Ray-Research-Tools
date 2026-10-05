@@ -9,7 +9,7 @@
  */
 
 import { readFloats, readUtf8, type PricingExports } from './module.js';
-import type { OptionKind } from './pricing.js';
+import type { CashDividend, OptionKind } from './pricing.js';
 
 export type ExerciseStyle = 'european' | 'american';
 
@@ -64,6 +64,14 @@ export interface GridSpec {
   decayDays?: number;
   /** Defaults to `standard`, which is what the server computes. */
   quality?: Quality;
+  /**
+   * Cash dividends on the underlier, dated in years from today. With any,
+   * European legs price on the escrowed spot and American legs read a
+   * dividend tree per leg and vol level (200 steps at `standard`), and the
+   * badge says so. `market.dividend` should then usually be zero: it is a
+   * continuous yield and applies on top.
+   */
+  dividends?: readonly CashDividend[];
 }
 
 /** One cell: the book's value and aggregate Greeks under that shock. */
@@ -133,6 +141,12 @@ export class GridPricer {
       );
     }
 
+    // The schedule is set for this call and cleared after it, so it cannot
+    // leak into a later grid or scalar price that did not ask for it.
+    w.pc_div_reset();
+    for (const d of spec.dividends ?? []) w.pc_div_add(d.time, d.amount);
+    w.pc_grid_use_dividends(spec.dividends && spec.dividends.length > 0 ? 1 : 0);
+
     const started = performance.now();
     const quality: Quality = spec.quality ?? 'standard';
     const count = w.pc_grid_reprice(
@@ -141,6 +155,7 @@ export class GridPricer {
       spec.decayDays ?? 0, QUALITY_CODE[quality],
     );
     const elapsedMs = performance.now() - started;
+    w.pc_div_reset();
     if (count < 0) throw new Error('the module reports an empty book');
 
     const stride = w.pc_grid_stride();
