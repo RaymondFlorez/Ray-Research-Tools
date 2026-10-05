@@ -37,11 +37,15 @@ from a paper — produced by a test in this repo. If you change code that a
 stated figure depends on, re-measure and update the figure.
 
 **When a measurement contradicts the design, the design is wrong.** This has
-happened four times and each is documented in the commit that fixed it: the
+happened repeatedly, and each is documented in the commit that fixed it: the
 accuracy guard was checking Andersen-Lake against a lattice that was itself
 wrong; clustered event dates do not inflate significance unless the benchmark
 fails to span the common factor; the microprice runs the opposite way to the
 obvious guess; tail dependence does not decay slowly in the degrees of freedom.
+Later ones: a t copula applied per step is Gaussian at the horizon; Roll's
+spread estimator reports tens of basis points on a series with no spread; the
+textbook standard errors for impact calibration and for realized vol both
+under-covered once noise was heteroskedastic or fat-tailed.
 Before concluding the code is wrong, check whether the test encodes the same
 assumption the code does — twice it did.
 
@@ -71,7 +75,8 @@ invent a formula for any of them.
 
 Unit suites test one package against its own fixtures. `canvas-integration`
 has no `src` — it tests the **seams**, and it is where the bugs that survive
-unit tests were found (two so far, both documented in its README). When a
+unit tests were found (two bugs and two cross-package disagreements so far, all
+documented in its README). When a
 change crosses a package boundary, add the assertion there.
 
 Numerical routines with a published definition are checked against that

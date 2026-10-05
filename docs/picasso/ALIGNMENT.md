@@ -13,7 +13,8 @@ and does not measure anything itself. Re-audit it when a README's figure changes
 
 Last audited at the commit that added this file, from a fresh clone: build, typecheck, 1,686
 TypeScript tests, 228 Rust tests, 5,379-value WASM parity and eight headless-browser demo
-checks, all green. CI (`.github/workflows/ci.yml`) repeats that on every push.
+checks, all green. CI (`.github/workflows/ci.yml`) repeats that on every push; its first
+run (GitHub Actions run 37340683867) passed all three jobs.
 
 ## Appendix B exit criteria
 
