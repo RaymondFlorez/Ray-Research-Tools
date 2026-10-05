@@ -120,6 +120,34 @@ export function assertEdge(elasticity: number, lagPeriods: number): CausalEdgePa
   };
 }
 
+export class MissingCitation extends Error {
+  constructor() {
+    super('a cited elasticity needs the citation: an edge "from a published estimate" with no source is an assertion wearing a reference');
+    this.name = 'MissingCitation';
+  }
+}
+
+/**
+ * An edge "pulled from a published estimate with a citation" (PRD 5.6).
+ *
+ * The only constructor for a `cited` edge, and it will not build one without
+ * the citation, so the audit can always say where the number came from.
+ */
+export function citeEdge(
+  elasticity: number,
+  lagPeriods: number,
+  citation: string,
+  window: readonly [string, string] = ['', ''],
+): CausalEdgeParams {
+  if (citation.trim() === '') throw new MissingCitation();
+  return {
+    sign: elasticity >= 0 ? 1 : -1,
+    elasticity,
+    lagPeriods,
+    estimation: { method: 'cited', window: [window[0], window[1]], citation: citation.trim() },
+  };
+}
+
 /** A causal edge, ready to add to a document. */
 export function createCausalEdge(
   id: EdgeID,
@@ -161,6 +189,7 @@ export function linksFromDocument(
       method: estimation?.method ?? 'asserted',
       ...(estimation?.r2 !== undefined ? { rSquared: estimation.r2 } : {}),
       ...(estimation?.se !== undefined ? { standardError: estimation.se } : {}),
+      ...(estimation?.citation !== undefined ? { citation: estimation.citation } : {}),
       ...(unstable.has(edge.id) ? { unstable: true } : {}),
     });
   }

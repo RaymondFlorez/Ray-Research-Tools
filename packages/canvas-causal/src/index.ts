@@ -15,3 +15,4 @@ export * from './estimate.js';
 export * from './regime.js';
 export * from './propagate.js';
 export * from './edge.js';
+export * from './var.js';

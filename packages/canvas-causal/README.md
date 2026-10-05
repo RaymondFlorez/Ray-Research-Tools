@@ -5,7 +5,7 @@ Newey-West errors, a regime split that cannot be hidden, and shock propagation o
 graph that is allowed to have cycles.
 
 ```bash
-npm test --workspace @picasso/canvas-causal    # 36 tests
+npm test --workspace @picasso/canvas-causal    # 46 tests
 ```
 
 | Module | PRD | What it does |
@@ -14,6 +14,7 @@ npm test --workspace @picasso/canvas-causal    # 36 tests
 | `regime.ts` | 5.6, C.3 | Break detection and per-regime estimates, with the instability test |
 | `propagate.ts` | 3.4, 5.6 | Discrete-time impulse response over a cyclic graph, with divergence detection |
 | `edge.ts` | 3.4, A | Fills in `canvas-core`'s `CausalEdgeParams`, which has been empty since Phase 0 |
+| `var.ts` | 5.6, C.3 | A VAR for a drawn cycle of three or more nodes, and nothing else |
 
 ## The map is falsifiable
 
@@ -88,3 +89,46 @@ Damping is not a fudge factor. An asserted elasticity is a local, short-run resp
 applying it undiminished around a loop assumes the relationship holds exactly that far.
 Damping states how fast that confidence decays, and a damping of one is the analyst
 claiming it does not decay at all.
+
+## A VAR, only where the analyst asserted a system
+
+C.3 offers a VAR "only for closed systems of three or more mutually causal nodes", and
+suggests it "the moment the analyst builds a causal cycle among three or more nodes". So
+`suggestVar` returns exactly those cycles, and `varForCycle` refuses everything else: a pair,
+a node set the canvas does not draw as a cycle, and a contemporaneous edge, which a
+reduced-form VAR has no coefficient for.
+
+**An edge carries the direct coefficient, not the impulse response.** A VAR's impulse
+response is the system's answer, feedback already folded in. `propagate` folds the loops in
+itself, so an edge carrying an impulse response would count its feedback twice. The edge
+from `a` to `b` at lag L gets `A_L[b][a]`, and the test that justifies it propagates the
+full set of direct coefficients at a damping of one and gets the VAR's own impulse response
+back to twelve places. Coefficients the fit finds significant that no drawn edge carries —
+every node's own persistence, for one — are reported as `undrawn`, not added: the map is the
+analyst's.
+
+The response shown for reading is the generalized one (Pesaran-Shin), which needs no
+Cholesky ordering — one more piece of structure nobody asserted — and is checked against
+`Ψ_h Σ e_j / σ_jj` computed independently in the test. On a simulated three-node loop all
+nine coefficients land within two standard errors of the truth. Stability is the companion
+matrix's spectral radius, by Gelfand's formula with square roots only; against a
+two-variable system's eigenvalues it is off by a relative 8.5e-5.
+
+**A cited elasticity has to say where it came from.** `citeEdge` is the only constructor
+for a `cited` edge and refuses an empty citation; the audit line quotes the source, and a
+`cited` edge that arrived without one is audited as an assertion.
+
+## What is not covered
+
+- **No VAR standard errors for impulse responses.** Each direct coefficient carries its OLS
+  standard error; the impulse responses built from them carry none, and there is no
+  bootstrap band. A response shown without an interval is a point estimate.
+- **No lag-length selection.** A VAR's lag order defaults to the longest lag drawn on the
+  cycle; there is no information criterion choosing it.
+- **No structural identification.** Nothing here identifies a structural shock — no sign
+  restrictions, no external instruments. Local projections answer the edge's question, and
+  the generalized VAR response avoids pretending to an ordering.
+- **No data.** Series arrive aligned and differenced by the caller. Choosing the window is
+  the analyst's control (PRD 7.4); fetching the history is `canvas-data`'s.
+- **Propagation is linear.** An elasticity is a slope, so a shock twice as large moves
+  everything twice as far; thresholds and asymmetric responses are not modelled.

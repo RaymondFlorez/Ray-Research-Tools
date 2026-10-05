@@ -37,6 +37,8 @@ export interface CausalLink {
   standardError?: number;
   /** Set when the edge's own estimate was unstable across regimes. */
   unstable?: boolean;
+  /** Where a `cited` elasticity came from. */
+  citation?: string;
 }
 
 export interface PropagateOptions {
@@ -194,7 +196,11 @@ export function auditLinks(links: readonly CausalLink[]): string[] {
       continue;
     }
     if (link.method === 'cited') {
-      lines.push(`${edge}: elasticity ${link.elasticity} taken from a citation, not re-estimated here`);
+      lines.push(
+        link.citation
+          ? `${edge}: elasticity ${link.elasticity} taken from ${link.citation}, not re-estimated here`
+          : `${edge}: elasticity ${link.elasticity} marked as cited with no citation recorded — treat it as asserted`,
+      );
       continue;
     }
     if (link.rSquared !== undefined && link.rSquared < WEAK_R_SQUARED) {
