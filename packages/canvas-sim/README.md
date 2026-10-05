@@ -84,3 +84,18 @@ It is also what killed the first honest strategy in the test suite — a 10-day 
 flipping between long and short cost more in turnover than its edge was worth. The surviving
 fixture holds for sixty days, and that is a fair summary of the tradeoff the model exists to
 make visible.
+
+## What is not here
+
+- **No snapshot pinning.** PRD 5.8 enforces point-in-time "by Iceberg snapshot
+  pinning, not by convention". Here `History` is in memory and the guard is
+  the `AsOfView` reader; there is no Iceberg and no snapshot id.
+- **No intrabar fills.** Orders fill at the next bar's price, with the cost
+  model's spread and impact on top; there is no order book and no partial fill.
+- **No factor attribution in this package.** The result carries
+  `returnDates` so a factor series can be joined on the right bar;
+  the regression and the decomposition are in `canvas-equity`, and the join
+  is tested in `canvas-integration`.
+- **The trial counter is passed in.** The PRD says it is "tracked
+  automatically"; the canvas owns that count and passes it as `trials`. Omitted, it is 1,
+  and the deflated Sharpe deflates for a single trial.

@@ -19,6 +19,7 @@ export default defineConfig({
       '@picasso/canvas-sync': pkg('canvas-sync'),
       '@picasso/canvas-ink': pkg('canvas-ink'),
       '@picasso/canvas-render': pkg('canvas-render'),
+      '@picasso/canvas-sim': pkg('canvas-sim'),
     },
   },
   test: { include: ['test/**/*.test.ts'], environment: 'node', testTimeout: 120_000 },

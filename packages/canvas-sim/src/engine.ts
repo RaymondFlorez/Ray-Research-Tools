@@ -69,8 +69,16 @@ export interface BacktestResult {
   dates: string[];
   /** Portfolio value at each bar. */
   equity: number[];
-  /** Bar-over-bar returns. */
+  /** Bar-over-bar returns: `returns[i]` runs from `dates[i]` to `dates[i + 1]`. */
   returns: number[];
+  /**
+   * The date each return ends on — `dates.slice(1)`, spelled out because one
+   * array shorter than the other is an invitation to align a factor series on
+   * the wrong end. Joined on the wrong end, a long-only book with a market
+   * beta of 1.00 attributes all of its return to alpha (measured in
+   * `canvas-integration/test/attribution.test.ts`).
+   */
+  returnDates: string[];
   trades: Trade[];
   /** Gross exposure over equity, per bar. */
   exposure: number[];
@@ -194,6 +202,7 @@ export function backtest(
     dates,
     equity,
     returns,
+    returnDates: dates.slice(1),
     trades,
     exposure,
     totalCosts,

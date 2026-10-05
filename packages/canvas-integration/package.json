@@ -20,7 +20,8 @@
     "@picasso/canvas-hypothesis": "*",
     "@picasso/canvas-sync": "*",
     "@picasso/canvas-ink": "*",
-    "@picasso/canvas-render": "*"
+    "@picasso/canvas-render": "*",
+    "@picasso/canvas-sim": "*"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",

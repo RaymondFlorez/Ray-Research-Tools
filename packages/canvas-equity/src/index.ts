@@ -13,3 +13,4 @@ export * from './ols.js';
 export * from './eventStudy.js';
 export * from './factors.js';
 export * from './nodes.js';
+export * from './attribution.js';

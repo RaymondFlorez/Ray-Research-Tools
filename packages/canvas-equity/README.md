@@ -1,6 +1,6 @@
 # @picasso/canvas-equity
 
-PRD 5.2. 54 tests.
+PRD 5.2 and 5.8's factor attribution. 60 tests.
 
 | Module | What it is |
 |---|---|
@@ -106,6 +106,36 @@ The regression is four lines. The value is in the three ways an exposure lies:
 A custom factor gets no special treatment: an analyst who builds "quality" out
 of the same inputs as RMW sees a VIF that says so.
 
+## Factor attribution: exact, and exactly wrong when exposure moves
+
+PRD 5.8 lists factor attribution among a backtest's outputs. `factorAttribution`
+regresses per-bar returns on the factors once; OLS with an intercept leaves
+residuals summing to zero, so `T·alpha + Σ beta_k·Σf_k` equals the summed
+return to rounding (the tests hold it below 1e-12). That sum is additive. An
+equity curve compounds, and the difference is reported as its own
+`compounding` line rather than spread across the factors Carino-style, which
+would make every line slightly wrong so that the total can be exactly right.
+
+Exact is not the same as right. A strategy long the market for half the window
+and short it for the other half has a static beta near zero, so the market
+P&L moves into alpha. Measured on 500 seeded bars where the true market
+contribution is 0.3446 and the true alpha 0.100: the static fit reports alpha
+0.5213 and market −0.0096, with no residual to hint at a problem.
+
+`rollingAttribution(returns, factors, window)` estimates each bar's betas from
+the `window` bars before it — nothing from the bar itself or later, which a
+test checks by moving the last return and seeing only the residual change. On
+the same series with a 60-bar window it reports market 0.117 and alpha 0.1192
+against a truth (over the bars it can attribute) of 0.1425 and 0.088, and the
+0.2755 it cannot explain is reported as residual, not folded into alpha. The
+lag is the cost: for up to a window after a change in exposure, the betas
+still describe the old one.
+
+Through the real backtest engine, `canvas-integration/test/attribution.test.ts`
+measures what happens when the factor series is joined one bar off: a long
+book's market line falls from 0.4065 to under 0.005 and the whole return,
+0.4256, is reported as alpha.
+
 ## Four scoring nodes that refuse to compute
 
 `ERQ12Node` and `AXM8Node` are named in 5.2 as platform rubrics — ERQ12 "from
@@ -128,6 +158,14 @@ with an exhaustive switch, so a framework that one day gains a specification
 has to be wired in on purpose.
 
 ## What is not here
+
+- **No holdings-based attribution.** Attribution here is returns-based: it
+  infers exposure from co-movement. A backtest knows its positions exactly,
+  and attributing from them (per-name betas times weights) would not lag a
+  change in exposure. That needs per-instrument factor loadings, which nothing
+  here estimates.
+- **No Carino or Menchero linking.** The compounding difference is one line,
+  not distributed across factors.
 
 - **No transcript ingestion.** Diarization and section tagging are ASR and
   pipeline work; these modules take the tagged result.

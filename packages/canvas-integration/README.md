@@ -38,7 +38,7 @@ fixture gives every fact its own node. A reading is now identified by node
 *and* port, with the cache key dating it rather than identifying it — and
 `test/reconciler.test.ts` carries the regression.
 
-## Nine suites, nine seams
+## The suites, by seam
 
 | Suite | Seam |
 |---|---|
@@ -51,6 +51,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `sketch-to-code.test.ts` | `canvas-ink` → `canvas-pricing`: candidate books re-rendered by the engine and verified against a drawn payoff before anything is offered. |
 | `skew-history.test.ts` | `canvas-pricing` → `canvas-data`: a risk reversal read by the engine, kept bitemporally, the two shapes held equal by the compiler. |
 | `alerts.test.ts` | `canvas-data` → `canvas-agents`: detector firings ranked in the return digest, and the two packages' family names held equal by the compiler. |
+| `attribution.test.ts` | `canvas-sim` → `canvas-equity`: a backtest's returns explained by factors, joined on the date each return ends. |
 
 ## The second bug, found the same way
 
@@ -123,6 +124,7 @@ fallback would make the ladder look more verified than it is.
 | guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
 | guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |
+| sim → equity | A backtest returns one fewer return than it has dates. Joined to market returns on `returnDates`, a long book's market line is 0.4065 against a true 0.4205; joined one bar early — same lengths, a clean fit, no warning — the market line is under 0.005 and 0.4256 lands in alpha. The attribution compounds to the engine's own equity curve to twelve places. On a book that flips from long to short halfway, the static fit reports +0.0319 alpha where the only non-market P&L was −0.0163 of costs, and its R-squared warning is the only tell. |
 
 ## A third disagreement, caught before it ran
 
