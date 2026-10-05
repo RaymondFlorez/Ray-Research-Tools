@@ -122,6 +122,7 @@ fallback would make the ladder look more verified than it is.
 | ink → core → agents (the margin) | An unreadable scribble carrying readable words becomes a loose note; the arrow drawn from it to a node puts `analyst_note` on the edge; the context builder reads that tag off the edge without having seen the gesture, and the note reaches the prompt framed as intent. |
 | agents (never as data) | The same note's number is refused into a `MonteCarloNode` *with* a valid override, and a narrative reporting it as a measured figure fails reconciliation with a blocking `note_as_data`. Three modules enforce one sentence from PRD 3.2.5, and each is in a different file from the one the number entered by. |
 | guard → router | A frontier outage still answers every frontier task class, from `open-70b`; an on-device-only fleet classifies but refuses codegen. |
+| router (rung 2's queue) | The refused codegen request queues at position 1 ahead of an overnight batch refresh, classification still routes to the 3B, and the healthy fleet releases both in that order. |
 | guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
 | guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |

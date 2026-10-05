@@ -26,6 +26,7 @@ import {
 } from '@picasso/canvas-guard';
 import {
   DEFAULT_POLICY,
+  InferenceQueue,
   NoEligibleModel,
   route,
   type Model,
@@ -131,6 +132,21 @@ describe('rung 2 · GPU fleet saturated', () => {
   // request from a 3B model would be the silent substitution rung 1 forbids.
   it('refuses heavy work rather than answering it from the 3B', () => {
     expect(() => route(onDeviceOnly, features('quant.codegen'))).toThrow(NoEligibleModel);
+  });
+
+  // The router's refusal is half of the rung. The other half is the queue:
+  // the same request gets a place in line, and a position that is true.
+  it('queues the heavy work with a visible position, and releases it on recovery', () => {
+    const queue = new InferenceQueue(DEFAULT_POLICY);
+    queue.submit({ id: 'overnight-refresh', features: features('summarize.bulk'), priority: 'batch' }, onDeviceOnly);
+    const ask = queue.submit({ id: 'maya-codegen', features: features('quant.codegen'), priority: 'interactive' }, onDeviceOnly);
+    expect(ask).toMatchObject({ kind: 'queued', position: 1 });
+    expect(queue.position('overnight-refresh')).toBe(2);
+    // Classification never queues: the 3B answers it.
+    expect(queue.submit({ id: 'classify', features: features('intent.classify'), priority: 'interactive' }, onDeviceOnly).kind).toBe('routed');
+
+    const released = queue.drain(DEFAULT_POLICY);
+    expect(released.map((r) => r.id)).toEqual(['maya-codegen', 'overnight-refresh']);
   });
 });
 

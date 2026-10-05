@@ -16,3 +16,4 @@ export * from './trace.js';
 export * from './evals.js';
 export * from './canary.js';
 export * from './manifest.js';
+export * from './queue.js';

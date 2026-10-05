@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 103 tests
+npm test --workspace @picasso/canvas-router    # 109 tests
 ```
 
 ## Phase 3's exit criterion
@@ -210,7 +210,28 @@ justifying, so silence blocks it rather than clearing the gate by default.
 of traffic at double cost is a 5 percent increase. The report carries what the
 shadow spent, which is better learned here than from an unexplained line later.
 
+## A refusal is not a queue
+
+Rung 2 of PRD 7.4: "GPU fleet saturated → local 3B handles classification and
+autocomplete; heavy tasks queue with a visible position indicator." The router already got
+the first half right — on a fleet reduced to the on-device model a codegen request throws
+`NoEligibleModel` rather than being answered by the 3B — and stopped there, so the analyst
+got an error where the PRD promised a place in line.
+
+`InferenceQueue.submit` routes against the fleet that is up and, when that fails, asks
+whether the healthy fleet would have served the request. If it would, the failure is
+capacity and the task queues with its position; if not, it is policy — a modality no model
+for that class accepts, say — and the healthy fleet's refusal is thrown now, because
+queueing it would mean waiting for a recovery that could never admit it. Positions are
+interactive first, then oldest first (7.3: "interactive over batch"), so a waiting batch
+task's position gets worse whenever an interactive one arrives, and the number reported is
+the true one rather than its place at arrival. `drain` releases, in that order, whatever a
+recovering fleet can now serve and keeps the rest.
+
 ## What is not here
+
+- **No preemption of running work.** 7.3 says batch work "is preempted". The queue orders
+  waiting work; nothing here knows what is running, so nothing is stopped mid-flight.
 
 - **No dispatch.** Every model in this package is a description and a function
   the caller supplies. What is tested is the routing, the cascade's control
