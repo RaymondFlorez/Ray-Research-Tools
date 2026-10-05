@@ -177,3 +177,29 @@ describe('a record cannot be edited after the fact', () => {
     expect(result.resolvedAt).toBe('2026-08-18');
   });
 });
+
+describe('only data inside the claim window counts', () => {
+  it('ignores a number dated before the claim was made', () => {
+    // Stating "below 71" the day after the 70.2 print is not a prediction.
+    const late: Hypothesis = { ...nvda, createdAt: '2026-08-19' };
+    const result = resolve(late, seen(70.2), '2026-08-19T12:00');
+    expect(result.status).toBe('undetermined');
+    expect(result.outcomes[0]!.reason).toMatch(/dated 2026-08-18 falls outside .* does not count/);
+    expect(resolve(late, seen(70.2), '2026-08-21').status).toBe('expired');
+  });
+
+  it('ignores a number dated on the day the claim was made', () => {
+    expect(resolve({ ...nvda, createdAt: '2026-08-18' }, seen(70.2), '2026-08-21').status).toBe('expired');
+  });
+
+  it('lets a prediction expire rather than resolve on data dated after it was due', () => {
+    const result = resolve(nvda, seen(70.2, '2026-08-25'), '2026-08-26');
+    expect(result.status).toBe('expired');
+    expect(result.outcome).toBeUndefined();
+  });
+
+  it('ignores observations of observables the claim does not name', () => {
+    const result = resolve(nvda, [...seen(70.2), { observableId: 'other', value: 1, observedAt: '2026-08-01' }], '2026-08-21');
+    expect(result.status).toBe('supported');
+  });
+});

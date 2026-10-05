@@ -103,6 +103,9 @@ export function validate(hypothesis: Hypothesis): string[] {
     problems.push('a claim with no observable cannot be checked, only believed');
   }
   for (const observable of hypothesis.observables) {
+    if (!(observable.dueBy > hypothesis.createdAt)) {
+      problems.push(`${observable.name}: due ${observable.dueBy}, which is not after the claim was made`);
+    }
     const falsifierIsFarSide =
       observable.direction === 'below'
         ? observable.falsifier > observable.threshold
@@ -147,6 +150,9 @@ function judge(observable: Observable, value: number): { status: HypothesisStatu
 /**
  * Resolves a claim against whatever data has arrived.
  *
+ * An observation counts only when it is dated after the claim was made and no
+ * later than its observable's due date; among those, the earliest wins.
+ *
  * Precedence, in order:
  *
  *  1. **Any falsifier that fired wins.** That is what a falsifier is for, and a
@@ -162,8 +168,21 @@ export function resolve(
   observations: readonly Observation[],
   now: string,
 ): Resolution {
+  const observablesById = new Map(hypothesis.observables.map((o) => [o.id, o]));
   const byObservable = new Map<string, Observation>();
+  const outside = new Map<string, Observation>();
   for (const observation of observations) {
+    const observable = observablesById.get(observation.observableId);
+    if (!observable) continue;
+    // Only a number dated after the claim and by its due date can settle it.
+    // One dated earlier was known, or knowable, when the claim was written, so
+    // counting it would let a record be padded with calls made after the
+    // answer was in; one dated later is the prediction expiring and the data
+    // turning up anyway.
+    if (!(observation.observedAt > hypothesis.createdAt && observation.observedAt <= observable.dueBy)) {
+      outside.set(observation.observableId, observation);
+      continue;
+    }
     const existing = byObservable.get(observation.observableId);
     // The first observation is the one that counts: a prediction resolved by
     // the data available on the due date cannot be un-resolved by a later
@@ -176,16 +195,21 @@ export function resolve(
   const outcomes: ObservableOutcome[] = hypothesis.observables.map((observable) => {
     const observation = byObservable.get(observable.id);
     if (!observation) {
+      const ignored = outside.get(observable.id);
+      const note = ignored
+        ? ` (the ${ignored.value}${observable.unit ?? ''} dated ${ignored.observedAt} falls outside ` +
+          `${hypothesis.createdAt} to ${observable.dueBy} and does not count)`
+        : '';
       return now > observable.dueBy
         ? {
             observable,
             status: 'expired' as const,
-            reason: `nothing was observed by ${observable.dueBy}`,
+            reason: `nothing was observed by ${observable.dueBy}${note}`,
           }
         : {
             observable,
             status: 'undetermined' as const,
-            reason: `awaiting the observation, due ${observable.dueBy}`,
+            reason: `awaiting the observation, due ${observable.dueBy}${note}`,
           };
     }
     const verdict = judge(observable, observation.value);

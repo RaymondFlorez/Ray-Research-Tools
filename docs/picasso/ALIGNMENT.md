@@ -52,7 +52,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.7 text pass (on-device handwriting recognition) | Infra | Needs a TrOCR-class model under WebNN (Appendix C.1) |
 | 3.7 semantic pass | Partial | Proposal schema and `accept()` gate built; the model is the caller's |
 | 3.7 sketch-to-code with Fréchet verification | Built | `canvas-ink` frechet, `sketch-to-code.test.ts` |
-| 3.7 hypothesis builder | Built | `canvas-hypothesis`; persistence and the re-resolve trigger are the caller's |
+| 3.7 hypothesis builder | Built | `canvas-hypothesis`; `HypothesisLedger` keeps the record and re-resolves on each observation (`hypothesis-ledger.test.ts`); the durable store is Infra (3.9) |
 | 3.8 interaction model (pan momentum, palette, frame, search, time scrub) | Built | `canvas-core` viewport/search/frame, `canvas-data` timescrub |
 | 3.9 named versions, templates | Built | `canvas-sync` snapshot, `canvas-core` template |
 | 3.9 Postgres snapshots every 30s | Infra | No Postgres |
