@@ -129,6 +129,20 @@ is broken:
   edge for the same reason `promoteAnnotationToData` is separate: there is no
   path from a drawn arrow to a wired one that skips `connect`'s validation.
 
+## A stale badge says why
+
+PRD 4.7: "Model version changes mark those nodes stale with an explicit reason so the
+analyst knows a number moved because the model changed, not because the market did." A new
+cache key says that something changed; `explainKeyChange` compares the two key inputs and
+says what — a model's version, a model call's prompt, seed or temperature, a dataset
+snapshot, a parameter, an upstream key, or the node's code — with model reasons first, and
+`describeStaleReasons` adds "the data did not change" when only a model moved. A test
+perturbs every input of the key, singly and in pairs, and holds "there is a reason" equal
+to "the key moved", so a badge can never be silent about a number that changed. A model
+called twice is grouped, not collapsed by name, so its second call's edit is explained too.
+`cacheKeyInput` reads those inputs off a document; `canvas-router`'s `fingerprintOf` turns
+a routing decision into the fingerprint that feeds them.
+
 ## Not here yet
 
 Phase 0 continues with the renderer and collaboration layers, which land next: the

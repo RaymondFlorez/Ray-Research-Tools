@@ -12,6 +12,7 @@
  * exactly the reasoning the rule exists to forbid.
  */
 
+import type { ModelFingerprint } from '@picasso/canvas-core';
 import {
   entryFor,
   modelById,
@@ -344,3 +345,22 @@ export function escalate(
 }
 
 export { modelById };
+
+/**
+ * What a routed call contributes to the cache key of the value it produces
+ * (PRD 4.7: "Any node feeding a compute path pins model version, temperature
+ * 0, and seed. Model version changes mark those nodes stale with an explicit
+ * reason").
+ *
+ * The version comes from the model as the policy describes it, so a manifest
+ * that bumps it moves every key the model contributed to, and canvas-core's
+ * `explainKeyChange` names the model rather than the market as the reason.
+ */
+export function fingerprintOf(decision: RoutingDecision, promptHash: string): ModelFingerprint {
+  return {
+    model: decision.model.id,
+    version: decision.model.version,
+    promptHash,
+    ...(decision.pinned ? { seed: decision.pinned.seed, temperature: decision.pinned.temperature } : {}),
+  };
+}

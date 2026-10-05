@@ -210,6 +210,13 @@ justifying, so silence blocks it rather than clearing the gate by default.
 of traffic at double cost is a 5 percent increase. The report carries what the
 shadow spent, which is better learned here than from an unexplained line later.
 
+## A routed call has a fingerprint
+
+`fingerprintOf(decision, promptHash)` is what a routed call contributes to the cache key of
+the value it produces: the model, its version as the policy states it, and the seed and
+temperature when the call is pinned. A manifest that bumps a version therefore moves every
+key the model fed, and canvas-core's `explainKeyChange` names the model as the reason.
+
 ## A refusal is not a queue
 
 Rung 2 of PRD 7.4: "GPU fleet saturated → local 3B handles classification and

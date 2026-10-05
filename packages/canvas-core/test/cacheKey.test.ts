@@ -4,6 +4,8 @@ import {
   cacheKeyPreimage,
   canonicalize,
   deriveCacheKey,
+  describeStaleReasons,
+  explainKeyChange,
   nodeSignature,
   type CacheKeyInput,
 } from '../src/cacheKey.js';
@@ -185,5 +187,70 @@ describe('deriving keys from the document', () => {
     const n = node({ kind: 'BacktestNode' });
     n.nodeVersion = '2';
     expect(nodeSignature(n)).toBe('BacktestNode@2');
+  });
+});
+
+describe('why a key moved (PRD 4.7)', () => {
+  const base: CacheKeyInput = {
+    nodeKind: 'EvidenceNode',
+    nodeVersion: '3',
+    params: { window: 10, method: 'subtext' },
+    upstream: { 'in:t.out': 'k-transcript' },
+    datasetVersions: { transcripts: 'snap-41' },
+    modelFingerprints: [{ model: 'frontier-a', version: '2026-01', promptHash: 'p1', seed: 7, temperature: 0 }],
+  };
+
+  it('names a model version bump as the model, and says the data did not move', () => {
+    const after = { ...base, modelFingerprints: [{ ...base.modelFingerprints[0]!, version: '2026-03' }] };
+    expect(cacheKey(after)).not.toBe(cacheKey(base));
+    const reasons = explainKeyChange(base, after);
+    expect(reasons).toEqual([{ kind: 'model_version', model: 'frontier-a', from: '2026-01', to: '2026-03' }]);
+    expect(describeStaleReasons(reasons)).toContain('the data did not change: this number moved because the model did');
+  });
+
+  it('lists the model first when the data moved too, and does not claim the data held', () => {
+    const after = {
+      ...base,
+      datasetVersions: { transcripts: 'snap-42' },
+      modelFingerprints: [{ ...base.modelFingerprints[0]!, version: '2026-03' }],
+    };
+    const reasons = explainKeyChange(base, after);
+    expect(reasons.map((r) => r.kind)).toEqual(['model_version', 'dataset']);
+    expect(describeStaleReasons(reasons).join(' ')).not.toMatch(/did not change/);
+  });
+
+  it('separates a changed prompt from a changed model', () => {
+    const after = { ...base, modelFingerprints: [{ ...base.modelFingerprints[0]!, promptHash: 'p2' }] };
+    expect(explainKeyChange(base, after)).toEqual([{ kind: 'model_call', model: 'frontier-a', fields: ['promptHash'] }]);
+  });
+
+  it('has a reason exactly when the key moved', () => {
+    // Every input of the key, perturbed one at a time and in pairs: an empty
+    // explanation must mean an unchanged key, or the badge could say nothing
+    // about a number that moved.
+    const perturb: Array<(i: CacheKeyInput) => CacheKeyInput> = [
+      (i) => ({ ...i, nodeVersion: '4' }),
+      (i) => ({ ...i, params: { ...i.params, window: 11 } }),
+      (i) => ({ ...i, params: { ...i.params, extra: true } }),
+      (i) => ({ ...i, upstream: { 'in:t.out': 'k-other' } }),
+      (i) => ({ ...i, datasetVersions: {} }),
+      (i) => ({ ...i, modelFingerprints: [] }),
+      (i) => ({ ...i, modelFingerprints: [...i.modelFingerprints, { model: 'embed', version: '1', promptHash: 'e' }] }),
+      (i) => ({ ...i, modelFingerprints: [{ ...i.modelFingerprints[0]!, seed: 8 }] }),
+      // The same model called twice, then the second call's prompt edited.
+      (i) => ({ ...i, modelFingerprints: [...i.modelFingerprints, { ...i.modelFingerprints[0]!, promptHash: 'second' }] }),
+      (i) => ({
+        ...i,
+        modelFingerprints: i.modelFingerprints.map((f, n) => (n === 1 ? { ...f, promptHash: 'second-edited' } : f)),
+      }),
+      (i) => i,
+    ];
+    for (const f of perturb) {
+      for (const g of perturb) {
+        const after = g(f(base));
+        const moved = cacheKey(after) !== cacheKey(base);
+        expect(explainKeyChange(base, after).length > 0).toBe(moved);
+      }
+    }
   });
 });
