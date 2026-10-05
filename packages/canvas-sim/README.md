@@ -5,7 +5,7 @@ that run on every one of them, and the statistics that account for how many stra
 analyst tried before this one.
 
 ```bash
-npm test --workspace @picasso/canvas-sim    # 38 tests
+npm test --workspace @picasso/canvas-sim    # 45 tests
 ```
 
 | Module | PRD | What it does |
@@ -85,11 +85,33 @@ flipping between long and short cost more in turnover than its edge was worth. T
 fixture holds for sixty days, and that is a fair summary of the tradeoff the model exists to
 make visible.
 
+## Delisted names were a 100% loss, and a missing print was a 50% drawdown
+
+The universe already resolved as of the historical date, delisted names
+included. The engine then threw half of that away: a held name with no price
+on a bar was skipped when marking the book. Measured on 10,000 shares at 50,
+equity went from 999,509 to 499,509 on the first bar after the prints stopped
+— a total loss whatever the holders actually received, so a survivorship fix
+that biased results the other way. The same skip turned a one-day gap in one
+series into a 50% drawdown that reversed the next morning (999,626 → 499,626
+→ 999,626), and the drawdown and Sharpe both believed it.
+
+`History.delist(symbol, date, delistingReturn)` records the return from the
+last traded price to what holders received, CRSP-style. The engine settles any
+position at that value on that date — a +20% cash-out is worth exactly 100,000
+on the position above, a short covers at it — records the settlement as a
+trade marked `delisting`, and will not trade back into the name. A held name
+with no print and no delisting is marked at its last print; every such bar is
+listed in `staleMarks`, and a name still held that way at the end gets a
+warning saying its delisting return is probably missing.
+
 ## What is not here
 
 - **No snapshot pinning.** PRD 5.8 enforces point-in-time "by Iceberg snapshot
   pinning, not by convention". Here `History` is in memory and the guard is
   the `AsOfView` reader; there is no Iceberg and no snapshot id.
+- **No delisting data.** The engine settles a delisting it is told about;
+  it has no CRSP feed and cannot tell a delisting from a data gap on its own.
 - **No intrabar fills.** Orders fill at the next bar's price, with the cost
   model's spread and impact on top; there is no order book and no partial fill.
 - **No factor attribution in this package.** The result carries

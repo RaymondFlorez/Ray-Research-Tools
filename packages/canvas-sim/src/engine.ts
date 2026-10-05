@@ -43,6 +43,16 @@ export interface Trade {
   shares: number;
   price: number;
   cost: number;
+  /** Set when the position was closed by a delisting rather than an order. */
+  delisting?: { lastPrice: number; delistingReturn: number };
+}
+
+/** A held position marked at an old price because the bar had no print for it. */
+export interface StaleMark {
+  date: string;
+  symbol: string;
+  /** The date of the price it was marked at. */
+  pricedOn: string;
 }
 
 export interface BacktestOptions {
@@ -86,6 +96,9 @@ export interface BacktestResult {
   sharpe: number;
   deflated: DeflatedSharpe;
   drawdown: Drawdown;
+  /** Every bar a held position was marked at a carried-forward price. */
+  staleMarks: StaleMark[];
+  warnings: string[];
 }
 
 const VOL_WINDOW = 20;
@@ -126,13 +139,42 @@ export function backtest(
   const trades: Trade[] = [];
   let totalCosts = 0;
   let pending: Order[] = [];
+  const lastPrint = new Map<string, { price: number; date: string }>();
+  const staleMarks: StaleMark[] = [];
+  const delisted = new Set<string>();
 
   for (let bar = 0; bar < dates.length; bar += 1) {
     const date = dates[bar] as string;
     const priceOf = (symbol: string) => history.actualAt(`price:${symbol}`, date);
+    for (const symbol of new Set([...positions.keys(), ...pending.map((o) => o.symbol)])) {
+      const price = priceOf(symbol);
+      if (price !== undefined && price > 0) lastPrint.set(symbol, { price, date });
+    }
+
+    // 0. Settle delistings. "Survivorship handling: universes resolve as of
+    // the historical date, including delisted names with their delisting
+    // returns." The holder receives the last price compounded by the
+    // delisting return — a cash-out at a merger price, or most of nothing in
+    // a bankruptcy — and the position is closed. Dropping it from the book
+    // instead is a 100% loss on every delisting, which is how a survivorship
+    // fix ends up biased the other way.
+    for (const [symbol, shares] of [...positions]) {
+      const delistingReturn = history.actualAt(`delist:${symbol}`, date);
+      if (delistingReturn === undefined) continue;
+      const last = lastPrint.get(symbol);
+      const lastPrice = last?.price ?? 0;
+      const price = lastPrice * (1 + delistingReturn);
+      cash += shares * price;
+      positions.delete(symbol);
+      delisted.add(symbol);
+      trades.push({ date, symbol, shares: -shares, price, cost: 0, delisting: { lastPrice, delistingReturn } });
+    }
 
     // 1. Fill what the previous bar decided, at this bar's price.
     for (const order of pending) {
+      // A delisted name cannot be traded back into, even on a bar that still
+      // carries its final print.
+      if (delisted.has(order.symbol) || history.actualAt(`delist:${order.symbol}`, date) !== undefined) continue;
       const price = priceOf(order.symbol);
       if (price === undefined || price <= 0) continue;
       const held = positions.get(order.symbol) ?? 0;
@@ -162,8 +204,14 @@ export function backtest(
     let marked = cash;
     const held = new Map<string, { shares: number; price: number }>();
     for (const [symbol, shares] of positions) {
-      const price = priceOf(symbol);
-      if (price === undefined) continue;
+      // A held name with no print on this bar is marked at its last print,
+      // and the bar is recorded. Skipping it would mark the position at zero
+      // for one bar: a one-day gap in one series halves equity and restores
+      // it the next day, and the drawdown and Sharpe both believe it.
+      const last = lastPrint.get(symbol);
+      if (last === undefined) continue;
+      const price = last.price;
+      if (last.date !== date) staleMarks.push({ date, symbol, pricedOn: last.date });
       marked += shares * price;
       gross += Math.abs(shares * price);
       held.set(symbol, { shares, price });
@@ -197,6 +245,20 @@ export function backtest(
     returns.push(previous !== 0 ? (equity[i] as number) / previous - 1 : 0);
   }
 
+  const warnings: string[] = [];
+  const staleBySymbol = new Map<string, StaleMark[]>();
+  for (const mark of staleMarks) staleBySymbol.set(mark.symbol, [...(staleBySymbol.get(mark.symbol) ?? []), mark]);
+  for (const [symbol, marks] of staleBySymbol) {
+    const lastMark = marks[marks.length - 1] as StaleMark;
+    warnings.push(
+      `${symbol}: marked at a carried-forward price on ${marks.length} bar${marks.length === 1 ? '' : 's'}` +
+        (lastMark.date === dates[dates.length - 1]
+          ? ` and still held at the end with no print since ${lastMark.pricedOn}. If it delisted, ` +
+            'its delisting return is missing from the history and the position is valued at a price nobody can trade at.'
+          : '.'),
+    );
+  }
+
   const periodsPerYear = options.periodsPerYear ?? 252;
   return {
     dates,
@@ -209,5 +271,7 @@ export function backtest(
     sharpe: sharpe(returns, periodsPerYear),
     deflated: deflatedSharpe(returns, options.trials ?? 1, periodsPerYear),
     drawdown: maxDrawdown(equity),
+    staleMarks,
+    warnings,
   };
 }

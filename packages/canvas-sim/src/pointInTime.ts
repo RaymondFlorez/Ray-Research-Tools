@@ -116,6 +116,21 @@ export class History {
     }
   }
 
+  /**
+   * Records that `symbol` delisted on `date`, returning `delistingReturn` from
+   * its last traded price to what holders actually received (CRSP's DLRET).
+   *
+   * The backtest settles any position in the name at that value on that date.
+   * A name whose prices simply stop, with no delisting recorded, is marked at
+   * its last print and warned about — never silently dropped.
+   */
+  delist(symbol: string, date: string, delistingReturn: number, knowledgeTime: string = date): void {
+    if (!(delistingReturn >= -1)) {
+      throw new RangeError(`delisting return for ${symbol} is ${delistingReturn}; a holder cannot lose more than everything`);
+    }
+    this.add(`delist:${symbol}`, { validTime: date, knowledgeTime, value: delistingReturn });
+  }
+
   viewAt(asOf: string): AsOfView {
     return new AsOfView(this.series, asOf);
   }
