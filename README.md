@@ -86,7 +86,7 @@ name.
 
 ```bash
 npm install
-npm run build        # build first: typecheck resolves packages through dist
+npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
 npm test             # 1,686 TypeScript tests across 16 packages
 
@@ -102,3 +102,6 @@ cd crates/pricing-core && cargo test --release   # 228 tests
 cargo run --release --example grid_bench --manifest-path crates/pricing-core/Cargo.toml
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 ```
+
+CI (`.github/workflows/ci.yml`) runs all of the above from a clean checkout, plus all eight
+browser checks under `apps/canvas-demo/scripts`.

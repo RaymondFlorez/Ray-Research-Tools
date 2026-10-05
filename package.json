@@ -5,12 +5,13 @@
   "description": "Alphalytica / The Grand Chessboard research tooling",
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "build": "node scripts/workspaces.mjs build",
+    "typecheck": "node scripts/workspaces.mjs typecheck",
+    "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
     "playwright": "^1.63.0"

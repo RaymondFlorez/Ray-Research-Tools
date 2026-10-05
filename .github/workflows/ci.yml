@@ -1,0 +1,66 @@
+# Every check this repository's figures rest on, from a clean checkout.
+#
+# Before this workflow existed, every check was run by hand against a working
+# tree with stale build output on disk, and a fresh clone could not build at
+# all (see scripts/workspaces.mjs). Running from nothing is the point.
+
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  typescript:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: npm ci
+      - run: npm run build # dependency order; also builds apps/canvas-demo
+      - run: npm run typecheck
+      - run: npm test # the pricing and integration suites build the WASM once in globalSetup
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo test --release
+        working-directory: crates/pricing-core
+      - run: node scripts/verify-wasm-parity.mjs # native vs WASM, bit for bit
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: cargo build --release --target wasm32-unknown-unknown
+        working-directory: crates/pricing-core
+      - name: Demo surfaces in headless Chromium
+        run: |
+          for check in screenshot ink-shots inkgl-shots gl-shots collab-shots payoff-shots rates-shots csp-check; do
+            echo "::group::$check"
+            node "apps/canvas-demo/scripts/$check.mjs"
+            echo "::endgroup::"
+          done

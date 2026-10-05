@@ -5,7 +5,7 @@ the `canvas-render` draw list; this app owns only the viewport, the input handli
 Canvas2D painter.
 
 ```bash
-npm run build --workspaces          # canvas-core, canvas-render, then this app
+npm run build                       # every package in dependency order, then this app
 node scripts/serve.mjs              # http://localhost:8123/
 node apps/canvas-demo/scripts/screenshot.mjs   # headless capture + assertions
 ```

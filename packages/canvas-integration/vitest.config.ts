@@ -22,5 +22,11 @@ export default defineConfig({
       '@picasso/canvas-sim': pkg('canvas-sim'),
     },
   },
-  test: { include: ['test/**/*.test.ts'], environment: 'node', testTimeout: 120_000 },
+  test: {
+    include: ['test/**/*.test.ts'],
+    environment: 'node',
+    // Builds the WASM once before any worker starts; see scripts/ensure-wasm.mjs.
+    globalSetup: ['../../scripts/ensure-wasm.mjs'],
+    testTimeout: 120_000,
+  },
 });

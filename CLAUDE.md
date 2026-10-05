@@ -9,13 +9,21 @@ under `apps/canvas-demo`.
 ```bash
 npm install
 npm run build        # MUST precede typecheck: tsc resolves cross-package
-                     # imports through each package's dist, not its src
+                     # imports through each package's dist, not its src.
+                     # Runs in dependency order (scripts/workspaces.mjs) and
+                     # includes apps/canvas-demo.
 npm run typecheck
-npm test             # vitest, per workspace
+npm test             # vitest, per workspace; suites that load the WASM build
+                     # it once first (scripts/ensure-wasm.mjs)
 
 cd crates/pricing-core && cargo test --release
 node scripts/verify-wasm-parity.mjs   # native vs WASM, bit for bit
 ```
+
+`.github/workflows/ci.yml` runs all of this, plus the demo's browser checks,
+from a clean checkout. Verify a build-system change the same way — a fresh
+clone with no `dist` and no `target` — because stale output on disk hid a
+build that could not run from scratch until it was checked that way.
 
 Vitest resolves `@picasso/*` to each package's **source** through aliases in
 `vitest.config.ts`, so tests see uncompiled changes immediately. `tsc` does
