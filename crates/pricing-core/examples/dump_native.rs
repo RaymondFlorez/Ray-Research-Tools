@@ -385,6 +385,7 @@ fn main() {
     ffi::pc_mc_add_heston(80.0, -1.0, 0.03, 0.01, 0.0625, 0.09, 1.6, 0.6, -0.65);
     ffi::pc_mc_corr_equicorrelated(0.7);
     emit("tcop_dep".to_string(), ffi::pc_mc_dependence_t(4.0) as f64);
+    ffi::pc_mc_keep_scenarios(1);
     emit("tcop_run".to_string(), ffi::pc_mc_run(1.0, 512, 32, 1, 77.0, 2) as f64);
     let summary = ffi::pc_mc_summary();
     for which in 0..ffi::MC_SUMMARY_STRIDE {
@@ -398,6 +399,12 @@ fn main() {
     let sample = ffi::pc_mc_sample();
     for step in 0..=32 {
         emit(format!("tcop_path({step})"), unsafe { *sample.add(step) });
+    }
+    // The optimizer's input: per-asset terminal levels, three assets a path.
+    emit("tcop_scen_len".to_string(), ffi::pc_mc_scenario_len() as f64);
+    let scenarios = ffi::pc_mc_scenarios();
+    for k in 0..30 {
+        emit(format!("tcop_scen({k})"), unsafe { *scenarios.add(k) });
     }
 
     // The joint stationary bootstrap: integer row draws and libm::exp, and a

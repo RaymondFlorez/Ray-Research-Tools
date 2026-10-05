@@ -155,6 +155,8 @@ pub enum PortfolioError {
     DegreesOfFreedom,
     /// A resampling history that is empty or not a whole number of rows.
     History { values: usize, assets: usize },
+    /// Retaining per-asset scenarios would exceed `MAX_SCENARIO_VALUES`.
+    ScenarioCap { values: usize },
 }
 
 /// The `distribution` port, plus the sample.
@@ -279,6 +281,47 @@ pub fn simulate_portfolio_with(
     time: f64,
     config: &PortfolioConfig,
     dependence: Dependence,
+) -> Result<PortfolioResult, PortfolioError> {
+    march(processes, assets, factor, time, config, dependence, None)
+}
+
+/// Most per-asset terminal values a run may retain: 4,000,000 `f64`, 32 MB.
+///
+/// The `distribution` port never needed the path cube, and an optimizer does
+/// not either — it needs each asset's terminal level on each path, `paths × n`
+/// values, which at 100k paths and 40 assets is exactly this. Past it the run
+/// is refused rather than quietly sliding back toward the array the PRD keeps
+/// out of the browser.
+pub const MAX_SCENARIO_VALUES: usize = 4_000_000;
+
+/// The same run, also returning every path's terminal level for every asset,
+/// row-major by path — the joint scenarios an optimizer works on. Takes the
+/// same draws as `simulate_portfolio_with`, so the summary is bit-identical.
+pub fn simulate_portfolio_scenarios(
+    processes: &[&dyn Process],
+    assets: &[AssetSpec],
+    factor: &Factor,
+    time: f64,
+    config: &PortfolioConfig,
+    dependence: Dependence,
+) -> Result<(PortfolioResult, Vec<f64>), PortfolioError> {
+    let values = config.paths.saturating_mul(assets.len());
+    if values > MAX_SCENARIO_VALUES {
+        return Err(PortfolioError::ScenarioCap { values });
+    }
+    let mut scenarios = Vec::with_capacity(values);
+    let result = march(processes, assets, factor, time, config, dependence, Some(&mut scenarios))?;
+    Ok((result, scenarios))
+}
+
+fn march(
+    processes: &[&dyn Process],
+    assets: &[AssetSpec],
+    factor: &Factor,
+    time: f64,
+    config: &PortfolioConfig,
+    dependence: Dependence,
+    mut scenarios: Option<&mut Vec<f64>>,
 ) -> Result<PortfolioResult, PortfolioError> {
     let student = match dependence {
         Dependence::Gaussian => None,
@@ -419,6 +462,9 @@ pub fn simulate_portfolio_with(
 
             terminal.push(assets.iter().enumerate().map(|(i, a)| a.weight * level[i]).sum());
             drawdown.push(worst);
+            if let Some(sink) = scenarios.as_deref_mut() {
+                sink.extend_from_slice(&level);
+            }
             done += 1;
         }
     }
@@ -523,6 +569,32 @@ pub fn simulate_resampled_portfolio(
     mean_block: f64,
     config: &PortfolioConfig,
 ) -> Result<PortfolioResult, PortfolioError> {
+    replay(history, assets, mean_block, config, None)
+}
+
+/// The resampled run, also returning every path's terminal level per asset.
+pub fn simulate_resampled_scenarios(
+    history: &[f64],
+    assets: &[AssetSpec],
+    mean_block: f64,
+    config: &PortfolioConfig,
+) -> Result<(PortfolioResult, Vec<f64>), PortfolioError> {
+    let values = config.paths.saturating_mul(assets.len());
+    if values > MAX_SCENARIO_VALUES {
+        return Err(PortfolioError::ScenarioCap { values });
+    }
+    let mut scenarios = Vec::with_capacity(values);
+    let result = replay(history, assets, mean_block, config, Some(&mut scenarios))?;
+    Ok((result, scenarios))
+}
+
+fn replay(
+    history: &[f64],
+    assets: &[AssetSpec],
+    mean_block: f64,
+    config: &PortfolioConfig,
+    mut scenarios: Option<&mut Vec<f64>>,
+) -> Result<PortfolioResult, PortfolioError> {
     let n = assets.len();
     if n == 0 || history.is_empty() || history.len() % n != 0 {
         return Err(PortfolioError::History { values: history.len(), assets: n });
@@ -574,6 +646,9 @@ pub fn simulate_resampled_portfolio(
         }
         terminal.push(assets.iter().enumerate().map(|(i, a)| a.weight * level[i]).sum());
         drawdown.push(worst);
+        if let Some(sink) = scenarios.as_deref_mut() {
+            sink.extend_from_slice(&level);
+        }
     }
 
     Ok(finish(terminal, drawdown, sample, false, steps, n))

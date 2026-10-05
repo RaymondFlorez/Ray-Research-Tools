@@ -51,6 +51,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `sketch-to-code.test.ts` | `canvas-ink` → `canvas-pricing`: candidate books re-rendered by the engine and verified against a drawn payoff before anything is offered. |
 | `skew-history.test.ts` | `canvas-pricing` → `canvas-data`: a risk reversal read by the engine, kept bitemporally, the two shapes held equal by the compiler. |
 | `alerts.test.ts` | `canvas-data` → `canvas-agents`: detector firings ranked in the return digest, and the two packages' family names held equal by the compiler. |
+| `optimizer.test.ts` | `pricing-core` → `canvas-pricing`: Monte Carlo scenarios reach the OptimizerNode in the run's asset order, and the joint law the run used is the one allocated against. |
 | `resample-fix.test.ts` | `canvas-core` → `canvas-data`: the one-click resample fix the port checker offers is one the `TransformNode` can apply — down by the last value, up by carrying it forward. |
 | `model-staleness.test.ts` | `canvas-router` → `canvas-core`: a model version bump in the policy moves the key of the node it fed, and the reason names the model, not the data. |
 | `attribution.test.ts` | `canvas-sim` → `canvas-equity`: a backtest's returns explained by factors, joined on the date each return ends. |

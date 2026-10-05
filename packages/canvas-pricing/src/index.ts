@@ -27,3 +27,5 @@ export * from './vol.js';
 export * from './aggregate.js';
 export * from './svi.js';
 export * from './shockShape.js';
+export * from './lp.js';
+export * from './optimizer.js';

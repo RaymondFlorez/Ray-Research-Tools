@@ -356,6 +356,7 @@ function wasmTCopula() {
   w.pc_mc_add_heston(80, -1, 0.03, 0.01, 0.0625, 0.09, 1.6, 0.6, -0.65);
   w.pc_mc_corr_equicorrelated(0.7);
   rows.set('tcop_dep', w.pc_mc_dependence_t(4));
+  w.pc_mc_keep_scenarios(1);
   rows.set('tcop_run', w.pc_mc_run(1, 512, 32, 1, 77, 2));
   const summary = new Float64Array(w.memory.buffer, w.pc_mc_summary(), 9);
   for (let which = 0; which < 9; which += 1) {
@@ -370,6 +371,9 @@ function wasmTCopula() {
   for (let step = 0; step <= 32; step += 1) {
     rows.set(`tcop_path(${step})`, sample[step]);
   }
+  rows.set('tcop_scen_len', w.pc_mc_scenario_len());
+  const scenarios = new Float64Array(w.memory.buffer, w.pc_mc_scenarios(), 30);
+  for (let k = 0; k < 30; k += 1) rows.set(`tcop_scen(${k})`, scenarios[k]);
   return rows;
 }
 

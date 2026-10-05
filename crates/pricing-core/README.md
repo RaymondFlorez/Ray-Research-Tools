@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 228 tests
+cargo test --release                              # 231 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -213,6 +213,12 @@ are shuffled; and on an AR(1) with φ = 0.5, blocks of 40 recover 2.81 times the
 variance of a twenty-step sum against the closed form's 2.80, while blocks of 10 recover
 2.52, because a block shorter than the horizon breaks the dependence it spans.
 
+**Scenarios are retained only when asked, and only to a cap.** An optimizer needs each path's
+terminal level per asset — `paths × assets` values, not the cube. `simulate_portfolio_scenarios`
+and `simulate_resampled_scenarios` return them alongside the usual result, take no extra
+draws (the summary is bit-identical with or without them), and refuse past
+`MAX_SCENARIO_VALUES`, four million: 100k paths of 40 assets, exactly.
+
 **Drawdown is absolute, not fractional,** and that is a correction rather than a
 preference. The first version divided by the running peak, guarded with `if peak > 0.0` so
 it would not divide by zero — which means a portfolio whose peak is zero or negative
@@ -274,7 +280,7 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,379 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,410 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
 Heston with its calibration, the pin and early-exercise thresholds, the volatility

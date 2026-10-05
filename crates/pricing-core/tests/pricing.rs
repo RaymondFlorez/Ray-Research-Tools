@@ -1327,6 +1327,68 @@ mod discrete_dividend_tests {
     }
 }
 
+mod scenario_tests {
+    //! Per-asset terminal scenarios, retained for the optimizer.
+
+    use pricing_core::copula::Factor;
+    use pricing_core::mc::{Gbm, Process};
+    use pricing_core::portfolio::{
+        simulate_portfolio_scenarios, simulate_portfolio_with, simulate_resampled_portfolio,
+        simulate_resampled_scenarios, AssetSpec, Dependence, PortfolioConfig, PortfolioError,
+        MAX_SCENARIO_VALUES,
+    };
+
+    fn spec(weight: f64) -> AssetSpec {
+        AssetSpec { spot: 100.0, weight, initial_variance: 0.0 }
+    }
+
+    #[test]
+    fn scenarios_reproduce_the_runs_own_distribution_bit_for_bit() {
+        let a = Gbm { rate: 0.03, dividend: 0.0, vol: 0.2 };
+        let b = Gbm { rate: 0.03, dividend: 0.0, vol: 0.35 };
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let factor = Factor::equicorrelated(2, 0.5).unwrap();
+        let assets = [spec(2.0), spec(-1.0)];
+        let config = PortfolioConfig { paths: 3_000, steps: 16, antithetic: true, seed: 9, sample_paths: 2 };
+        for dependence in [Dependence::Gaussian, Dependence::Student { nu: 5.0 }] {
+            let plain = simulate_portfolio_with(&processes, &assets, &factor, 1.0, &config, dependence).unwrap();
+            let (with, scenarios) =
+                simulate_portfolio_scenarios(&processes, &assets, &factor, 1.0, &config, dependence).unwrap();
+            // Retaining scenarios takes no draws: the summary is unchanged.
+            assert_eq!(plain.terminal, with.terminal);
+            assert_eq!(plain.mean.to_bits(), with.mean.to_bits());
+            assert_eq!(scenarios.len(), 3_000 * 2);
+            // Each row, weighted, is that path's portfolio value.
+            let mut rebuilt: Vec<f64> = scenarios.chunks(2).map(|row| 2.0 * row[0] - row[1]).collect();
+            rebuilt.sort_by(|x, y| x.partial_cmp(y).unwrap());
+            assert_eq!(rebuilt, with.terminal);
+        }
+    }
+
+    #[test]
+    fn resampled_scenarios_match_their_run() {
+        let history: Vec<f64> = (0..200).map(|k| (((k * 37) % 17) as f64 - 8.0) * 0.001).collect();
+        let config = PortfolioConfig { paths: 500, steps: 10, antithetic: false, seed: 3, sample_paths: 0 };
+        let assets = [spec(1.0), spec(1.0)];
+        let plain = simulate_resampled_portfolio(&history, &assets, 5.0, &config).unwrap();
+        let (with, scenarios) = simulate_resampled_scenarios(&history, &assets, 5.0, &config).unwrap();
+        assert_eq!(plain.terminal, with.terminal);
+        assert_eq!(scenarios.len(), 1_000);
+    }
+
+    #[test]
+    fn refuses_to_retain_more_than_the_cap() {
+        let a = Gbm { rate: 0.0, dividend: 0.0, vol: 0.2 };
+        let processes: Vec<&dyn Process> = vec![&a; 40];
+        let factor = Factor::independent(40);
+        let assets = vec![spec(1.0); 40];
+        let config = PortfolioConfig { paths: 100_001, steps: 1, antithetic: false, seed: 1, sample_paths: 0 };
+        let error = simulate_portfolio_scenarios(&processes, &assets, &factor, 1.0, &config, Dependence::Gaussian).unwrap_err();
+        assert_eq!(error, PortfolioError::ScenarioCap { values: 4_000_040 });
+        assert_eq!(MAX_SCENARIO_VALUES, 4_000_000);
+    }
+}
+
 mod complex_tests {
     use pricing_core::complex::Complex;
 

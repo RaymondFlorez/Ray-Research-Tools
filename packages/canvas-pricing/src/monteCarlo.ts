@@ -148,6 +148,11 @@ export interface McSpec {
    * (`paths * steps * assets`). Defaults to `DEFAULT_COST_CEILING`.
    */
   maxAssetSteps?: number;
+  /**
+   * Retain every path's terminal level for every asset — the joint scenarios
+   * an optimizer needs. Bounded at `MAX_SCENARIO_VALUES`.
+   */
+  keepScenarios?: boolean;
 }
 
 export interface McMoments {
@@ -182,6 +187,31 @@ export interface McResult {
   terminal: () => Float64Array;
   /** Full sorted per-path maximum drawdowns, in portfolio currency. */
   drawdownPaths: () => Float64Array;
+  /** Present when the run was asked to keep scenarios. */
+  scenarios?: Scenarios;
+}
+
+/** Joint terminal outcomes, one row per path, one column per asset. */
+export interface Scenarios {
+  assets: string[];
+  /** Each asset's starting level, so a row converts to returns. */
+  spots: number[];
+  paths: number;
+  /** Row-major `paths × assets` terminal levels. Copies out of linear memory. */
+  levels: () => Float64Array;
+}
+
+/** `paths × assets` beyond which scenarios are refused (the engine's `MAX_SCENARIO_VALUES`). */
+export const MAX_SCENARIO_VALUES = 4_000_000;
+
+export class ScenariosTooLarge extends Error {
+  constructor(readonly values: number) {
+    super(
+      `keeping ${values.toLocaleString('en-US')} scenario values is past the ${MAX_SCENARIO_VALUES.toLocaleString('en-US')} ` +
+        'limit; run fewer paths for the optimizer than for the distribution.',
+    );
+    this.name = 'ScenariosTooLarge';
+  }
 }
 
 /**
@@ -332,6 +362,7 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     throw new DependenceRejected(dependence.nu);
   }
 
+  if (spec.keepScenarios) exports.pc_mc_keep_scenarios(1);
   const samplePaths = Math.min(spec.samplePaths ?? 32, spec.paths);
   const code = exports.pc_mc_run(
     spec.time,
@@ -353,13 +384,18 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
       throw new CorrelationRejected('the matrix is not square in the number of assets');
     }
     if (code === -4) throw new EmptySimulation('paths and steps');
+    if (code === -6) throw new ScenariosTooLarge(spec.paths * spec.assets.length);
     throw new CorrelationRejected(
       'it is not a valid correlation matrix — the diagonal must be one, it must be symmetric, ' +
         'and it must be positive definite. Correlations assembled pair by pair routinely are not.',
     );
   }
 
-  return readResult(exports, run, spec, dependence);
+  return readResult(exports, run, spec, dependence, held(spec));
+}
+
+function held(spec: { assets: ReadonlyArray<{ id: string; spot: number }>; keepScenarios?: boolean }) {
+  return spec.keepScenarios ? spec.assets.map((a) => ({ id: a.id, spot: a.spot })) : undefined;
 }
 
 /** Reads the module's single result slot into a result tied to `run`. */
@@ -368,6 +404,7 @@ function readResult(
   run: number,
   spec: Pick<McSpec, 'percentiles' | 'cvarLevels'> & { assets: readonly unknown[] },
   dependence: Dependence | Replayed,
+  kept?: ReadonlyArray<{ id: string; spot: number }>,
 ): McResult {
   const summary = readFloats(exports.memory, exports.pc_mc_summary(), 9);
   const paths = summary[5] as number;
@@ -427,6 +464,19 @@ function readResult(
       if (run !== currentRun) throw new ResultSuperseded(run, currentRun);
       return readFloats(exports.memory, exports.pc_mc_drawdown(), paths);
     },
+    ...(kept
+      ? {
+          scenarios: {
+            assets: kept.map((a) => a.id),
+            spots: kept.map((a) => a.spot),
+            paths,
+            levels: () => {
+              if (run !== currentRun) throw new ResultSuperseded(run, currentRun);
+              return readFloats(exports.memory, exports.pc_mc_scenarios(), exports.pc_mc_scenario_len());
+            },
+          },
+        }
+      : {}),
   };
 }
 
@@ -453,6 +503,11 @@ export interface ResampleSpec {
   percentiles?: readonly number[];
   cvarLevels?: readonly number[];
   maxAssetSteps?: number;
+  /**
+   * Retain every path's terminal level for every asset — the joint scenarios
+   * an optimizer needs. Bounded at `MAX_SCENARIO_VALUES`.
+   */
+  keepScenarios?: boolean;
 }
 
 export class HistoryRejected extends Error {
@@ -496,17 +551,19 @@ export function runResampled(exports: PricingExports, spec: ResampleSpec): McRes
   for (const asset of spec.assets) exports.pc_mc_add_asset(asset.spot, asset.weight, 0, 0, 0);
   for (const row of spec.history) for (const value of row) exports.pc_mc_history_push(value);
 
+  if (spec.keepScenarios) exports.pc_mc_keep_scenarios(1);
   const samplePaths = Math.min(spec.samplePaths ?? 32, spec.paths);
   const code = exports.pc_mc_run_resampled(spec.paths, spec.steps, spec.meanBlock, spec.seed ?? 0x5eed, samplePaths);
   if (code === -1) throw new EmptySimulation('at least one asset');
   if (code === -4) throw new EmptySimulation('paths and steps');
+  if (code === -6) throw new ScenariosTooLarge(spec.paths * spec.assets.length);
   if (code < 0) throw new HistoryRejected('it is not a whole number of dates');
 
   return readResult(exports, run, spec, {
     kind: 'replayed',
     meanBlock: Math.max(1, spec.meanBlock),
     observations: spec.history.length,
-  });
+  }, held(spec));
 }
 
 export interface HistoryFitInput {

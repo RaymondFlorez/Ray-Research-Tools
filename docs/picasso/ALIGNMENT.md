@@ -58,17 +58,16 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.9 Postgres snapshots every 30s | Infra | No Postgres |
 
 **Node kinds (3.3).** Built: DataTile and ChartNode (`canvas-render` scene, chart);
-HeatmapNode (`canvas-data` cross-sectional wash); CurveNode; UniverseNode (`screener`); TransformNode ops (`canvas-data`
-transform); MonteCarloNode; BacktestNode; FactorNode (`canvas-equity` factors);
-ScenarioNode including trees; CausalNode/edge; StrategyNode; ChainMetricNode;
+HeatmapNode (`canvas-data` cross-sectional wash); CurveNode; UniverseNode (`screener`);
+TransformNode ops (`canvas-data` transform); MonteCarloNode; BacktestNode; OptimizerNode
+(`canvas-pricing` optimizer — objective decided below); FactorNode (`canvas-equity`
+factors); ScenarioNode including trees; CausalNode/edge; StrategyNode; ChainMetricNode;
 ProbabilityCurveNode; HypothesisNode; QueryNode; AgentNode; TextPad with transclusion
 (`canvas-guard` transclude); EvidenceNode; FrameNode; InkLayer.
 Partial: **SurfaceNode** — the strategy's `surface` port and a 2D spot × vol cell drawing in
-the payoff demo (`payoff.html`); no 3D rendering. Infra: **CodeNode** and **TableNode**'s query bar (DuckDB-WASM, Pyodide,
-a sandbox). Not built:
-**OptimizerNode** — named in 3.3 with no objective, inputs or constraints (see *Open
-decisions*). Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never
-defined.
+the payoff demo (`payoff.html`); no 3D rendering.
+Infra: **CodeNode** and **TableNode**'s query bar (DuckDB-WASM, Pyodide, a sandbox).
+Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never defined.
 
 ### 4 · AI orchestration
 
@@ -103,6 +102,7 @@ defined.
 | 5.7 QueryNode plan, execution as nodes, reconcile, critique, synthesize | Built | `canvas-agents`, walkthrough in `canvas-integration` |
 | 5.7 shock defaulting to the hawkish-conditional shape | Built | `canvas-pricing` shockShape |
 | 5.8 Monte Carlo: GBM, Heston, Merton, bootstraps, Gaussian and t copulas | Built | `pricing-core` portfolio, resample, copula |
+| 3.3 OptimizerNode over Monte Carlo scenarios | Built | `canvas-pricing` optimizer, lp; `canvas-integration/test/optimizer.test.ts` |
 | 5.8 variance gamma in a portfolio | Refused by design | It ignores the correlated driver; measured correlation 0.0062 at a requested 0.8 |
 | 5.8 Sobol + Brownian bridge, antithetic, control variates | Built | Single-asset; the portfolio is pseudorandom by design (dimension) |
 | 5.8 calibration: user-set, history window, surface | Built | `gbmFromHistory`, Heston surface fit |
@@ -136,14 +136,16 @@ defined.
 | `americanExact`/`americanDetail` docstrings named a lattice after the switch to Andersen-Lake | Corrected |
 | The port checker offered an upsample fix the transform refused | Transform carries forward onto a grid; seam test |
 
-## Open decisions
+## Decisions
 
 **OptimizerNode.** PRD 3.3 lists it with no objective, inputs or constraints. Unlike the
-four scoring rubrics it names no house methodology, so building one would not misrepresent
-anyone — but the choice of objective (mean-variance, risk parity, CVaR, tracking error) is
-a product decision. Default if approved: mean-variance and minimum-CVaR over the Monte Carlo
-`distribution` port, with long-only and gross-exposure constraints, every input exposed as
-an assumption.
+four scoring rubrics it names no house methodology, so building one misrepresents nobody,
+but the objective was a product decision and was put to the analyst. Approved: mean-variance
+and minimum CVaR over the Monte Carlo node's joint scenarios, long-only and fully invested
+with a per-asset cap, every input reported as an assumption. Long-only and fully invested
+make gross exposure exactly one, so the gross limit originally proposed is not offered —
+it could never bind. Revisit if shorting is wanted: that brings the gross limit back and
+needs it in both solvers.
 
 ## Critical path to production
 

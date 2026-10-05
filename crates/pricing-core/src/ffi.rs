@@ -18,7 +18,8 @@ use crate::de::DeConfig;
 use crate::heston::{self, CalibrationConfig, HestonParams, Quote, Residual, Surface};
 use crate::mc::{Gbm, Process};
 use crate::portfolio::{
-    simulate_portfolio_with, simulate_resampled_portfolio, AssetSpec, Dependence, PortfolioConfig,
+    simulate_portfolio_scenarios, simulate_portfolio_with, simulate_resampled_portfolio,
+    simulate_resampled_scenarios, AssetSpec, Dependence, PortfolioConfig, PortfolioError,
     PortfolioResult,
 };
 
@@ -1129,6 +1130,10 @@ thread_local! {
     static MC_NU: core::cell::Cell<f64> = const { core::cell::Cell::new(0.0) };
     /// Historical log returns for a resampled run, row-major by date.
     static MC_HISTORY: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    /// Whether the next run retains per-asset terminal scenarios.
+    static MC_KEEP_SCENARIOS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
+    /// The last run's scenarios, row-major by path. Empty unless asked for.
+    static MC_SCENARIOS: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
         const { RefCell::new([0.0; MC_SUMMARY_STRIDE]) };
 }
@@ -1141,6 +1146,43 @@ pub extern "C" fn pc_mc_reset() {
     MC_RESULT.with(|r| *r.borrow_mut() = None);
     MC_NU.with(|nu| nu.set(0.0));
     MC_HISTORY.with(|h| h.borrow_mut().clear());
+    MC_KEEP_SCENARIOS.with(|k| k.set(false));
+    MC_SCENARIOS.with(|v| v.borrow_mut().clear());
+}
+
+/// Asks the next run to retain every path's terminal level for every asset,
+/// for the optimizer. A run that would exceed `MAX_SCENARIO_VALUES` returns
+/// `-6`. `pc_mc_reset` turns it off.
+#[no_mangle]
+pub extern "C" fn pc_mc_keep_scenarios(keep: i32) {
+    MC_KEEP_SCENARIOS.with(|k| k.set(keep != 0));
+}
+
+/// Pointer to the last run's scenarios, `pc_mc_scenario_len()` values.
+#[no_mangle]
+pub extern "C" fn pc_mc_scenarios() -> *const f64 {
+    MC_SCENARIOS.with(|v| v.borrow().as_ptr())
+}
+
+/// Number of retained scenario values: paths × assets, or zero.
+#[no_mangle]
+pub extern "C" fn pc_mc_scenario_len() -> i32 {
+    MC_SCENARIOS.with(|v| v.borrow().len() as i32)
+}
+
+/// Runs a simulation, retaining scenarios when asked, and stores them.
+fn with_scenarios(
+    keep: bool,
+    plain: impl FnOnce() -> Result<PortfolioResult, PortfolioError>,
+    kept: impl FnOnce() -> Result<(PortfolioResult, Vec<f64>), PortfolioError>,
+) -> Result<PortfolioResult, PortfolioError> {
+    MC_SCENARIOS.with(|v| v.borrow_mut().clear());
+    if !keep {
+        return plain();
+    }
+    let (result, scenarios) = kept()?;
+    MC_SCENARIOS.with(|v| *v.borrow_mut() = scenarios);
+    Ok(result)
 }
 
 /// Appends one historical log return. Rows are dates, columns are the assets
@@ -1177,7 +1219,15 @@ pub extern "C" fn pc_mc_run_resampled(
         seed: seed.abs() as u64,
         sample_paths: sample_paths.max(0) as usize,
     };
-    let outcome = MC_HISTORY.with(|h| simulate_resampled_portfolio(&h.borrow(), &specs, mean_block, &config));
+    let keep = MC_KEEP_SCENARIOS.with(|k| k.get());
+    let outcome = MC_HISTORY.with(|h| {
+        let history = h.borrow();
+        with_scenarios(
+            keep,
+            || simulate_resampled_portfolio(&history, &specs, mean_block, &config),
+            || simulate_resampled_scenarios(&history, &specs, mean_block, &config),
+        )
+    });
     match outcome {
         Ok(result) => {
             MC_SUMMARY.with(|summary| {
@@ -1196,6 +1246,10 @@ pub extern "C" fn pc_mc_run_resampled(
             let count = result.paths as i32;
             MC_RESULT.with(|slot| *slot.borrow_mut() = Some(result));
             count
+        }
+        Err(PortfolioError::ScenarioCap { .. }) => {
+            MC_RESULT.with(|slot| *slot.borrow_mut() = None);
+            -6
         }
         Err(_) => {
             MC_RESULT.with(|slot| *slot.borrow_mut() = None);
@@ -1405,7 +1459,12 @@ pub extern "C" fn pc_mc_run(
 
         let nu = MC_NU.with(|cell| cell.get());
         let dependence = if nu > 0.0 { Dependence::Student { nu } } else { Dependence::Gaussian };
-        match simulate_portfolio_with(&processes, &specs, &factor, time, &config, dependence) {
+        let keep = MC_KEEP_SCENARIOS.with(|k| k.get());
+        match with_scenarios(
+            keep,
+            || simulate_portfolio_with(&processes, &specs, &factor, time, &config, dependence),
+            || simulate_portfolio_scenarios(&processes, &specs, &factor, time, &config, dependence),
+        ) {
             Ok(result) => {
                 MC_SUMMARY.with(|summary| {
                     *summary.borrow_mut() = [
@@ -1424,6 +1483,7 @@ pub extern "C" fn pc_mc_run(
                 MC_RESULT.with(|slot| *slot.borrow_mut() = Some(result));
                 count
             }
+            Err(PortfolioError::ScenarioCap { .. }) => -6,
             Err(_) => -3,
         }
     })

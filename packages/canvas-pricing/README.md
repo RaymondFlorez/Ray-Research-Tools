@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 207 tests
+npm test --workspace @picasso/canvas-pricing    # 221 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -85,6 +85,36 @@ serial dependence an iid draw destroys. It shares the module's one result slot w
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
 and the analyst who assembled them is the one who can fix it.
+
+## OptimizerNode: mean-variance and minimum CVaR
+
+PRD 3.3 names `OptimizerNode` and defines nothing else. The objectives were chosen with the
+analyst: mean-variance, and minimum CVaR (optionally at a target expected return), over the
+Monte Carlo node's joint scenarios; long-only and fully invested, with a cap per asset.
+Long-only and fully invested make gross exposure exactly one, so no gross limit is offered.
+
+`runMonteCarlo` and `runResampled` keep each path's terminal level per asset when asked
+(`keepScenarios`), capped at four million values — the joint outcomes an optimizer needs,
+still far short of the path cube. The engine takes no extra draws to keep them; its summary
+is bit-identical either way.
+
+**Minimum CVaR** is a linear program, solved by cutting planes (Künzi-Bay and Mayer) over a
+small two-phase simplex (`lp.ts`). The master problem has one column per asset plus three
+and gains a row per round, so it stays small at any scenario count: 40 assets over 20,000
+scenarios take 135 rounds and 0.75s. The simplex is checked against textbook programs,
+Beale's cycling example and 200 random programs solved by brute-force vertex enumeration;
+the optimizer against a brute-force grid of weights, with CVaR recomputed in the test.
+
+**Mean-variance** is accelerated projected gradient onto the capped simplex. Where no bound
+binds it matches the closed form `Σ⁻¹(μ − ν1)/λ` to eight places; where bounds bind its KKT
+residual, which the result carries, is checked instead.
+
+**The scenarios' measure is the binding assumption.** The engine simulates risk-neutral:
+every asset drifts at the rate. Means read off those scenarios distinguish nothing, and
+mean-variance over them is minimum variance wearing a different name. `views` supplies
+expected returns; without them the result checks whether any two assets' means differ by
+two standard errors and says so when none do. On the integration suite's semis cluster the
+warning fires, as it should.
 
 ## Scenario trees
 
@@ -445,6 +475,9 @@ against nothing at all.
 
 ## What is not covered
 
+- **The optimizer is single-period and frictionless.** One horizon, no turnover or
+  transaction costs, no shorting, and no robust estimation of means or covariances —
+  sampling error in the scenarios goes straight into the weights.
 - **No THERMIDOR parser.** Its export format is specified nowhere available, so the tree
   is the seam and whatever reads THERMIDOR's files builds one. Inventing a format and
   calling it theirs is what the scoring nodes refuse to do too.
