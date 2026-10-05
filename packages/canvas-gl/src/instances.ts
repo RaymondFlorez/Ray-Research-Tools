@@ -99,6 +99,30 @@ function writeColor(target: Float32Array, offset: number, color: RGBA, alpha = 1
  * one batch and the fragment shader decides what to draw. Splitting them would
  * trade a uniform for a second draw call and a second state change.
  */
+/** Halo severity as the shader reads it: 0 none, 1 low, 2 medium, 3 high. */
+export const SEVERITY_CODE = { low: 1, medium: 2, high: 3 } as const;
+
+/**
+ * Wash intensity and halo severity in one float.
+ *
+ * PRD 3.6's halo is "severity-graded", and the GPU path had been painting every
+ * wash in the theme's one wash colour. A fifth instance slot would grow the
+ * stride from 20 floats to 24 and every upload with it, so severity rides in
+ * the integer part of the slot the wash already uses: `2 * code + wash`, with
+ * wash in [0, 1]. The factor of two keeps a wash of exactly 1 from reading as
+ * the next severity up; the shader recovers both with one `floor`.
+ */
+export function encodeWash(wash: number, severity?: keyof typeof SEVERITY_CODE): number {
+  const w = Math.min(1, Math.max(0, wash));
+  return (severity ? SEVERITY_CODE[severity] : 0) * 2 + w;
+}
+
+/** The inverse of `encodeWash`, as the fragment shader computes it. */
+export function decodeWash(value: number): { code: number; wash: number } {
+  const code = Math.floor(value * 0.5);
+  return { code, wash: value - code * 2 };
+}
+
 export function packNodes(nodes: readonly SceneNode[], into?: Float32Array): InstanceBuffer {
   const data = into && into.length >= nodes.length * NODE_STRIDE
     ? into
@@ -122,7 +146,7 @@ export function packNodes(nodes: readonly SceneNode[], into?: Float32Array): Ins
     // pattern: dashes cost either a texture lookup or geometry, and at LOD0 a
     // dashed border is smaller than one pixel anyway.
     data[offset + 18] = style.strokeStyle === 'soft' ? 1 : 0;
-    data[offset + 19] = node.wash ?? 0;
+    data[offset + 19] = encodeWash(node.wash ?? 0, node.halo?.severity);
 
     offset += NODE_STRIDE;
   }

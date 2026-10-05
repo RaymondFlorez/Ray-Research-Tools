@@ -258,6 +258,9 @@ export class GLRenderer {
       this.setVec2(this.nodeProgram, 'u_resolution', width, height);
       const wash = parseColor(theme.wash);
       this.setVec4(this.nodeProgram, 'u_wash', wash);
+      this.setVec4(this.nodeProgram, 'u_haloLow', parseColor(theme.haloLow));
+      this.setVec4(this.nodeProgram, 'u_haloMedium', parseColor(theme.haloMedium));
+      this.setVec4(this.nodeProgram, 'u_haloHigh', parseColor(theme.haloHigh));
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, packedNodes.count);
       drawCalls += 1;
       uploadedBytes += bytes;

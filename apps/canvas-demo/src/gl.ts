@@ -14,7 +14,7 @@ import {
   type Vec2,
   type Viewport,
 } from '@picasso/canvas-core';
-import { buildScene, darkTheme, lightTheme } from '@picasso/canvas-render';
+import { buildScene, darkTheme, lightTheme, type SceneNode } from '@picasso/canvas-render';
 import { GLRenderer, createContext, type FrameStats } from '@picasso/canvas-gl';
 import { buildDemoCanvas } from './fixture.js';
 
@@ -154,9 +154,38 @@ declare global {
       /** Screen centre and expected fill of a drawn node, for that probe. */
       sampleNode: () => { x: number; y: number; fill: string } | null;
       setViewport: (next: Partial<Viewport>) => void;
+      /** On-screen washed nodes: where to probe, and what the wash should be tinted. */
+      washSamples: () => Array<{ x: number; y: number; fill: string; wash: number; tint: string; plain: string }>;
+      /** Washes on-screen nodes at the given z-scores, so a check controls the severities. */
+      plantWash: (zScores: number[]) => number;
     };
   }
 }
+/**
+ * A node whose centre no other node covers, so a probe there reads this node
+ * and not a neighbour drawn over it — clusters overlap, and the first version
+ * of the wash check read a white neighbour's fill as a failed tint.
+ */
+function probeable(n: SceneNode, all: readonly SceneNode[]): boolean {
+  const r = n.screenRect;
+  const cx = (r.minX + r.maxX) / 2;
+  const cy = (r.minY + r.maxY) / 2;
+  const clear = all.every((o) => {
+    if (o === n) return true;
+    const q = o.screenRect;
+    return cx < q.minX - 2 || cx > q.maxX + 2 || cy < q.minY - 2 || cy > q.maxY + 2;
+  });
+  return (
+    clear &&
+    r.minX > 12 &&
+    r.minY > 12 &&
+    r.maxX < viewport.width - 12 &&
+    r.maxY < viewport.height - 12 &&
+    r.maxX - r.minX > 32 &&
+    r.maxY - r.minY > 32
+  );
+}
+
 window.__gl = {
   stats: () => lastStats,
   timings: () => ({
@@ -166,6 +195,32 @@ window.__gl = {
   }),
   reset: () => {
     frameTimes.length = 0;
+  },
+  plantWash: (zScores) => {
+    const now = performance.now();
+    const scene = buildScene({ doc, index, viewport, theme, now, wash });
+    const all = [...scene.dom, ...scene.tiles, ...scene.quads];
+    const candidates = all.filter((n) => n.wash === undefined && probeable(n, all));
+    zScores.forEach((z, i) => {
+      const node = candidates[i];
+      if (node) wash.bump(node.id, z, now);
+    });
+    return Math.min(zScores.length, candidates.length);
+  },
+  washSamples: () => {
+    const scene = buildScene({ doc, index, viewport, theme, now: performance.now(), wash });
+    const all = [...scene.dom, ...scene.tiles, ...scene.quads];
+    return all
+      .filter((n) => n.wash !== undefined && n.halo !== undefined && probeable(n, all))
+      .slice(0, 8)
+      .map((n) => ({
+        x: (n.screenRect.minX + n.screenRect.maxX) / 2,
+        y: (n.screenRect.minY + n.screenRect.maxY) / 2,
+        fill: n.style.fill,
+        wash: n.wash!,
+        tint: n.halo!.color,
+        plain: theme.wash,
+      }));
   },
   sampleNode: () => {
     const scene = buildScene({ doc, index, viewport, theme, now: performance.now(), wash });

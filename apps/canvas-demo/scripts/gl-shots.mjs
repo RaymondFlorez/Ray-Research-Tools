@@ -122,6 +122,38 @@ try {
     `got rgba(${pixel.join(',')}) want ${sample.fill}`,
   );
 
+  // --- The wash is graded by severity, as PRD 3.6's halos are.
+  // Each washed node's body should be its fill mixed towards its own halo
+  // colour, not towards the theme's single wash colour.
+  // One firing at each severity is planted on visible nodes, so the check does
+  // not depend on which severities the fixture happened to draw: "medium" is
+  // close to the old single wash colour and cannot tell the two apart alone.
+  await page.goto(`${base}?nodes=2000&scale=0.6`, { waitUntil: 'load' });
+  await page.waitForFunction(() => window.__gl?.stats() !== null, null, { timeout: 20_000 });
+  await page.waitForTimeout(200);
+  const planted = await page.evaluate(() => window.__gl.plantWash([2.5, 4, 8]));
+  check('three severities planted on screen', planted === 3, `${planted}`);
+  const washed = await page.evaluate(() => window.__gl.washSamples());
+  const rgb = (hex) => hex.replace('#', '').match(/../g).map((h) => parseInt(h, 16));
+  const mix = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  const dist = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
+  let graded = 0;
+  let distinguishing = 0;
+  for (const w of washed) {
+    const pixel = await page.evaluate((s) => window.__gl.probe(s.x, s.y), w);
+    const want = mix(rgb(w.fill), rgb(w.tint), w.wash * 0.35);
+    const uniform = mix(rgb(w.fill), rgb(w.plain), w.wash * 0.35);
+    if (dist(pixel.slice(0, 3), want) <= 4) graded += 1;
+    else console.log(`    mismatch at (${w.x.toFixed(0)},${w.y.toFixed(0)}): got ${pixel.slice(0, 3)} want ${want.map((v) => v.toFixed(0))} fill ${w.fill} tint ${w.tint} wash ${w.wash.toFixed(3)}`);
+    if (dist(want, uniform) > 8) distinguishing += 1;
+  }
+  check(
+    'every washed node is tinted by its own severity',
+    washed.length > 0 && graded === washed.length,
+    `${graded}/${washed.length} probes match, ${distinguishing} of them in a colour the old single wash would not produce`,
+  );
+  check('the probes can tell graded from ungraded', distinguishing > 0);
+
   // --- The Phase 0 target: 5,000 nodes, all on screen.
   const results = [];
   for (const nodes of [500, 2_000, 5_000, 10_000]) {

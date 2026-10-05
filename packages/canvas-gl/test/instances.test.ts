@@ -10,6 +10,9 @@ import {
 } from '@picasso/canvas-core';
 import { buildScene, lightTheme } from '@picasso/canvas-render';
 import {
+  SEVERITY_CODE,
+  decodeWash,
+  encodeWash,
   EDGE_STRIDE,
   NODE_STRIDE,
   ensureCapacity,
@@ -148,6 +151,30 @@ describe('node packing', () => {
     if (!node) throw new Error('missing');
     node.wash = 0.8;
     expect(packNodes([node]).data[19]).toBeCloseTo(0.8, 6);
+  });
+
+  it('carries the halo severity in the same slot, without growing the stride', () => {
+    const doc = docOf(1);
+    const scene = buildScene({ doc, index: new CanvasIndex(doc), viewport: vp(), theme: lightTheme });
+    const node = scene.dom[0]!;
+    node.wash = 0.8;
+    node.halo = { severity: 'high', color: lightTheme.haloHigh };
+    const packed = packNodes([node]);
+    expect(packed.stride).toBe(20);
+    expect(decodeWash(packed.data[19]!)).toEqual({ code: SEVERITY_CODE.high, wash: expect.closeTo(0.8, 6) });
+  });
+
+  it('round-trips every severity at every wash, including a wash of exactly one', () => {
+    // The factor of two is what keeps wash = 1 at "low" from reading as "medium".
+    for (const severity of [undefined, 'low', 'medium', 'high'] as const) {
+      for (const wash of [0, 0.37, 0.999, 1]) {
+        const decoded = decodeWash(Math.fround(encodeWash(wash, severity)));
+        expect(decoded.code).toBe(severity ? SEVERITY_CODE[severity] : 0);
+        expect(decoded.wash).toBeCloseTo(wash, 6);
+      }
+    }
+    // Out-of-range intensities are clamped rather than bleeding into the code.
+    expect(decodeWash(encodeWash(1.7, 'low'))).toEqual({ code: 1, wash: 1 });
   });
 
   it('writes into a caller-supplied buffer without reallocating', () => {

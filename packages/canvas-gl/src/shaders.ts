@@ -60,6 +60,9 @@ in vec4 v_status;
 in vec4 v_params;
 
 uniform vec4 u_wash;
+uniform vec4 u_haloLow;
+uniform vec4 u_haloMedium;
+uniform vec4 u_haloHigh;
 
 out vec4 outColor;
 
@@ -89,9 +92,12 @@ void main() {
   vec4 color = v_fill * inside;
   color = mix(color, v_stroke, border * v_stroke.a);
 
-  // Passive-mode wash, painted inside the body only.
-  float wash = v_params.w;
-  color = mix(color, vec4(u_wash.rgb, color.a), wash * 0.35 * band);
+  // Passive-mode wash, painted inside the body only, in the halo's severity
+  // colour when a detector graded it (encodeWash: 2 * code + wash).
+  float code = floor(v_params.w * 0.5);
+  float wash = v_params.w - code * 2.0;
+  vec3 tint = code > 2.5 ? u_haloHigh.rgb : code > 1.5 ? u_haloMedium.rgb : code > 0.5 ? u_haloLow.rgb : u_wash.rgb;
+  color = mix(color, vec4(tint, color.a), wash * 0.35 * band);
 
   // Status dot in the top-right corner, drawn only when the node is big
   // enough for it to mean anything.

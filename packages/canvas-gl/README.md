@@ -79,6 +79,24 @@ SDF, and it differs from this one only where the radius changes fast relative to
 segment's length. Between two stylus samples a fraction of a pixel apart, pressure has not
 moved enough for the difference to reach a pixel.
 
+## The wash is graded by severity, in the slot it already had
+
+PRD 3.6's halos are "severity-graded", and the GPU path painted every wash in
+the theme's one wash colour. A fifth instance slot would grow the stride from
+20 floats to 24 and every upload with it, so severity rides in the integer part
+of the wash float — `2 * code + wash`, wash clamped to [0, 1] — and the fragment
+shader recovers both with one `floor`. The factor of two is what keeps a wash of
+exactly 1 at "low" from reading as "medium"; a unit test round-trips every
+severity at wash 0, 0.37, 0.999 and 1.
+
+`gl-shots.mjs` checks it on real pixels: one firing at each severity is planted
+on visible nodes, and every washed node's body must read as its fill mixed
+towards its own halo colour. Planting matters — "medium" is close enough to the
+old single wash colour that a check relying on the fixture's random severities
+could not tell graded from ungraded. The first run also read a white neighbour's
+fill where two nodes overlapped; probes now land only on centres no other node
+covers.
+
 ## Where Phase 0's exit criterion actually stands
 
 Honestly: **partly verified.**
