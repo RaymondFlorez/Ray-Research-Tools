@@ -403,6 +403,24 @@ function wasmResampled() {
 
 const resampled = wasmResampled();
 
+/** Discrete-dividend prices, through WASM. */
+function wasmDividends() {
+  const rows = new Map();
+  w.pc_div_reset();
+  w.pc_div_add(0.2, 1.25);
+  w.pc_div_add(0.45, 1.25);
+  for (const [index, [s, k]] of [[100, 95], [100, 105], [60, 60]].entries()) {
+    for (const isCall of [0, 1]) {
+      for (const american of [0, 1]) {
+        rows.set(`divpx(${index}/${isCall}/${american})`, w.pc_price_dividends(s, k, 0.5, 0.05, 0, 0.3, isCall, american, 300));
+      }
+    }
+  }
+  return rows;
+}
+
+const dividendRows = wasmDividends();
+
 /** Heston closed form and a small calibration, through WASM. */
 function wasmHeston() {
   const rows = new Map();
@@ -460,6 +478,7 @@ function recompute(label) {
   if (mixed.has(label)) return mixed.get(label);
   if (tcopula.has(label)) return tcopula.get(label);
   if (resampled.has(label)) return resampled.get(label);
+  if (dividendRows.has(label)) return dividendRows.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -526,7 +545,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends, ` +
     `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

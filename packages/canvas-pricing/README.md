@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 197 tests
+npm test --workspace @picasso/canvas-pricing    # 200 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -85,6 +85,25 @@ serial dependence an iid draw destroys. It shares the module's one result slot w
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
 and the analyst who assembled them is the one who can fix it.
+
+## Discrete dividends
+
+PRD 5.4 lists "discrete dividend handling" under pricing, and until now dividends reached
+only the early-assignment check; every price took a continuous yield. A continuous yield
+spreads a dividend's drop over the option's whole life, so the one day an American call is
+worth exercising — the day before the ex-date — never looks like that day.
+
+`Pricer.priceWithDividends` uses the escrowed-dividend model: the stock less the present
+value of dividends due before expiry is lognormal. The European is Black-Scholes on that
+escrowed spot; the American is a CRR tree on it, with each exercise decision taken on the
+actual stock price at the node. The crate checks the tree against Roll-Geske-Whaley, the
+closed form for an American call with one cash dividend, written in its test suite with its
+own bivariate normal: the worst gap over three cases is 0.0035 at 1,000 steps and 0.00036
+at 8,000. On a 95-strike half-year call with a 4.00 dividend a week before expiry, 1.78 of
+the 11.58 is the right to exercise early.
+
+The escrowed model uses the vol of the stock-less-dividends, so a vol quoted on the stock
+itself understates the option a little, more for long-dated options with large dividends.
 
 ## Heston, and where it belongs
 
@@ -399,6 +418,9 @@ against nothing at all.
 
 ## What is not covered
 
+- **Discrete dividends price one option at a time.** `priceWithDividends` is a scalar
+  call; the scenario grid, the strategy surface and the fast American path still take a
+  continuous yield.
 - **Pricing off the surface is opt-in.** `evaluateStrategy` reads every
   leg's vol off a fitted surface when given one and uses each leg's own vol
   otherwise; nothing fits or refreshes a surface automatically from a chain.

@@ -144,6 +144,13 @@ export interface PricingExports {
   ): number;
   pc_heston_fit(): number;
 
+  pc_div_reset(): void;
+  pc_div_add(time: number, amount: number): void;
+  pc_price_dividends(
+    s: number, k: number, t: number, r: number, q: number, v: number,
+    isCall: number, american: number, steps: number,
+  ): number;
+
   pc_mc_reset(): void;
   pc_mc_add_asset(spot: number, weight: number, vol: number, rate: number, dividend: number): void;
   pc_mc_add_heston(
@@ -200,6 +207,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_nss_reset', 'pc_nss_observe', 'pc_nss_fit', 'pc_nss_param', 'pc_nss_stat',
   'pc_nss_zero', 'pc_nss_residual', 'pc_nss_install_curve',
   'pc_nss_warning_ptr', 'pc_nss_warning_len',
+  'pc_div_reset', 'pc_div_add', 'pc_price_dividends',
   'pc_mc_reset', 'pc_mc_add_asset', 'pc_mc_add_heston', 'pc_mc_add_merton', 'pc_mc_asset_count',
   'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_dependence_t', 'pc_mc_run',
   'pc_mc_history_push', 'pc_mc_run_resampled',

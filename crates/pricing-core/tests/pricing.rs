@@ -1233,6 +1233,100 @@ mod resampled_portfolio_tests {
     }
 }
 
+mod discrete_dividend_tests {
+    //! The escrowed-dividend tree against Roll-Geske-Whaley (Roll 1977,
+    //! Geske 1979, Whaley 1981; in the corrected form Haug gives), the closed
+    //! form for an American call with one cash dividend under the same model.
+    //! Written here with its own bivariate normal, so nothing it computes
+    //! passes through the code under test.
+
+    use pricing_core::bsm::{self, Inputs, OptionType};
+    use pricing_core::dividends::{american_price, european_price, CashDividend};
+    use pricing_core::normal::cdf;
+
+    /// M(a, b; rho) = integral_{-inf}^{a} phi(x) N((b - rho x) / sqrt(1 - rho^2)) dx,
+    /// by composite Simpson on [-12, a].
+    fn bivariate(a: f64, b: f64, rho: f64) -> f64 {
+        let lower = -12.0f64;
+        if a <= lower {
+            return 0.0;
+        }
+        let n = 20_000;
+        let h = (a - lower) / n as f64;
+        let root = (1.0 - rho * rho).sqrt();
+        let f = |x: f64| (-0.5 * x * x).exp() / (2.0 * std::f64::consts::PI).sqrt() * cdf((b - rho * x) / root);
+        let mut sum = f(lower) + f(a);
+        for i in 1..n {
+            let x = lower + i as f64 * h;
+            sum += if i % 2 == 1 { 4.0 * f(x) } else { 2.0 * f(x) };
+        }
+        sum * h / 3.0
+    }
+
+    fn bs_call(s: f64, k: f64, t: f64, r: f64, v: f64) -> f64 {
+        let d1 = ((s / k).ln() + (r + 0.5 * v * v) * t) / (v * t.sqrt());
+        s * cdf(d1) - k * (-r * t).exp() * cdf(d1 - v * t.sqrt())
+    }
+
+    fn roll_geske_whaley(s: f64, k: f64, t1: f64, t: f64, d: f64, r: f64, v: f64) -> f64 {
+        let escrowed = s - d * (-r * t1).exp();
+        // Early exercise at the ex-date is never optimal when the dividend is
+        // smaller than the interest on the strike over the remaining life.
+        if d <= k * (1.0 - (-r * (t - t1)).exp()) {
+            return bs_call(escrowed, k, t, r, v);
+        }
+        // The critical stock price at t1: where holding equals exercising.
+        let (mut lo, mut hi) = (k * 1e-6, k * 100.0);
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if bs_call(mid, k, t - t1, r, v) - (mid + d - k) > 0.0 {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        let critical = 0.5 * (lo + hi);
+        let a1 = ((escrowed / k).ln() + (r + 0.5 * v * v) * t) / (v * t.sqrt());
+        let a2 = a1 - v * t.sqrt();
+        let b1 = ((escrowed / critical).ln() + (r + 0.5 * v * v) * t1) / (v * t1.sqrt());
+        let b2 = b1 - v * t1.sqrt();
+        let rho = -(t1 / t).sqrt();
+        escrowed * cdf(b1) + escrowed * bivariate(a1, -b1, rho)
+            - k * (-r * t).exp() * bivariate(a2, -b2, rho)
+            - (k - d) * (-r * t1).exp() * cdf(b2)
+    }
+
+    #[test]
+    fn the_tree_converges_to_roll_geske_whaley() {
+        let (mut worst_coarse, mut worst_fine) = (0.0f64, 0.0f64);
+        for (s, k, t1, t, d, r, v) in [
+            (100.0, 95.0, 0.45, 0.5, 4.0, 0.05, 0.3),
+            (80.0, 82.0, 0.25, 0.75, 2.5, 0.06, 0.25),
+            (120.0, 100.0, 0.1, 1.0, 5.0, 0.04, 0.4),
+        ] {
+            let closed = roll_geske_whaley(s, k, t1, t, d, r, v);
+            let inputs = Inputs { spot: s, strike: k, time: t, rate: r, dividend: 0.0, vol: v, kind: OptionType::Call };
+            let divs = [CashDividend { time: t1, amount: d }];
+            let gaps: Vec<f64> = [1000, 8000].iter().map(|&n| american_price(&inputs, &divs, n) - closed).collect();
+            worst_coarse = worst_coarse.max(gaps[0].abs());
+            worst_fine = worst_fine.max(gaps[1].abs());
+        }
+        // CRR oscillates on its way in, so the check is on the envelope.
+        // Measured: 0.0035 at 1,000 steps, 0.00036 at 8,000.
+        assert!(worst_fine < 5e-4, "{worst_fine}");
+        assert!(worst_fine < worst_coarse / 5.0, "{worst_fine} against {worst_coarse}");
+    }
+
+    #[test]
+    fn european_is_black_scholes_on_the_escrowed_spot() {
+        let inputs = Inputs { spot: 100.0, strike: 100.0, time: 1.0, rate: 0.05, dividend: 0.0, vol: 0.2, kind: OptionType::Put };
+        let divs = [CashDividend { time: 0.3, amount: 1.5 }, CashDividend { time: 0.8, amount: 1.5 }];
+        let escrowed = 100.0 - 1.5 * (-0.05f64 * 0.3).exp() - 1.5 * (-0.05f64 * 0.8).exp();
+        let direct = bsm::price(&Inputs { spot: escrowed, ..inputs });
+        assert_eq!(european_price(&inputs, &divs), direct);
+    }
+}
+
 mod complex_tests {
     use pricing_core::complex::Complex;
 

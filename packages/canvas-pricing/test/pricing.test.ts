@@ -97,3 +97,33 @@ describe('implied vol says why, not just no', () => {
     expect(pricer.exports.pc_implied_vol_reason()).toBe(0);
   });
 });
+
+describe('discrete dividends (PRD 5.4)', () => {
+  const name: OptionInputs = { spot: 100, strike: 95, time: 0.5, rate: 0.05, dividend: 0, vol: 0.3, kind: 'call' };
+  const exDate = [{ time: 0.45, amount: 4 }];
+
+  it('prices a European as Black-Scholes on the escrowed spot', () => {
+    const escrowed = 100 - 4 * Math.exp(-0.05 * 0.45);
+    // The escrowed spot is computed here with Math.exp, so the comparison is
+    // to rounding rather than to the bit.
+    expect(pricer.priceWithDividends(name, exDate, { style: 'european' })).toBeCloseTo(pricer.price({ ...name, spot: escrowed }), 12);
+  });
+
+  it('values the early exercise a dividend makes worth having', () => {
+    const european = pricer.priceWithDividends(name, exDate, { style: 'european' });
+    const american = pricer.priceWithDividends(name, exDate, { style: 'american' });
+    // Roll-Geske-Whaley puts this call at 11.5847 (computed in the crate's
+    // suite); the default 1,000-step tree lands 0.0032 under it.
+    expect(Math.abs(american - 11.5847)).toBeLessThan(0.004);
+    // 1.78 of the value is the right to exercise the day before the ex-date.
+    expect(american - european).toBeCloseTo(1.776, 3);
+    // With no dividend the tree agrees with Andersen-Lake to 0.0003, and both
+    // with Black-Scholes: a call on a non-payer is never exercised early.
+    const plain = pricer.priceWithDividends(name, [], { style: 'american' });
+    expect(Math.abs(plain - pricer.americanDetail(name))).toBeLessThan(0.0005);
+  });
+
+  it('refuses dividends worth more than the stock', () => {
+    expect(pricer.priceWithDividends(name, [{ time: 0.1, amount: 150 }], { style: 'american' })).toBeNaN();
+  });
+});

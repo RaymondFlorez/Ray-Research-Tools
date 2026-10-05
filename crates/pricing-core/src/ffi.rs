@@ -1681,3 +1681,50 @@ pub extern "C" fn pc_heston_calibrate(
 pub extern "C" fn pc_heston_fit() -> *const f64 {
     HESTON_FIT.with(|f| f.borrow().as_ptr())
 }
+
+// ---------------------------------------------------------------------------
+// Discrete dividends (PRD 5.4)
+// ---------------------------------------------------------------------------
+
+thread_local! {
+    static DIVIDENDS: RefCell<Vec<crate::dividends::CashDividend>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Clears the dividend schedule.
+#[no_mangle]
+pub extern "C" fn pc_div_reset() {
+    DIVIDENDS.with(|d| d.borrow_mut().clear());
+}
+
+/// Adds a cash dividend going ex `time` years from now.
+#[no_mangle]
+pub extern "C" fn pc_div_add(time: f64, amount: f64) {
+    DIVIDENDS.with(|d| d.borrow_mut().push(crate::dividends::CashDividend { time, amount }));
+}
+
+/// Prices under the escrowed-dividend model against the schedule.
+/// `american` 0 is European (closed form), 1 is a CRR tree of `steps`.
+/// NaN when the dividends are worth more than the stock.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_price_dividends(
+    s: f64,
+    k: f64,
+    t: f64,
+    r: f64,
+    q: f64,
+    v: f64,
+    is_call: i32,
+    american: i32,
+    steps: i32,
+) -> f64 {
+    let option = inputs(s, k, t, r, q, v, is_call);
+    DIVIDENDS.with(|d| {
+        let schedule = d.borrow();
+        if american != 0 {
+            crate::dividends::american_price(&option, &schedule, steps.max(1) as usize)
+        } else {
+            crate::dividends::european_price(&option, &schedule)
+        }
+    })
+}

@@ -425,6 +425,22 @@ fn main() {
         emit(format!("boot_path({step})"), unsafe { *sample.add(step) });
     }
 
+    // Discrete dividends: an exp per dividend per tree layer, and an exercise
+    // decision at each node that a differing bit can flip.
+    ffi::pc_div_reset();
+    ffi::pc_div_add(0.2, 1.25);
+    ffi::pc_div_add(0.45, 1.25);
+    for (index, &(s, k)) in [(100.0, 95.0), (100.0, 105.0), (60.0, 60.0)].iter().enumerate() {
+        for is_call in [0, 1] {
+            for american in [0, 1] {
+                emit(
+                    format!("divpx({index}/{is_call}/{american})"),
+                    ffi::pc_price_dividends(s, k, 0.5, 0.05, 0.0, 0.3, is_call, american, 300),
+                );
+            }
+        }
+    }
+
     // Heston: a complex characteristic function under a Gauss-Legendre rule,
     // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
     // moves the integrand at every node.

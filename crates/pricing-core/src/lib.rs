@@ -10,6 +10,7 @@
 
 pub mod american;
 pub mod de;
+pub mod dividends;
 pub mod ffi;
 pub mod andersen_lake;
 pub mod bond;

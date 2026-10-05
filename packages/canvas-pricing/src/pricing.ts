@@ -11,6 +11,12 @@ import type { PricingExports } from './module.js';
 
 export type OptionKind = 'call' | 'put';
 
+/** A cash dividend going ex `time` years from now. */
+export interface CashDividend {
+  time: number;
+  amount: number;
+}
+
 export interface OptionInputs {
   spot: number;
   strike: number;
@@ -110,14 +116,40 @@ export class Pricer {
     return this.exports.pc_american_fast(...this.args(inputs));
   }
 
-  /** Leisen-Reimer lattice. The reference the guard checks against. */
+  /** Andersen-Lake at the guard's scheme. The reference the grid guard checks against. */
   americanExact(inputs: OptionInputs): number {
     return this.exports.pc_american_exact(...this.args(inputs));
   }
 
-  /** The 255-step lattice, for a position the analyst pinned as exact. */
+  /** Andersen-Lake at its most accurate scheme, for a position the analyst pinned as exact. */
   americanDetail(inputs: OptionInputs): number {
     return this.exports.pc_american_detail(...this.args(inputs));
+  }
+
+  /**
+   * Priced against a schedule of cash dividends (PRD 5.4, "discrete dividend
+   * handling"), under the escrowed-dividend model: the stock less the present
+   * value of the dividends due before expiry is lognormal. European is
+   * Black-Scholes on that escrowed spot; American is a CRR tree on it, deciding
+   * exercise on the actual stock price at each node. The crate checks the
+   * tree against Roll-Geske-Whaley to within 0.0005 at 8,000 steps.
+   *
+   * `inputs.dividend` is still a continuous yield and is applied on top; a
+   * single name paying cash dividends should usually pass zero there. NaN when
+   * the dividends are worth more than the stock.
+   */
+  priceWithDividends(
+    inputs: OptionInputs,
+    dividends: readonly CashDividend[],
+    options: { style: 'european' | 'american'; steps?: number },
+  ): number {
+    this.exports.pc_div_reset();
+    for (const d of dividends) this.exports.pc_div_add(d.time, d.amount);
+    return this.exports.pc_price_dividends(
+      ...this.args(inputs),
+      options.style === 'american' ? 1 : 0,
+      options.steps ?? 1_000,
+    );
   }
 
   /**
