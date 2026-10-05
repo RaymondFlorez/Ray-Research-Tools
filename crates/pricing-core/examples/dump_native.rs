@@ -375,6 +375,30 @@ fn main() {
         emit(format!("mix_path({step})"), unsafe { *sample.add(step) });
     }
 
+    // The t copula: a chi-squared draw from a rejection sampler, a Student-t
+    // CDF through the incomplete beta, and an inverse normal, per asset per
+    // path. Any of them differing by a bit moves every step of the path.
+    ffi::pc_mc_reset();
+    ffi::pc_mc_add_asset(100.0, 1.0, 0.3, 0.03, 0.0);
+    ffi::pc_mc_add_asset(100.0, 1.0, 0.3, 0.03, 0.0);
+    ffi::pc_mc_add_heston(80.0, -1.0, 0.03, 0.01, 0.0625, 0.09, 1.6, 0.6, -0.65);
+    ffi::pc_mc_corr_equicorrelated(0.7);
+    emit("tcop_dep".to_string(), ffi::pc_mc_dependence_t(4.0) as f64);
+    emit("tcop_run".to_string(), ffi::pc_mc_run(1.0, 512, 32, 1, 77.0, 2) as f64);
+    let summary = ffi::pc_mc_summary();
+    for which in 0..ffi::MC_SUMMARY_STRIDE {
+        emit(format!("tcop_summary({which})"), unsafe { *summary.add(which) });
+    }
+    for q in [0.01, 0.1, 0.5, 0.9, 0.99] {
+        emit(format!("tcop_pct({q})"), ffi::pc_mc_percentile(q));
+        emit(format!("tcop_dd({q})"), ffi::pc_mc_drawdown_percentile(q));
+        emit(format!("tcop_cvar({q})"), ffi::pc_mc_cvar(q));
+    }
+    let sample = ffi::pc_mc_sample();
+    for step in 0..=32 {
+        emit(format!("tcop_path({step})"), unsafe { *sample.add(step) });
+    }
+
     // Heston: a complex characteristic function under a Gauss-Legendre rule,
     // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
     // moves the integrand at every node.

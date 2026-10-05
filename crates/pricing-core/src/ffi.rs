@@ -17,7 +17,7 @@ use crate::implied;
 use crate::de::DeConfig;
 use crate::heston::{self, CalibrationConfig, HestonParams, Quote, Residual, Surface};
 use crate::mc::{Gbm, Process};
-use crate::portfolio::{simulate_portfolio, AssetSpec, PortfolioConfig, PortfolioResult};
+use crate::portfolio::{simulate_portfolio_with, AssetSpec, Dependence, PortfolioConfig, PortfolioResult};
 
 #[inline]
 fn inputs(s: f64, k: f64, t: f64, r: f64, q: f64, v: f64, is_call: i32) -> Inputs {
@@ -1116,6 +1116,8 @@ thread_local! {
     static MC_ASSETS: RefCell<Vec<(AssetSpec, McProcess)>> = const { RefCell::new(Vec::new()) };
     static MC_CORR: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static MC_RESULT: RefCell<Option<PortfolioResult>> = const { RefCell::new(None) };
+    /// Degrees of freedom of the t copula; zero means Gaussian.
+    static MC_NU: core::cell::Cell<f64> = const { core::cell::Cell::new(0.0) };
     static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
         const { RefCell::new([0.0; MC_SUMMARY_STRIDE]) };
 }
@@ -1126,6 +1128,19 @@ pub extern "C" fn pc_mc_reset() {
     MC_ASSETS.with(|a| a.borrow_mut().clear());
     MC_CORR.with(|c| c.borrow_mut().clear());
     MC_RESULT.with(|r| *r.borrow_mut() = None);
+    MC_NU.with(|nu| nu.set(0.0));
+}
+
+/// Gives the next run t-copula dependence with `nu` degrees of freedom, on
+/// the same correlation matrix. Returns 0, or -1 when `nu` is not positive
+/// and finite. `pc_mc_reset` returns to Gaussian.
+#[no_mangle]
+pub extern "C" fn pc_mc_dependence_t(nu: f64) -> i32 {
+    if !(nu > 0.0 && nu.is_finite()) {
+        return -1;
+    }
+    MC_NU.with(|cell| cell.set(nu));
+    0
 }
 
 /// Appends one geometric Brownian motion asset.
@@ -1315,7 +1330,9 @@ pub extern "C" fn pc_mc_run(
         let processes: Vec<&dyn Process> =
             assets.iter().map(|(_, process)| process.as_process()).collect();
 
-        match simulate_portfolio(&processes, &specs, &factor, time, &config) {
+        let nu = MC_NU.with(|cell| cell.get());
+        let dependence = if nu > 0.0 { Dependence::Student { nu } } else { Dependence::Gaussian };
+        match simulate_portfolio_with(&processes, &specs, &factor, time, &config, dependence) {
             Ok(result) => {
                 MC_SUMMARY.with(|summary| {
                     *summary.borrow_mut() = [

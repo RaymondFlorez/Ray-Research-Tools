@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CorrelationRejected,
   DEFAULT_COST_CEILING,
+  DependenceRejected,
   EmptySimulation,
   ResultSuperseded,
   SimulationTooLarge,
@@ -355,5 +356,41 @@ describe('Merton jumps', () => {
     expect(jumpy.moments.excessKurtosis).toBeGreaterThan(smooth.moments.excessKurtosis);
     // Downward-mean jumps push the left tail out further than the diffusion.
     expect(jumpy.percentiles['0.01']).toBeLessThan(smooth.percentiles['0.01'] as number);
+  });
+});
+
+describe('t-copula dependence (PRD 5.8, and 6.2\'s semis cluster)', () => {
+  const pair = (dependence?: McSpec['dependence']) =>
+    runMonteCarlo(wasm, spec({
+      assets: [asset({ id: 'a', vol: 0.3 }), asset({ id: 'b', vol: 0.3 })],
+      correlation: { kind: 'equicorrelated', rho: 0.7 },
+      paths: 100_000,
+      steps: 64,
+      cvarLevels: [0.01, 0.002],
+      ...(dependence ? { dependence } : {}),
+    }));
+
+  it('deepens the joint left tail without moving the middle', () => {
+    const g = pair();
+    const t = pair({ kind: 't', nu: 4 });
+    expect(g.dependence).toEqual({ kind: 'gaussian' });
+    expect(t.dependence).toEqual({ kind: 't', nu: 4 });
+    // Measured through WASM. The crate's independent one-step references for
+    // the same pair are 95.00 Gaussian and 92.93 t at 1%.
+    expect(g.cvar['0.01']).toBeCloseTo(95.57, 2);
+    expect(t.cvar['0.01']).toBeCloseTo(92.98, 2);
+    // At 0.2%, 83.3 against 79.0: the corner the walkthrough asks about.
+    expect(g.cvar['0.002']! - t.cvar['0.002']!).toBeGreaterThan(4);
+    // Same marginals, same correlation parameter: the median barely moves.
+    expect(Math.abs(g.percentiles['0.5']! - t.percentiles['0.5']!)).toBeLessThan(0.5);
+  });
+
+  it('is Gaussian when asked for explicitly, bit for bit', () => {
+    expect(pair({ kind: 'gaussian' }).terminal()).toEqual(pair().terminal());
+  });
+
+  it('refuses degrees of freedom that are not positive and finite', () => {
+    expect(() => pair({ kind: 't', nu: 0 })).toThrow(DependenceRejected);
+    expect(() => pair({ kind: 't', nu: Number.NaN })).toThrow(DependenceRejected);
   });
 });

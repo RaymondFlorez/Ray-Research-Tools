@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 209 tests
+cargo test --release                              # 216 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
@@ -168,12 +168,39 @@ gamma comes back at 0.0062, which is the value it returns at a requested correla
 `uses_brownian` and `simulate_portfolio` refuses on it, naming the asset. A single-asset
 variance-gamma simulation belongs in `mc::simulate`, which drives it correctly.
 
+The stationary bootstrap had the same defect and nobody had checked it. `Bootstrap` replays
+historical returns and never reads `w`, but it inherited the trait's default
+`uses_brownian() == true`, so a portfolio accepted it beside a GBM at a requested
+correlation of 0.8 that could not reach it. It answers `false` now and is refused like
+variance gamma; the test that found it is
+`a_bootstrap_asset_is_refused_rather_than_silently_decorrelated`.
+
 **Pseudorandom only, deliberately.** `mc::simulate` offers Sobol with a Brownian bridge and
 it is the right default for one asset. Here the dimension is `steps * assets` — 10,080 at
 this shape — against a `MAX_SOBOL_DIMENSIONS` of 16. A Sobol sequence used far past its
 constructed dimension is worse than pseudorandom, not better, and it converges without a
 standard error to warn anyone. There is no `sampling` field, because offering the option
 would be offering a trap.
+
+**The t copula is imposed on the endpoint, because on the steps it does nothing.** PRD
+6.2 runs the semis cluster under a t copula "since Gaussian correlation badly understates
+joint tail behavior in that group". The obvious construction draws every step's increments
+from a t copula. Measured with correlation 0.7 and four degrees of freedom, the share of
+draws with both names in their worst 1% is 0.429 for a single step against 0.264 Gaussian —
+and 0.267 against 0.258 once twelve steps are summed. Independent increments obey the
+central limit theorem whatever their joint law, so the tail dependence is gone long before
+a 252-step horizon.
+
+`Dependence::Student { nu }` therefore takes each path's correlated Gaussian endpoint,
+scales the vector by one chi-squared draw, maps each component back to a standard normal
+through its own t CDF, and rebuilds the path as a correlated Brownian bridge to that point.
+Each driver is still exactly a Brownian motion, so a lone asset stays lognormal (its 1%
+and 99% quantiles within 0.3% of closed form, its mean 0.44 standard errors from the
+forward), and only the joint law of the endpoints moves. Against an independent one-step
+reference drawn straight from `copula.rs`, two names held one each have a worst-1% mean of
+92.93 under the t and 95.00 under the Gaussian; across four seeds the simulator's t runs
+landed within 0.2 of theirs and its Gaussian runs within 0.55. `Gaussian` takes the same
+draws as before, bit for bit, and the t path is in the parity harness.
 
 **Drawdown is absolute, not fractional,** and that is a correction rather than a
 preference. The first version divided by the running peak, guarded with `if peak > 0.0` so
@@ -236,7 +263,7 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,251 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,310 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
 Heston with its calibration, the pin and early-exercise thresholds, the volatility

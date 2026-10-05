@@ -903,6 +903,214 @@ mod portfolio_tests {
 // Complex arithmetic, the characteristic function, and calibration (PRD 5.8)
 // ---------------------------------------------------------------------------
 
+mod t_copula_tests {
+    //! PRD 5.8's t copula in the portfolio simulator, and PRD 6.2's reason
+    //! for wanting it: "Gaussian correlation badly understates joint tail
+    //! behavior in that group."
+
+    use pricing_core::copula::{Copula, Factor, GaussianCopula, TCopula};
+    use pricing_core::mc::{Gbm, Process};
+    use pricing_core::normal::inv_cdf;
+    use pricing_core::portfolio::{
+        simulate_portfolio, simulate_portfolio_with, AssetSpec, Dependence, PortfolioConfig,
+        PortfolioError,
+    };
+    use pricing_core::rng::Rng;
+
+    const RATE: f64 = 0.03;
+    const VOL: f64 = 0.3;
+
+    fn gbm() -> Gbm {
+        Gbm { rate: RATE, dividend: 0.0, vol: VOL }
+    }
+
+    fn spec(weight: f64) -> AssetSpec {
+        AssetSpec { spot: 100.0, weight, initial_variance: 0.0 }
+    }
+
+    fn config(paths: usize, steps: usize) -> PortfolioConfig {
+        PortfolioConfig { paths, steps, antithetic: true, seed: 0xD1CE, sample_paths: 0 }
+    }
+
+    /// Share of draws where both coordinates are below their own `q` quantile,
+    /// over the number below in the first: the empirical tail dependence at `q`.
+    fn joint_tail(pairs: &[(f64, f64)], q: f64) -> f64 {
+        let mut a: Vec<f64> = pairs.iter().map(|p| p.0).collect();
+        let mut b: Vec<f64> = pairs.iter().map(|p| p.1).collect();
+        a.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        b.sort_by(|x, y| x.partial_cmp(y).unwrap());
+        let k = (pairs.len() as f64 * q) as usize;
+        let both = pairs.iter().filter(|p| p.0 < a[k] && p.1 < b[k]).count();
+        both as f64 / k as f64
+    }
+
+    /// Sums `steps` independent copula draws, each mapped to a standard normal.
+    fn summed_increments(copula: &dyn Copula, steps: usize, draws: usize) -> Vec<(f64, f64)> {
+        let mut rng = Rng::new(42);
+        let mut u = [0.0; 2];
+        (0..draws)
+            .map(|_| {
+                let (mut x, mut y) = (0.0, 0.0);
+                for _ in 0..steps {
+                    copula.sample(&mut u, &mut rng);
+                    x += inv_cdf(u[0]);
+                    y += inv_cdf(u[1]);
+                }
+                (x, y)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_per_step_t_copula_is_gaussian_at_the_horizon() {
+        // Why the simulator imposes the copula on the endpoint. Increments
+        // independent across steps sum toward a Gaussian whatever their joint
+        // law per step, so a per-step t copula's tail dependence is gone by
+        // the horizon.
+        let factor = Factor::cholesky(&[1.0, 0.7, 0.7, 1.0], 2).unwrap();
+        let gaussian = GaussianCopula::new(factor.clone());
+        let t = TCopula::new(factor, 4.0);
+        let one_t = joint_tail(&summed_increments(&t, 1, 100_000), 0.01);
+        let one_g = joint_tail(&summed_increments(&gaussian, 1, 100_000), 0.01);
+        let twelve_t = joint_tail(&summed_increments(&t, 12, 100_000), 0.01);
+        let twelve_g = joint_tail(&summed_increments(&gaussian, 12, 100_000), 0.01);
+        assert_eq!((one_t * 1000.0).round(), 429.0);
+        assert_eq!((one_g * 1000.0).round(), 264.0);
+        assert_eq!((twelve_t * 1000.0).round(), 267.0);
+        assert_eq!((twelve_g * 1000.0).round(), 258.0);
+        // One step: the t copula's corner is 1.6 times the Gaussian's.
+        // Twelve steps: within sampling noise of it.
+        assert!(one_t - one_g > 0.15);
+        assert!((twelve_t - twelve_g).abs() < 0.015);
+    }
+
+    /// The independent reference: draw the two terminal Gaussian drivers from
+    /// a copula directly and apply the GBM terminal formula. No path, no
+    /// bridge, no code shared with the simulator beyond the copula module.
+    fn reference_portfolio_cvar(nu: Option<f64>, q: f64) -> f64 {
+        let factor = Factor::cholesky(&[1.0, 0.7, 0.7, 1.0], 2).unwrap();
+        let copula: Box<dyn Copula> = match nu {
+            Some(nu) => Box::new(TCopula::new(factor, nu)),
+            None => Box::new(GaussianCopula::new(factor)),
+        };
+        let mut rng = Rng::new(7);
+        let mut u = [0.0; 2];
+        let drift = RATE - 0.5 * VOL * VOL;
+        let mut values: Vec<f64> = (0..400_000)
+            .map(|_| {
+                copula.sample(&mut u, &mut rng);
+                u.iter().map(|&ui| 100.0 * (drift + VOL * inv_cdf(ui)).exp()).sum()
+            })
+            .collect();
+        values.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let k = (values.len() as f64 * q).ceil() as usize;
+        values[..k].iter().sum::<f64>() / k as f64
+    }
+
+    #[test]
+    fn the_endpoint_carries_t_copula_dependence_through_a_path() {
+        // Two GBM names at rho 0.7, held one each, simulated over 64 steps.
+        // The worst-1% conditional mean of the portfolio is compared with a
+        // one-step reference drawn straight from each copula. The two
+        // references are 2.07 apart; across four seeds the simulator's t runs
+        // landed within 0.2 of theirs and its Gaussian runs within 0.55.
+        let a = gbm();
+        let b = gbm();
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let factor = Factor::equicorrelated(2, 0.7).unwrap();
+        let assets = [spec(1.0), spec(1.0)];
+        let cfg = config(100_000, 64);
+        let t = simulate_portfolio_with(&processes, &assets, &factor, 1.0, &cfg, Dependence::Student { nu: 4.0 }).unwrap();
+        let g = simulate_portfolio(&processes, &assets, &factor, 1.0, &cfg).unwrap();
+
+        let t_ref = reference_portfolio_cvar(Some(4.0), 0.01);
+        let g_ref = reference_portfolio_cvar(None, 0.01);
+        assert!((t_ref - 92.93).abs() < 0.01 && (g_ref - 95.00).abs() < 0.01, "{t_ref} {g_ref}");
+        assert!((t.cvar(0.01) - t_ref).abs() < 0.6, "t {} against {t_ref}", t.cvar(0.01));
+        assert!((g.cvar(0.01) - g_ref).abs() < 0.6, "gaussian {} against {g_ref}", g.cvar(0.01));
+
+        // Deeper, the gap is wider than any seed's noise: 79.5 against 83.2.
+        assert!((t.cvar(0.002) - reference_portfolio_cvar(Some(4.0), 0.002)).abs() < 0.5);
+        assert!(g.cvar(0.002) - t.cvar(0.002) > 2.0);
+
+        // The middle of the distribution does not move: same marginals, same
+        // correlation parameter, different corner.
+        assert!((t.percentile(0.5) - g.percentile(0.5)).abs() < 0.5);
+    }
+
+    #[test]
+    fn many_degrees_of_freedom_is_gaussian() {
+        let a = gbm();
+        let b = gbm();
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let factor = Factor::equicorrelated(2, 0.7).unwrap();
+        let assets = [spec(1.0), spec(1.0)];
+        let wide = simulate_portfolio_with(&processes, &assets, &factor, 1.0, &config(100_000, 64), Dependence::Student { nu: 1e6 }).unwrap();
+        assert!((wide.cvar(0.01) - reference_portfolio_cvar(None, 0.01)).abs() < 0.6);
+    }
+
+    #[test]
+    fn gaussian_takes_the_same_draws_as_before() {
+        let a = gbm();
+        let b = gbm();
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let factor = Factor::equicorrelated(2, 0.4).unwrap();
+        let assets = [spec(1.0), spec(-0.5)];
+        let cfg = PortfolioConfig { sample_paths: 3, ..config(2_000, 16) };
+        let old = simulate_portfolio(&processes, &assets, &factor, 1.0, &cfg).unwrap();
+        let new = simulate_portfolio_with(&processes, &assets, &factor, 1.0, &cfg, Dependence::Gaussian).unwrap();
+        assert_eq!(old.terminal, new.terminal);
+        assert_eq!(old.drawdown, new.drawdown);
+        assert_eq!(old.sample, new.sample);
+    }
+
+    #[test]
+    fn a_bootstrap_asset_is_refused_rather_than_silently_decorrelated() {
+        // `Bootstrap` replays historical returns and never reads the Brownian
+        // increment, which is where this simulator puts the dependence. It
+        // used to inherit `uses_brownian() == true`, so a portfolio accepted
+        // it and paired it with a GBM at a requested correlation of 0.8 that
+        // could not reach it — the variance-gamma failure again, in a process
+        // nobody had checked.
+        let history: Vec<f64> = (0..250).map(|i| 0.01 * (((i * 37) % 17) as f64 - 8.0) / 8.0).collect();
+        let replay = pricing_core::resample::Bootstrap::stationary(&history, 10.0);
+        let a = gbm();
+        let processes: Vec<&dyn Process> = vec![&a, &replay];
+        let factor = Factor::equicorrelated(2, 0.8).unwrap();
+        let r = simulate_portfolio(&processes, &[spec(1.0), spec(1.0)], &factor, 1.0, &config(100, 8));
+        assert_eq!(r.unwrap_err(), PortfolioError::NotDrivenByBrownian { asset: 1 });
+    }
+
+    #[test]
+    fn refuses_degrees_of_freedom_that_are_not_positive_and_finite() {
+        let a = gbm();
+        let processes: Vec<&dyn Process> = vec![&a];
+        let factor = Factor::independent(1);
+        for nu in [0.0, -3.0, f64::NAN, f64::INFINITY] {
+            let r = simulate_portfolio_with(&processes, &[spec(1.0)], &factor, 1.0, &config(10, 4), Dependence::Student { nu });
+            assert_eq!(r.unwrap_err(), PortfolioError::DegreesOfFreedom);
+        }
+    }
+
+    #[test]
+    fn each_asset_keeps_its_lognormal_marginal() {
+        let a = gbm();
+        let processes: Vec<&dyn Process> = vec![&a];
+        let factor = Factor::independent(1);
+        let r = simulate_portfolio_with(&processes, &[spec(1.0)], &factor, 1.0, &config(100_000, 64), Dependence::Student { nu: 4.0 }).unwrap();
+        let drift = RATE - 0.5 * VOL * VOL;
+        // The driver is still a Brownian motion, so a lone asset is still
+        // lognormal: measured within 0.3% of the closed-form quantile at 1%
+        // and 99%, and the median to 2e-8 (antithetic pairs are symmetric).
+        for p in [0.01, 0.5, 0.99] {
+            let exact = 100.0 * (drift + VOL * inv_cdf(p)).exp();
+            assert!((r.percentile(p) / exact - 1.0).abs() < 0.003, "{p}: {} against {exact}", r.percentile(p));
+        }
+        assert!((r.percentile(0.5) - 100.0 * drift.exp()).abs() < 1e-6);
+        assert!((r.mean - 100.0 * RATE.exp()).abs() < 3.0 * r.standard_error);
+    }
+}
+
 mod complex_tests {
     use pricing_core::complex::Complex;
 

@@ -102,9 +102,24 @@ export type Correlation =
   /** Row-major, `assets.length` squared. */
   | { kind: 'matrix'; values: readonly number[] };
 
+/**
+ * How the assets' drivers depend on one another, on the same correlation.
+ *
+ * `t` is PRD 6.2's "t-copula for the semis cluster, since Gaussian correlation
+ * badly understates joint tail behavior in that group". The engine imposes it
+ * on each driver's endpoint and bridges the path to it, because a t copula on
+ * each step is Gaussian again by the horizon: measured in the crate, the
+ * share of paths with both names in their worst 1% is 0.429 against 0.264 for
+ * one step, and 0.267 against 0.258 by twelve. Each asset's marginal is
+ * unchanged; only the corner moves.
+ */
+export type Dependence = { kind: 'gaussian' } | { kind: 't'; nu: number };
+
 export interface McSpec {
   assets: readonly McAsset[];
   correlation: Correlation;
+  /** Gaussian when omitted. */
+  dependence?: Dependence;
   /** Horizon in years. */
   time: number;
   paths: number;
@@ -138,6 +153,8 @@ export interface McResult {
   paths: number;
   steps: number;
   assets: number;
+  /** What produced the joint law, carried with the numbers it shaped. */
+  dependence: Dependence;
   moments: McMoments;
   /** Requested terminal-value percentiles, keyed by the level asked for. */
   percentiles: Record<string, number>;
@@ -184,6 +201,13 @@ export class CorrelationRejected extends Error {
   constructor(readonly detail: string) {
     super(`the correlation matrix was refused: ${detail}`);
     this.name = 'CorrelationRejected';
+  }
+}
+
+export class DependenceRejected extends Error {
+  constructor(readonly nu: number) {
+    super(`a t copula needs positive, finite degrees of freedom; got ${nu}`);
+    this.name = 'DependenceRejected';
   }
 }
 
@@ -293,6 +317,11 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     for (const value of matrix) exports.pc_mc_corr_push(value);
   }
 
+  const dependence: Dependence = spec.dependence ?? { kind: 'gaussian' };
+  if (dependence.kind === 't' && exports.pc_mc_dependence_t(dependence.nu) !== 0) {
+    throw new DependenceRejected(dependence.nu);
+  }
+
   const samplePaths = Math.min(spec.samplePaths ?? 32, spec.paths);
   const code = exports.pc_mc_run(
     spec.time,
@@ -351,6 +380,7 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     paths,
     steps,
     assets: spec.assets.length,
+    dependence,
     moments: {
       mean: summary[0] as number,
       variance: summary[1] as number,

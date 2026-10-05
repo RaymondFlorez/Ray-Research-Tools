@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 187 tests
+npm test --workspace @picasso/canvas-pricing    # 190 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -56,6 +56,12 @@ frozen tab, so `estimateCost` reports the asset-steps before anything runs and
 `runMonteCarlo` refuses past a ceiling the caller sets. The node's job is PRD 7.1's
 optimistic local preview — a smaller path count, answered immediately, replaced by the
 server's authoritative run when it lands — and a preview that hangs is worse than none.
+
+`dependence: { kind: 't', nu }` runs the same correlation under a t copula, imposed on
+each driver's endpoint for the reason the crate's README measures: a per-step t copula is
+Gaussian again by the horizon. Through WASM, two names at rho 0.7 lose 95.57 → 92.98 at
+the worst-1% mean and 83.3 → 79.0 at the worst 0.2%, with the median moved by less than
+0.5. The result carries `dependence`, so the numbers travel with what shaped them.
 
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
@@ -390,6 +396,13 @@ against nothing at all.
   conservatively than an account would be. Portfolio margin is the CBOE equity
   range read off whatever grid was priced, not OCC TIMS, and there is no
   cross-margining, no concentration add-on and no index range.
+- **The portfolio simulator has no bootstrap and no variance gamma.** The
+  crate has the iid and stationary block bootstraps and a single-asset
+  variance-gamma path, but the multi-asset surface runs GBM, Heston and
+  Merton only: a bootstrap or a pure-jump process ignores the Brownian driver
+  that carries the dependence, and the engine refuses it rather than return
+  an uncorrelated run that looks correlated. Nothing fits `nu` or the
+  correlation to history; both are the caller's.
 - **Margin and the grid are one underlier at a time.** Aggregate Greeks span
   names (`aggregate.ts`); the scenario grid, the flags and both margin numbers
   do not, and there is no cross-underlier scenario with correlated spot moves.

@@ -58,8 +58,55 @@
 //! at all.
 
 use crate::copula::Factor;
-use crate::mc::{Process, ProcessState};
+use crate::mc::{sample_gamma, Process, ProcessState};
+use crate::normal::inv_cdf;
 use crate::rng::Rng;
+use crate::special::student_t_cdf;
+
+/// How the assets' Brownian drivers depend on one another.
+///
+/// > a copula-based multivariate sampler (Gaussian and t) for cross-asset
+/// > dependence. — PRD 5.8
+///
+/// > 100k Monte Carlo paths on the shocked regime with a t-copula for the
+/// > semis cluster, since Gaussian correlation badly understates joint tail
+/// > behavior in that group. — PRD 6.2
+///
+/// **The t copula is imposed on each driver's endpoint, not on each step.**
+/// The obvious construction draws every step's increments from a t copula.
+/// It does nothing at any horizon worth asking about: the increments are
+/// independent across steps, so their sum obeys the central limit theorem
+/// and its dependence converges to Gaussian. Measured, with correlation 0.7
+/// and four degrees of freedom, the share of paths where both assets finish in
+/// their worst 1% is 0.429 for one step against 0.264 Gaussian — and 0.267
+/// against 0.258 by twelve steps, which is no difference at all
+/// (`a_per_step_t_copula_is_gaussian_at_the_horizon`).
+///
+/// So the `Student` variant takes the path's correlated Gaussian endpoint,
+/// gives it t-copula dependence — one chi-squared draw scales the vector, and
+/// each component is mapped back to a standard normal through its own t CDF —
+/// and rebuilds the path as a correlated Brownian bridge to that endpoint.
+/// Each driver is still exactly a Brownian motion, so every asset's marginal
+/// law is unchanged; only the joint law of the endpoints moves.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Dependence {
+    Gaussian,
+    Student { nu: f64 },
+}
+
+/// A Student-t variate mapped to the standard normal with the same CDF value.
+///
+/// Through the tail on both sides, so the map is exactly odd — the antithetic
+/// mirror of a t vector maps to the mirror of its image — and a large positive
+/// `x` does not round `1 - tail` to one and come back as infinity.
+fn t_to_normal(x: f64, nu: f64) -> f64 {
+    let z = inv_cdf(student_t_cdf(-libm::fabs(x), nu));
+    if x > 0.0 {
+        -z
+    } else {
+        z
+    }
+}
 
 /// One asset's starting point and its share of the portfolio.
 #[derive(Clone, Copy, Debug)]
@@ -103,6 +150,8 @@ pub enum PortfolioError {
     /// back at 0.0062, the same to the last digit as at zero. Refusing names
     /// the asset instead.
     NotDrivenByBrownian { asset: usize },
+    /// A t copula needs positive, finite degrees of freedom.
+    DegreesOfFreedom,
 }
 
 /// The `distribution` port, plus the sample.
@@ -215,6 +264,24 @@ pub fn simulate_portfolio(
     time: f64,
     config: &PortfolioConfig,
 ) -> Result<PortfolioResult, PortfolioError> {
+    simulate_portfolio_with(processes, assets, factor, time, config, Dependence::Gaussian)
+}
+
+/// `simulate_portfolio` with the dependence named. `Gaussian` takes exactly
+/// the same draws and returns the same bits as `simulate_portfolio`.
+pub fn simulate_portfolio_with(
+    processes: &[&dyn Process],
+    assets: &[AssetSpec],
+    factor: &Factor,
+    time: f64,
+    config: &PortfolioConfig,
+    dependence: Dependence,
+) -> Result<PortfolioResult, PortfolioError> {
+    let student = match dependence {
+        Dependence::Gaussian => None,
+        Dependence::Student { nu } if nu > 0.0 && nu.is_finite() => Some(nu),
+        Dependence::Student { .. } => return Err(PortfolioError::DegreesOfFreedom),
+    };
     let n = assets.len();
     if processes.len() != n || factor.dimension() != n || n == 0 {
         return Err(PortfolioError::Shape {
@@ -252,10 +319,35 @@ pub fn simulate_portfolio(
 
     let initial: f64 = assets.iter().map(|a| a.weight * a.spot).sum();
 
+    // Per-step bridge correction for the t copula, for the unmirrored path.
+    let mut correction = vec![0.0; n];
+    let mut summed = vec![0.0; n];
+    let mut endpoint = vec![0.0; n];
+    let root_steps = libm::sqrt(steps as f64);
+
     let mut done = 0usize;
     while done < config.paths {
         for value in draw.iter_mut() {
             *value = rng.next_normal();
+        }
+
+        if let Some(nu) = student {
+            // The path's own correlated endpoint, in standard units:
+            // y = L * sum(z) / sqrt(steps), distributed N(0, R).
+            for i in 0..n {
+                summed[i] = (0..steps).map(|k| draw[k * n + i]).sum::<f64>() / root_steps;
+            }
+            factor.apply(&summed, &mut endpoint);
+            // One chi-squared draw scales the whole vector, then each
+            // component returns to N(0, 1) through its own t CDF.
+            let chi2 = 2.0 * sample_gamma(0.5 * nu, &mut rng);
+            let scale = if chi2 > 0.0 { libm::sqrt(nu / chi2) } else { 0.0 };
+            for i in 0..n {
+                let target = t_to_normal(scale * endpoint[i], nu);
+                // W_T - B_T, spread evenly over the steps: the bridge moves
+                // the endpoint and leaves the path's shape a Brownian bridge.
+                correction[i] = libm::sqrt(time) * (target - endpoint[i]) / steps as f64;
+            }
         }
 
         let mirrors = if config.antithetic { 2 } else { 1 };
@@ -294,7 +386,10 @@ pub fn simulate_portfolio(
                     for d in 0..extra_dims {
                         step_extras[d] = rng.next_normal();
                     }
-                    let increment = correlated[i] * sqrt_dt;
+                    let mut increment = correlated[i] * sqrt_dt;
+                    if student.is_some() {
+                        increment += sign * correction[i];
+                    }
                     level[i] = processes[i].step(
                         level[i],
                         &mut state[i],

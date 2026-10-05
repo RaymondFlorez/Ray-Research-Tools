@@ -156,6 +156,7 @@ export interface PricingExports {
   pc_mc_asset_count(): number;
   pc_mc_corr_push(value: number): void;
   pc_mc_corr_equicorrelated(rho: number): void;
+  pc_mc_dependence_t(nu: number): number;
   pc_mc_run(
     time: number, paths: number, steps: number,
     antithetic: number, seed: number, samplePaths: number,
@@ -197,7 +198,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_nss_zero', 'pc_nss_residual', 'pc_nss_install_curve',
   'pc_nss_warning_ptr', 'pc_nss_warning_len',
   'pc_mc_reset', 'pc_mc_add_asset', 'pc_mc_add_heston', 'pc_mc_add_merton', 'pc_mc_asset_count',
-  'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_run',
+  'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_dependence_t', 'pc_mc_run',
   'pc_mc_summary', 'pc_mc_terminal', 'pc_mc_drawdown', 'pc_mc_sample',
   'pc_mc_sample_rows', 'pc_mc_percentile', 'pc_mc_drawdown_percentile', 'pc_mc_cvar',
   'pc_heston_price', 'pc_heston_iv', 'pc_heston_conditioning',

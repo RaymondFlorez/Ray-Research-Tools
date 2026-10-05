@@ -148,6 +148,14 @@ impl<'a> Bootstrap<'a> {
 /// says, for the same reason the variance-gamma process is — it consumes draws
 /// from the stream in a pattern a Sobol point cannot be aligned to.
 impl<'a> Process for Bootstrap<'a> {
+    /// A replay of history reads no Brownian increment. Saying so is what
+    /// makes `simulate_portfolio` refuse it: cross-asset dependence there is
+    /// carried by the increments, and a process that ignores them would be
+    /// accepted and run uncorrelated while looking correlated.
+    fn uses_brownian(&self) -> bool {
+        false
+    }
+
     fn step(
         &self,
         spot: f64,

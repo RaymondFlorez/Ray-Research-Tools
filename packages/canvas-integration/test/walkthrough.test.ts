@@ -334,6 +334,52 @@ describe('4 · the scenario grid revalues every cell in the real engine', () => 
  * from the transmission — because running the Monte Carlo at the base regime
  * and calling it a shock analysis is the failure this step exists to avoid.
  */
+/**
+ * "*Simulation branch.* 100k Monte Carlo paths on the shocked regime with a
+ * t-copula for the semis cluster, since Gaussian correlation badly
+ * understates joint tail behavior in that group." — PRD 6.2
+ *
+ * The sentence is a claim about the corner, so the assertion is about the
+ * corner: the same three names, the same correlation parameter, the same
+ * marginals, and a worse worst case. The correlation and the degrees of
+ * freedom are assumptions written into the fixture; nothing here fits them.
+ */
+describe('4c · the semis cluster under a t copula', () => {
+  const RATE = BASE_MARKET.rate + 50 / 10_000;
+  const cluster = (dependence?: { kind: 't'; nu: number }) => ({
+    // NVDA, AMD and AVGO, normalised to 100 each, at shocked-regime vols.
+    assets: [
+      { id: 'NVDA', spot: 100, weight: 1, vol: 0.58, rate: RATE, dividend: 0 },
+      { id: 'AMD', spot: 100, weight: 1, vol: 0.55, rate: RATE, dividend: 0 },
+      { id: 'AVGO', spot: 100, weight: 1, vol: 0.4, rate: RATE, dividend: 0 },
+    ],
+    correlation: { kind: 'equicorrelated' as const, rho: 0.7 },
+    time: 0.35,
+    paths: 100_000,
+    // 100k x 252 x 3 is past the browser ceiling; 64 steps is not, and the
+    // endpoint construction does not depend on the step count.
+    steps: 64,
+    seed: 0x5eed,
+    cvarLevels: [0.01],
+    ...(dependence ? { dependence } : {}),
+  });
+
+  it('carries the joint tail the Gaussian run understates', async () => {
+    const exports = await loadPricing();
+    const gaussian = runMonteCarlo(exports, cluster());
+    const t = runMonteCarlo(exports, cluster({ kind: 't', nu: 4 }));
+    expect(t.paths).toBe(100_000);
+    expect(t.dependence).toEqual({ kind: 't', nu: 4 });
+    // Measured: the worst 1% of a 300 book averages 145.21 under the Gaussian
+    // copula and 140.89 under the t — 4.3 more lost in the corner.
+    expect(gaussian.cvar['0.01']).toBeCloseTo(145.21, 2);
+    expect(t.cvar['0.01']).toBeCloseTo(140.89, 2);
+    // The marginals did not move, so neither did the mean: 305.12 both ways.
+    expect(Math.abs(t.moments.mean - gaussian.moments.mean)).toBeLessThan(3 * t.moments.standardError);
+    expect(Math.abs(t.percentiles['0.5']! - gaussian.percentiles['0.5']!)).toBeLessThan(0.5);
+  });
+});
+
 describe('4b · the shocked regime becomes a P&L distribution', () => {
   const SHOCK_BPS = 50;
   const VOL_POINTS = 0.06;
