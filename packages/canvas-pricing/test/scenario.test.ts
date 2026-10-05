@@ -12,6 +12,9 @@ import {
   toSurface,
   type FactorMove,
   type GridAxis,
+  flattenScenarioTree,
+  ScenarioTreeRejected,
+  type ScenarioTree,
 } from '../src/scenario.js';
 
 function scenario(id: string, name: string, shocks: Shock[]): Scenario {
@@ -297,5 +300,56 @@ describe('tail attribution', () => {
 
   it('reports nothing when nothing lost', () => {
     expect(tailContributors(new Map([['a', 10]]))).toEqual([]);
+  });
+});
+
+describe('scenario trees (PRD 1.5, THERMIDOR)', () => {
+  // A two-stage war game: escalation or not, then the Fed's response.
+  const tree: ScenarioTree = {
+    id: 'root',
+    name: 'Strait closure',
+    shocks: [{ kind: 'equity_index', index: 'SPX', pct: -0.03 }],
+    children: [
+      {
+        id: 'esc',
+        name: 'escalates',
+        probability: 0.3,
+        shocks: [{ kind: 'equity_index', index: 'SPX', pct: -0.1 }, { kind: 'credit', bucket: 'HY', spreadBps: 150 }],
+        children: [
+          { id: 'cut', name: 'Fed cuts', probability: 0.6, shocks: [{ kind: 'curve', currency: 'USD', tenorDeltasBps: { '2y': -50 } }] },
+          { id: 'hold', name: 'Fed holds', probability: 0.4, shocks: [{ kind: 'credit', bucket: 'HY', spreadBps: 100 }] },
+        ],
+      },
+      { id: 'cal', name: 'contained', probability: 0.7, shocks: [{ kind: 'equity_index', index: 'SPX', pct: 0.02 }] },
+    ],
+  };
+
+  it('flattens to leaves weighted by the product of their branch probabilities', () => {
+    const leaves = flattenScenarioTree(tree);
+    expect(leaves.map((l) => l.id)).toEqual(['root/esc/cut', 'root/esc/hold', 'root/cal']);
+    expect(leaves.map((l) => l.probability)).toEqual([0.3 * 0.6, 0.3 * 0.4, 0.7]);
+    expect(leaves.reduce((s, l) => s + l.probability!, 0)).toBeCloseTo(1, 12);
+    expect(leaves.every((l) => l.source === 'imported_thermidor')).toBe(true);
+    expect(leaves[1]!.name).toBe('Strait closure → escalates → Fed holds');
+  });
+
+  it('composes shocks down each path with the per-kind rules', () => {
+    const [cut, hold, contained] = flattenScenarioTree(tree);
+    // -3% then -10% is -12.7%, not -13%.
+    const spx = (s: Scenario) => s.shocks.find((k) => k.kind === 'equity_index') as Extract<Shock, { kind: 'equity_index' }>;
+    expect(spx(cut!).pct).toBeCloseTo((1 - 0.03) * (1 - 0.1) - 1, 12);
+    expect(spx(contained!).pct).toBeCloseTo((1 - 0.03) * (1 + 0.02) - 1, 12);
+    // Spreads are levels: 150 then 100 is 250.
+    const hy = hold!.shocks.find((k) => k.kind === 'credit') as Extract<Shock, { kind: 'credit' }>;
+    expect(hy.spreadBps).toBe(250);
+  });
+
+  it('refuses a node whose branches do not sum to one, rather than renormalising', () => {
+    const missing: ScenarioTree = { ...tree, children: [tree.children![0]!, { ...tree.children![1]!, probability: 0.6 }] };
+    expect(() => flattenScenarioTree(missing)).toThrow(ScenarioTreeRejected);
+    expect(() => flattenScenarioTree(missing)).toThrow(/sum to 0.900000, not 1/);
+    const { probability: _dropped, ...noProbability } = tree.children![1]!;
+    const unset: ScenarioTree = { ...tree, children: [noProbability] };
+    expect(() => flattenScenarioTree(unset)).toThrow(/not in \[0, 1\]/);
   });
 });

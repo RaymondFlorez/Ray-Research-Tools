@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 204 tests
+npm test --workspace @picasso/canvas-pricing    # 207 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -85,6 +85,16 @@ serial dependence an iid draw destroys. It shares the module's one result slot w
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
 and the analyst who assembled them is the one who can fix it.
+
+## Scenario trees
+
+PRD 1.5: THERMIDOR's "war-game scenarios import as scenario trees into the Scenario node".
+`flattenScenarioTree` takes a tree whose branches carry conditional probabilities and shocks
+and returns its leaves as scenarios, each weighted by the product of the probabilities on
+its path and carrying every shock along it composed by the per-kind rules: −3% then −10% on
+an index is −12.7%, and 150bp then 100bp of spread is 250. A node whose branches do not sum
+to one is refused rather than renormalised — a tree with 70% and 20% branches is missing a
+branch, and scaling the two present ones up would invent its absence.
 
 ## The shock's shape is estimated, not assumed
 
@@ -435,6 +445,9 @@ against nothing at all.
 
 ## What is not covered
 
+- **No THERMIDOR parser.** Its export format is specified nowhere available, so the tree
+  is the seam and whatever reads THERMIDOR's files builds one. Inventing a format and
+  calling it theirs is what the scoring nodes refuse to do too.
 - **The surprise series is the caller's.** `estimateShockShape` takes event dates with a
   policy surprise and the curve's moves; extracting surprises from futures, and choosing
   which days count as policy events, happens before it.

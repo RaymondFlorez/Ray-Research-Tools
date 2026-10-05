@@ -305,3 +305,84 @@ export function tailContributors(
       share: totalLoss === 0 ? 0 : pnl / totalLoss,
     }));
 }
+
+// ---------------------------------------------------------------------------
+// Scenario trees
+// ---------------------------------------------------------------------------
+
+/**
+ * A branching scenario: "War-game scenarios import as scenario trees into the
+ * Scenario node" (PRD 1.5, THERMIDOR).
+ *
+ * THERMIDOR's export format is specified nowhere available, so there is no
+ * parser here — writing one would mean inventing a format and calling it
+ * theirs. What the sentence does specify is the structure: a tree whose
+ * branches carry conditional probabilities and shocks. This is that structure,
+ * and whatever reads THERMIDOR's files builds one.
+ */
+export interface ScenarioTree {
+  id: string;
+  name: string;
+  /** Shocks that happen on reaching this node, on top of everything above it. */
+  shocks: readonly Shock[];
+  /** Probability of this branch given its parent. Ignored at the root. */
+  probability?: number;
+  children?: readonly ScenarioTree[];
+}
+
+export class ScenarioTreeRejected extends Error {
+  constructor(readonly path: string, readonly detail: string) {
+    super(`scenario tree refused at ${path}: ${detail}`);
+    this.name = 'ScenarioTreeRejected';
+  }
+}
+
+/** How far a node's children's probabilities may sum from one. */
+export const TREE_PROBABILITY_TOLERANCE = 1e-6;
+
+/**
+ * Flattens a tree into its leaves, each a scenario carrying the product of
+ * the conditional probabilities on its path and the composition of every
+ * shock along it.
+ *
+ * A node whose children's probabilities do not sum to one is refused, not
+ * renormalised: a tree with 70% and 20% branches is missing a branch, and
+ * scaling the two that are there up to 78% and 22% would invent the missing
+ * outcome's absence.
+ */
+export function flattenScenarioTree(
+  tree: ScenarioTree,
+  source: Scenario['source'] = 'imported_thermidor',
+): Scenario[] {
+  const leaves: Scenario[] = [];
+  const walk = (node: ScenarioTree, path: string[], ids: string[], probability: number, shocks: readonly Shock[]): void => {
+    const here = [...path, node.name];
+    const idsHere = [...ids, node.id];
+    const accumulated = [...shocks, ...node.shocks];
+    const children = node.children ?? [];
+    if (children.length === 0) {
+      leaves.push({
+        id: idsHere.join('/'),
+        name: here.join(' → '),
+        probability,
+        shocks: compose(accumulated),
+        source,
+      });
+      return;
+    }
+    let total = 0;
+    for (const child of children) {
+      const p = child.probability;
+      if (p === undefined || !(p >= 0 && p <= 1)) {
+        throw new ScenarioTreeRejected([...here, child.name].join(' → '), `branch probability ${String(p)} is not in [0, 1]`);
+      }
+      total += p;
+    }
+    if (Math.abs(total - 1) > TREE_PROBABILITY_TOLERANCE) {
+      throw new ScenarioTreeRejected(here.join(' → '), `branch probabilities sum to ${total.toFixed(6)}, not 1`);
+    }
+    for (const child of children) walk(child, here, idsHere, probability * (child.probability as number), accumulated);
+  };
+  walk(tree, [], [], 1, []);
+  return leaves;
+}
