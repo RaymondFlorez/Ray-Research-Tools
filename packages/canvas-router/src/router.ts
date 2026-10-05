@@ -17,6 +17,7 @@ import {
   modelById,
   type Model,
   type Placement,
+  type InputSignal,
   type RoutingPolicy,
   type TaskClass,
 } from './policy.js';
@@ -37,6 +38,8 @@ export interface RoutingFeatures {
   determinismRequired: boolean;
   /** Length of the audio, for a class whose latency scales with it (ASR). */
   audioSeconds?: number;
+  /** Properties of the input known before dispatch: low SNR, an ambiguous table. */
+  signals?: InputSignal[];
   priorFailures: FailureRecord[];
 }
 
@@ -141,6 +144,29 @@ export function route(
   const entry = entryFor(policy, features.taskClass);
   const reasons: string[] = [];
   const excluded: Array<{ modelId: string; rule: string }> = [];
+
+  // An input signal the policy escalates on starts the request on the
+  // fallback tier. The usual hard rules still run over that tier, so a
+  // positions-classified call whose fallback is a vendor stays where it is,
+  // and the decision says which signal asked and what refused it.
+  const triggered = (entry?.escalateOn ?? []).filter((s) => features.signals?.includes(s));
+  if (triggered.length > 0 && entry && entry.fallback.length > 0) {
+    const tier: RoutingPolicy = { ...policy, models: policy.models.filter((m) => entry.fallback.includes(m.id)) };
+    const { signals: _signals, ...rest } = features;
+    try {
+      const decision = route(tier, rest, options);
+      return {
+        ...decision,
+        reasons: [`${triggered.join(', ')}: the policy escalates this input to the fallback tier`, ...decision.reasons],
+      };
+    } catch (error) {
+      if (!(error instanceof NoEligibleModel)) throw error;
+      reasons.push(
+        `${triggered.join(', ')} would escalate to ${entry.fallback.join(', ')}, which cannot serve this request ` +
+          `(${error.excluded.map((e) => `${e.modelId}: ${e.rule}`).join('; ')}); staying on the primary tier`,
+      );
+    }
+  }
 
   const placements = allowedPlacements(features.dataSensitivity);
   const failedOn = new Set(features.priorFailures.map((f) => f.modelId));

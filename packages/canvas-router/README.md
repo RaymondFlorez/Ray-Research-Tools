@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 89 tests
+npm test --workspace @picasso/canvas-router    # 93 tests
 ```
 
 ## Phase 3's exit criterion
@@ -139,10 +139,15 @@ the realtime fractions are stated, not measured. Positions-classified audio
 stays on the self-hosted model by the usual hard rule. The cascade's exit
 figures are unchanged: 86.8% cheap terminations, 0.00% quality delta.
 
-Not modelled: the table's escalation triggers that are inputs rather than
-verifier outcomes — low SNR for ASR, table ambiguity or footnote
-cross-references for `doc.extract` — which the cascade approximates as one
-failed verification.
+Some of the table's escalation triggers are properties of the input rather
+than outcomes of a verifier — low SNR for ASR, table ambiguity or a footnote
+cross-reference for `doc.extract`. They are known before the first dispatch, so
+a row declares them as `escalateOn` signals and a request carrying one starts
+on the fallback tier instead of failing on the primary first. The usual hard
+rules still run over that tier: low-SNR audio goes to the vendor ASR, unless it
+is positions-classified, in which case it is transcribed self-hosted and the
+decision says which signal asked and what refused it. Detecting the signals —
+measuring SNR, spotting the cross-reference — is the caller's job.
 
 ## The canary
 

@@ -89,6 +89,15 @@ export type LatencySlo =
   | { kind: 'realtime'; factor: number }
   | { kind: 'none' };
 
+/**
+ * Escalation triggers that are properties of the input rather than outcomes
+ * of a verifier: PRD 4.2's "Low SNR" for ASR, and "Table ambiguity or footnote
+ * cross-reference" for extraction. They are known before the first dispatch,
+ * so a request carrying one starts on the fallback tier instead of failing on
+ * the primary first.
+ */
+export type InputSignal = 'low_snr' | 'table_ambiguity' | 'footnote_xref';
+
 /** One row of the 4.2 table. */
 export interface PolicyEntry {
   taskClass: TaskClass;
@@ -102,6 +111,8 @@ export interface PolicyEntry {
   escalateAfterFailures?: number;
   /** Some classes go straight to the top, whatever a score would say. */
   alwaysEscalate?: boolean;
+  /** Input signals that send a request straight to the fallback tier. */
+  escalateOn?: InputSignal[];
 }
 
 export interface RoutingPolicy {
@@ -306,6 +317,7 @@ export const DEFAULT_POLICY: RoutingPolicy = {
       primary: ['qwen-coder-32b'],
       fallback: ['frontier-a'],
       escalateAfterFailures: 1,
+      escalateOn: ['table_ambiguity', 'footnote_xref'],
     },
     {
       taskClass: 'doc.deep_read',
@@ -334,6 +346,7 @@ export const DEFAULT_POLICY: RoutingPolicy = {
       slo: { kind: 'realtime', factor: 0.15 },
       primary: ['whisper-large-v3'],
       fallback: ['vendor-asr'],
+      escalateOn: ['low_snr'],
     },
   ],
 };
