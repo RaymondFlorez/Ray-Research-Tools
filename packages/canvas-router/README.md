@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 93 tests
+npm test --workspace @picasso/canvas-router    # 103 tests
 ```
 
 ## Phase 3's exit criterion
@@ -148,6 +148,29 @@ rules still run over that tier: low-SNR audio goes to the vendor ASR, unless it
 is positions-classified, in which case it is transcribed self-hosted and the
 decision says which signal asked and what refused it. Detecting the signals —
 measuring SNR, spotting the cross-reference — is the caller's job.
+
+## Capability manifests
+
+PRD 4.4: "Every model is registered with a capability manifest." The fleet
+carried quality, cost and latency, but not what a model can *take* — so an image
+request could be scored against a text-only model, and a tool-calling request
+against one that cannot call tools. Every model now declares `version`,
+`modalities`, `tools` and structured-output support, and two hard rules run
+before any score: a model that cannot read the request's modalities, or cannot
+call tools when the request needs them, is excluded with the reason.
+
+`parseManifest` reads the PRD's YAML example, parsed by hand rather than by a
+YAML library that would also honour anchors and tags. An unknown key is refused
+— `eval_score:` for `eval_scores:` would otherwise register a model the router
+never routes to. A manifest cannot widen a hard rule: a vendor-placed model
+whose `sensitivity_allowed` lists `positions` is refused at registration. The
+PRD's example has no placement field and the sensitivity line cannot be checked
+without one, so `placement` is required here, an addition to the PRD's schema.
+
+One consequence, stated rather than discovered later: nothing in the fleet the
+PRD specifies reads images *and* runs inside the tenant, so positions-classified
+page images have no route at all, and the router refuses them with the rules
+that removed each candidate.
 
 ## The canary
 

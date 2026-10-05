@@ -183,6 +183,15 @@ export function route(
       });
       return false;
     }
+    const missing = features.modalities.filter((m) => !model.modalities.includes(m));
+    if (missing.length > 0) {
+      excluded.push({ modelId: model.id, rule: `does not take ${missing.join(', ')} input` });
+      return false;
+    }
+    if (features.toolsRequired.length > 0 && !model.tools) {
+      excluded.push({ modelId: model.id, rule: `cannot call tools, and this request needs ${features.toolsRequired.join(', ')}` });
+      return false;
+    }
     if (options.allowedVendors && !options.allowedVendors.includes(model.vendor)) {
       excluded.push({ modelId: model.id, rule: `vendor ${model.vendor} is not in the org's allowed set` });
       return false;

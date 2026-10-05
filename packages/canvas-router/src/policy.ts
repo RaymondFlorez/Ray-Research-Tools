@@ -34,8 +34,18 @@ export type Placement =
   /** A third-party API. Data crosses an org boundary. */
   | 'vendor';
 
+export type Modality = 'text' | 'image' | 'audio' | 'table' | 'code';
+
 export interface Model {
   id: string;
+  /** The manifest's version: what a pinned dispatch pins (PRD 4.7). */
+  version: string;
+  /** What the model can take as input. A request outside this set is not routed to it. */
+  modalities: readonly Modality[];
+  /** Whether the model can call tools at all. */
+  tools: boolean;
+  /** Constrained decoding against a JSON schema. */
+  structuredOutput: boolean;
   vendor: string;
   /**
    * Model family within the vendor.
@@ -142,6 +152,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
   models: [
     {
       id: 'local-3b',
+      version: '2026-01-a',
+      modalities: ['text'],
+      tools: false,
+      structuredOutput: false,
       vendor: 'open',
       family: 'open-small',
       paramsB: 3,
@@ -155,6 +169,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'server-8b',
+      version: '2026-01-a',
+      modalities: ['text', 'table'],
+      tools: true,
+      structuredOutput: true,
       vendor: 'open',
       family: 'open-small',
       paramsB: 8,
@@ -172,6 +190,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'qwen-coder-32b',
+      version: '2026-01-a',
+      modalities: ['text', 'code', 'table'],
+      tools: true,
+      structuredOutput: true,
       vendor: 'open',
       family: 'open-coder',
       paramsB: 32,
@@ -191,6 +213,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'open-70b',
+      version: '2026-01-a',
+      modalities: ['text', 'code', 'table'],
+      tools: true,
+      structuredOutput: true,
       vendor: 'open',
       family: 'open-large',
       paramsB: 70,
@@ -211,6 +237,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'open-embed',
+      version: '2026-01-a',
+      modalities: ['text', 'image'],
+      tools: false,
+      structuredOutput: false,
       vendor: 'open',
       family: 'open-embed',
       placement: 'self_hosted',
@@ -223,6 +253,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'whisper-large-v3',
+      version: '2026-01-a',
+      modalities: ['audio'],
+      tools: false,
+      structuredOutput: false,
       vendor: 'open',
       family: 'open-asr',
       placement: 'self_hosted',
@@ -236,6 +270,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'vendor-asr',
+      version: '2026-01-a',
+      modalities: ['audio'],
+      tools: false,
+      structuredOutput: false,
       vendor: 'vendor-asr',
       family: 'asr-vendor',
       placement: 'vendor',
@@ -249,6 +287,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'frontier-a',
+      version: '2026-01-a',
+      modalities: ['text', 'image', 'table', 'code'],
+      tools: true,
+      structuredOutput: true,
       vendor: 'vendor-a',
       family: 'a-reasoning',
       placement: 'vendor',
@@ -270,6 +312,10 @@ export const DEFAULT_POLICY: RoutingPolicy = {
     },
     {
       id: 'frontier-b',
+      version: '2026-01-a',
+      modalities: ['text', 'image', 'table', 'code'],
+      tools: true,
+      structuredOutput: true,
       vendor: 'vendor-b',
       family: 'b-core',
       placement: 'vendor',
