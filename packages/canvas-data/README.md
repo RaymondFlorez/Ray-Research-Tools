@@ -320,6 +320,25 @@ service that runs them over every watched series; there is no per-node
 threshold store, and the live wash's z-threshold in `canvas-render` does not
 yet read these scores.
 
+## Transforms that cannot look ahead
+
+PRD 3.3's `TransformNode` — "declarative ops (resample, z-score, lag, winsorize, currency
+convert) with no code" — and the node `canvas-core`'s port checker inserts when it offers a
+one-click resample or conversion fix. Every op sits upstream of backtests, so each is
+written so it cannot leak:
+
+- **resample** going coarser dates each bucket by its last observation, the day its value
+  was known. `how` is required, because the last price of a month and the sum of a month's
+  flows are both "monthly". Going finer only carries the last known value forward onto a
+  grid the caller supplies; interpolation would read the next observation.
+- **lag** refuses a negative shift.
+- **z-score** and **winsorize** use the trailing window only; a test bumps the last point by
+  a million and checks that no earlier output moves.
+- **convert_currency** is an as-of join, and a date before the first known rate is refused
+  rather than back-filled.
+
+Each output lists the ops applied, in words.
+
 ## What is not covered
 
 - **The production data plane.** No ClickHouse, Iceberg, Redpanda, vendor feed or
@@ -330,5 +349,10 @@ yet read these scores.
 - **The alert engine.** The detectors are functions over an array, not the `alert-engine`
   service that runs them over every watched series. There is no per-node threshold store,
   and the live wash's z-threshold in `canvas-render` does not yet read these scores.
+- **Timestamps.** Series points carry dates. Intraday and tick resampling — the PRD's own
+  daily-into-intraday example — is refused by the transform with that reason, though the
+  port checker still offers the fix.
+- **Full-sample transforms.** A full-sample winsorize or z-score is not offered; they clip
+  or scale the past with quantiles that include the future.
 - **Chain data.** Addresses are checked (EIP-55 checksums, via Keccak-256) but nothing reads
   a chain: no RPC, no indexer, no block-time alignment with market data.

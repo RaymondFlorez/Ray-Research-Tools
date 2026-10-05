@@ -51,6 +51,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `sketch-to-code.test.ts` | `canvas-ink` → `canvas-pricing`: candidate books re-rendered by the engine and verified against a drawn payoff before anything is offered. |
 | `skew-history.test.ts` | `canvas-pricing` → `canvas-data`: a risk reversal read by the engine, kept bitemporally, the two shapes held equal by the compiler. |
 | `alerts.test.ts` | `canvas-data` → `canvas-agents`: detector firings ranked in the return digest, and the two packages' family names held equal by the compiler. |
+| `resample-fix.test.ts` | `canvas-core` → `canvas-data`: the one-click resample fix the port checker offers is one the `TransformNode` can apply — down by the last value, up by carrying it forward. |
 | `model-staleness.test.ts` | `canvas-router` → `canvas-core`: a model version bump in the policy moves the key of the node it fed, and the reason names the model, not the data. |
 | `attribution.test.ts` | `canvas-sim` → `canvas-equity`: a backtest's returns explained by factors, joined on the date each return ends. |
 
@@ -143,6 +144,16 @@ and the suite now holds both readings so the fix cannot quietly regress.
 `engineShockPoints` writes every undrawn pin as an explicit zero, and the
 tenors the analyst was told would not move come back identical to twelve
 places.
+
+## A fourth disagreement, caught before it shipped
+
+Writing `resample-fix.test.ts` meant reading the port checker beside the new transform. The
+checker offers "Upsample to …" as a one-click fix when a coarse series meets a fine port; the
+first version of the transform refused every upsample on the grounds that it invents
+observations. Both suites were green. The PRD settled it — its own example, daily into
+intraday, is an upsample with a resample fix — so the transform moved: it now goes finer by
+carrying the last known value forward onto the target grid, which is the `latest()` adapter
+per point, and still refuses to interpolate.
 
 ## Phase 5's third exit number
 
