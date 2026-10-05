@@ -16,6 +16,7 @@ PRD 7's hardening layer.
 | `exportBundle.ts` | Audit appendix, vendor licence redaction, and the refusal to export a figure that cannot be reproduced. |
 | `latency.ts` | PRD 7.1's budget table as data, with the evidence behind each row and the check against an observed distribution. |
 | `redteam.ts` | The suite phase 7 exits on. |
+| `keyring.ts` | PRD 4.4's per-tenant vendor keys: references only, no platform fallback, no way to reach another tenant's. |
 | `session.ts` | PRD 7.2's session policy: MFA per tenant, fifteen-minute tokens, and a silent refresh that can extend a session but never upgrade one. |
 
 ## The latency table, and where it actually stands
@@ -166,6 +167,19 @@ Measured rather than asserted:
 rollback rule: 0.10% false rollbacks on a stable model over 2000 trials
 rollback rule: catches 99% of a 5% -> 12% regression at 3 sigma
 ```
+
+## Vendor keys belong to the tenant
+
+PRD 4.4 deploys frontier models through "Vendor API, per-tenant key isolation".
+`VendorKeyring` makes the three ways that leaks impossible rather than
+discouraged. There is no platform key to fall back to: a tenant without a key
+for a vendor is refused, because the fallback is how a tenant's prompts end up
+under an account whose retention terms it never agreed to. It holds
+secret-manager references, never keys, and refuses anything that does not look
+like one — the likeliest thing passed by mistake is the key itself. And lookups
+go through a handle opened for one tenant, with no method that takes another
+tenant or returns the map; the references live in a true `#private` field, so
+neither `JSON.stringify` nor `console.log` of the keyring prints them.
 
 ## Sessions
 
