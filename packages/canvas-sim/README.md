@@ -5,7 +5,7 @@ that run on every one of them, and the statistics that account for how many stra
 analyst tried before this one.
 
 ```bash
-npm test --workspace @picasso/canvas-sim    # 45 tests
+npm test --workspace @picasso/canvas-sim    # 53 tests
 ```
 
 | Module | PRD | What it does |
@@ -85,6 +85,37 @@ flipping between long and short cost more in turnover than its edge was worth. T
 fixture holds for sixty days, and that is a fair summary of the tradeoff the model exists to
 make visible.
 
+## Where the spread came from, and why it is not modeled from prices
+
+> Spread (from historical quoted spread where available, modeled where not),
+> market impact (square-root law with a calibrated coefficient).
+
+Every fill now reads a quoted spread from the history (`spread:SYMBOL`)
+through the same point-in-time view the strategy gets, so a quote stamped
+after the fill is not used. Where there is no quote it falls back to the
+analyst's per-symbol assumption, then to a 5bp default, and each trade
+records which of the three it got. A result whose fills all used the default
+says so in `warnings`.
+
+The obvious way to model a missing spread is Roll (1984): bid-ask bounce
+makes successive price changes negatively autocorrelated, and the spread is
+twice the square root of minus that covariance. On daily closes it does not
+work. Measured on a series with 1% daily volatility and no spread at all, 60
+closes give an estimate 55% of the time, and that estimate has a median of
+62bp; a real 5bp spread is indistinguishable from none, and a full year of
+closes still reports 42bp of spread that is not there. Sampling noise in the
+autocovariance is many times larger than the bounce of a liquid name. So the
+engine does not model a spread from prices. "Modeled where not" is an
+explicit assumption, and the trade log says when it was used.
+
+`calibrateImpact(executions)` fits the square-root coefficient to fills: least
+squares through the origin, since no trade means no impact. The first version
+reported the textbook standard error, and a coverage test caught it. Impact
+noise grows with the size of the trade, and under that noise the textbook
+95% interval contained the true coefficient on 64% of 400 seeded samples.
+White's heteroskedasticity-robust error covers it on 94%. `DEFAULT_COSTS`
+keeps a coefficient of 1 until someone calibrates it with their own fills.
+
 ## Delisted names were a 100% loss, and a missing print was a 50% drawdown
 
 The universe already resolved as of the historical date, delisted names
@@ -110,6 +141,9 @@ warning saying its delisting return is probably missing.
 - **No snapshot pinning.** PRD 5.8 enforces point-in-time "by Iceberg snapshot
   pinning, not by convention". Here `History` is in memory and the guard is
   the `AsOfView` reader; there is no Iceberg and no snapshot id.
+- **No spread model and no execution data.** A missing quote is an
+  assumption, not an estimate (see above for why Roll was rejected); the
+  impact coefficient is calibrated only from fills the analyst supplies.
 - **No delisting data.** The engine settles a delisting it is told about;
   it has no CRSP feed and cannot tell a delisting from a data gap on its own.
 - **No intrabar fills.** Orders fill at the next bar's price, with the cost

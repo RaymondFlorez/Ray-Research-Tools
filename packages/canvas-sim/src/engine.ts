@@ -43,9 +43,21 @@ export interface Trade {
   shares: number;
   price: number;
   cost: number;
+  /**
+   * Where the spread charged on this fill came from: a quoted spread in the
+   * history (`spread:SYMBOL`), the analyst's per-symbol assumption, or the
+   * engine's 5bp default. The result is only as good as the share of its
+   * costs that rest on the first.
+   */
+  spreadSource?: SpreadSource;
   /** Set when the position was closed by a delisting rather than an order. */
   delisting?: { lastPrice: number; delistingReturn: number };
 }
+
+export type SpreadSource = 'quoted' | 'assumed' | 'default';
+
+/** Used when neither a quote nor an assumption is available. */
+export const DEFAULT_SPREAD = 0.0005;
 
 /** A held position marked at an old price because the bar had no print for it. */
 export interface StaleMark {
@@ -62,7 +74,10 @@ export interface BacktestOptions {
   costs?: CostModel;
   /** Average daily volume per symbol, for the impact term. */
   dailyVolume?: ReadonlyMap<string, number>;
-  /** Quoted spread as a fraction of price, per symbol. */
+  /**
+   * Assumed spread as a fraction of price, per symbol — used only where the
+   * history carries no quoted spread (`spread:SYMBOL`) knowable at the fill.
+   */
   spread?: ReadonlyMap<string, number>;
   /**
    * How many strategies the analyst has tried on this canvas.
@@ -182,11 +197,19 @@ export function backtest(
       if (delta === 0) continue;
 
       const view = history.viewAt(date);
+      // "Spread (from historical quoted spread where available, modeled where
+      // not)." The quote is read through the same point-in-time view as the
+      // strategy's data. Where there is none, the spread is an assumption, and
+      // the fill says which kind it got.
+      const quoted = view.latest(`spread:${order.symbol}`);
+      const assumed = options.spread?.get(order.symbol);
+      const [spread, spreadSource]: [number, SpreadSource] =
+        quoted !== undefined ? [quoted, 'quoted'] : assumed !== undefined ? [assumed, 'assumed'] : [DEFAULT_SPREAD, 'default'];
       const cost = fillCost(
         {
           shares: delta,
           price,
-          spread: options.spread?.get(order.symbol) ?? 0.0005,
+          spread,
           dailyVolume: options.dailyVolume?.get(order.symbol) ?? 1e7,
           volatility: volatilityOf(view.window(`price:${order.symbol}`, VOL_WINDOW)),
         },
@@ -195,7 +218,7 @@ export function backtest(
       cash -= delta * price + cost.total;
       totalCosts += cost.total;
       positions.set(order.symbol, order.targetShares);
-      trades.push({ date, symbol: order.symbol, shares: delta, price, cost: cost.total });
+      trades.push({ date, symbol: order.symbol, shares: delta, price, cost: cost.total, spreadSource });
     }
     pending = [];
 
@@ -256,6 +279,15 @@ export function backtest(
           ? ` and still held at the end with no print since ${lastMark.pricedOn}. If it delisted, ` +
             'its delisting return is missing from the history and the position is valued at a price nobody can trade at.'
           : '.'),
+    );
+  }
+
+  const defaulted = trades.filter((t) => t.spreadSource === 'default');
+  if (defaulted.length > 0) {
+    const symbols = [...new Set(defaulted.map((t) => t.symbol))].sort();
+    warnings.push(
+      `${defaulted.length} of ${trades.filter((t) => t.spreadSource !== undefined).length} fills charged the ` +
+        `${DEFAULT_SPREAD * 1e4}bp default spread (${symbols.join(', ')}): no quoted spread in the history and no assumption supplied.`,
     );
   }
 

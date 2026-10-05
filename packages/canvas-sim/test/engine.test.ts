@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { backtest, History, type Strategy } from '../src/index.js';
 
 const dates = Array.from({ length: 10 }, (_, d) => new Date(Date.UTC(2024, 0, 1 + d)).toISOString().slice(0, 10));
-const OPTIONS = { symbols: ['GONE'], trials: 1 };
+const OPTIONS = { symbols: ['GONE'], trials: 1, spread: new Map([['GONE', 0.001]]) };
 const holdGone: Strategy = () => [{ symbol: 'GONE', targetShares: 10_000 }];
 
 /** 10,000 shares of GONE at 50, bought on the second bar; prints stop after the fifth. */
@@ -70,12 +70,65 @@ describe('a missing print', () => {
     const h = new History();
     h.addSeries('price:A', dates.filter((_, i) => i !== 4).map((date) => ({ date, value: 100 })));
     h.addSeries('price:B', dates.map((date) => ({ date, value: 100 })));
-    const r = backtest(h, () => [{ symbol: 'A', targetShares: 5_000 }], { symbols: ['A'], trials: 1 });
+    const r = backtest(h, () => [{ symbol: 'A', targetShares: 5_000 }], { symbols: ['A'], trials: 1, spread: new Map([['A', 0.001]]) });
     // Measured before the fix: 999,626 → 499,626 → 999,626, a 50% drawdown
     // that never happened.
     expect(r.equity[4]).toBeCloseTo(r.equity[3]!, 6);
     expect(r.drawdown.maximum).toBeLessThan(0.001);
     expect(r.staleMarks).toEqual([{ date: dates[4], symbol: 'A', pricedOn: dates[3] }]);
     expect(r.warnings).toEqual(['A: marked at a carried-forward price on 1 bar.']);
+  });
+});
+
+describe('spread source (PRD 5.8: quoted where available, modeled where not)', () => {
+  function quoted(): History {
+    const h = new History();
+    h.addSeries('price:Q', dates.map((date) => ({ date, value: 100 })));
+    // Quotes for the first half only, at 20bp.
+    h.addSeries('spread:Q', dates.slice(0, 3).map((date) => ({ date, value: 0.002 })));
+    return h;
+  }
+  // Flips between 1,000 and 2,000 shares so every bar trades.
+  const churn: Strategy = (_view, state) => [{ symbol: 'Q', targetShares: (state.positions.get('Q') ?? 0) === 1_000 ? 2_000 : 1_000 }];
+
+  it('charges the quoted spread knowable at the fill, and says so', () => {
+    const r = backtest(quoted(), churn, { symbols: ['Q'], trials: 1 });
+    const first = r.trades[0]!;
+    expect(first.spreadSource).toBe('quoted');
+    // 1,000 shares at 100, 20bp quoted, half captured: 100 of spread on top
+    // of the commission minimum and impact.
+    expect(first.cost).toBeGreaterThan(100);
+    // Every fill reads the latest quote knowable on its date, so the last
+    // 20bp quote carries forward; nothing falls through to an assumption.
+    expect(r.trades.every((t) => t.spreadSource === 'quoted')).toBe(true);
+    expect(r.warnings).toEqual([]);
+  });
+
+  it('uses the analyst assumption where there is no quote, and the default last — with a warning', () => {
+    const h = new History();
+    h.addSeries('price:Q', dates.map((date) => ({ date, value: 100 })));
+    const assumed = backtest(h, churn, { symbols: ['Q'], trials: 1, spread: new Map([['Q', 0.003]]) });
+    expect(assumed.trades.every((t) => t.spreadSource === 'assumed')).toBe(true);
+    expect(assumed.warnings).toEqual([]);
+
+    const bare = backtest(h, churn, { symbols: ['Q'], trials: 1 });
+    expect(bare.trades.every((t) => t.spreadSource === 'default')).toBe(true);
+    expect(bare.warnings).toEqual([
+      `${bare.trades.length} of ${bare.trades.length} fills charged the 5bp default spread (Q): no quoted spread in the history and no assumption supplied.`,
+    ]);
+    // Same trades, different spreads: 30bp assumed costs more than 5bp default.
+    expect(assumed.totalCosts).toBeGreaterThan(bare.totalCosts);
+  });
+
+  it('does not read a quote from after the fill', () => {
+    const h = new History();
+    h.addSeries('price:Q', dates.map((date) => ({ date, value: 100 })));
+    // A quote dated the first bar but only knowable at the end.
+    h.add('spread:Q', { validTime: dates[0]!, knowledgeTime: dates[9]!, value: 0.002 });
+    const r = backtest(h, churn, { symbols: ['Q'], trials: 1 });
+    // Default on every fill until the quote becomes knowable, quoted from then.
+    expect(r.trades.map((t) => [t.date, t.spreadSource])).toEqual(
+      dates.slice(1).map((d) => [d, d === dates[9] ? 'quoted' : 'default']),
+    );
   });
 });

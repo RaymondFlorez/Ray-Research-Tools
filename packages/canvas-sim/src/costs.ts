@@ -110,3 +110,69 @@ export function carryCost(
   const financing = (leveraged * model.financingRate * days) / 365;
   return borrow + financing;
 }
+
+export interface ImpactObservation {
+  /** Shares executed, unsigned. */
+  shares: number;
+  dailyVolume: number;
+  /** Daily return volatility at the time. */
+  volatility: number;
+  /**
+   * Measured impact as a fraction of the arrival price: the adverse move
+   * beyond half the quoted spread, signed so that paying up is positive.
+   */
+  impact: number;
+}
+
+export interface ImpactCalibration {
+  coefficient: number;
+  standardError: number;
+  observations: number;
+  warnings: string[];
+}
+
+/** Below this many executions the coefficient is reported with a warning. */
+export const MIN_IMPACT_OBSERVATIONS = 30;
+
+/**
+ * Fits the square-root law's coefficient to executions: "market impact
+ * (square-root law with a calibrated coefficient)".
+ *
+ * The law is `impact = k * volatility * sqrt(shares / dailyVolume)` with no
+ * intercept — no trade, no impact — so `k` is least squares through the
+ * origin on `x = volatility * sqrt(participation)`.
+ *
+ * The standard error is White's (HC1), not the textbook `s^2 / sum(x^2)`.
+ * Impact noise grows with the trade — a fill at 10% of volume is noisier than
+ * one at 0.01% — and under that noise the textbook interval covered the true
+ * coefficient 64% of the time at a nominal 95% (measured in
+ * `test/costs.test.ts`). Calibrating needs the analyst's own fills;
+ * nothing here supplies them, and `DEFAULT_COSTS` keeps a coefficient of 1
+ * until someone does.
+ */
+export function calibrateImpact(observations: readonly ImpactObservation[]): ImpactCalibration {
+  const warnings: string[] = [];
+  const usable = observations.filter(
+    (o) => o.shares > 0 && o.dailyVolume > 0 && o.volatility > 0 && Number.isFinite(o.impact),
+  );
+  if (usable.length < observations.length) {
+    warnings.push(`${observations.length - usable.length} executions dropped: zero size, volume or volatility, or a non-finite impact.`);
+  }
+  if (usable.length < 2) {
+    return { coefficient: Number.NaN, standardError: Number.NaN, observations: usable.length, warnings: [...warnings, 'fewer than two usable executions'] };
+  }
+  const xs = usable.map((o) => o.volatility * Math.sqrt(o.shares / o.dailyVolume));
+  const sxx = xs.reduce((a, x) => a + x * x, 0);
+  const sxy = usable.reduce((a, o, i) => a + xs[i]! * o.impact, 0);
+  const coefficient = sxy / sxx;
+  const n = usable.length;
+  const meat = usable.reduce((a, o, i) => a + (xs[i]! * (o.impact - coefficient * xs[i]!)) ** 2, 0);
+  const standardError = Math.sqrt((n / (n - 1)) * meat) / sxx;
+  if (usable.length < MIN_IMPACT_OBSERVATIONS) {
+    warnings.push(`${usable.length} executions; the coefficient is fitted but not yet worth trusting.`);
+  }
+  if (coefficient <= 0) {
+    warnings.push('a non-positive coefficient says these fills improved with size, which the square-root law cannot express.');
+  }
+  return { coefficient, standardError, observations: usable.length, warnings };
+}
