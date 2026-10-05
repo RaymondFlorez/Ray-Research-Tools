@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 190 tests
+npm test --workspace @picasso/canvas-pricing    # 194 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -62,6 +62,14 @@ each driver's endpoint for the reason the crate's README measures: a per-step t 
 Gaussian again by the horizon. Through WASM, two names at rho 0.7 lose 95.57 → 92.98 at
 the worst-1% mean and 83.3 → 79.0 at the worst 0.2%, with the median moved by less than
 0.5. The result carries `dependence`, so the numbers travel with what shaped them.
+
+`runResampled` is the historical and stationary block bootstrap as a portfolio process.
+Each step replays one historical *date* for every asset, so the cross-section of a day
+stays together and the dependence is history's rather than a fitted matrix's: two names
+whose dates are kept together finish at a terminal correlation of 0.67, and 0.02 once one
+column's dates are shuffled. `meanBlock` above 1 keeps runs of dates, and with them the
+serial dependence an iid draw destroys. It shares the module's one result slot with
+`runMonteCarlo`, and a stale read across the two is refused the same way.
 
 A correlation matrix that is not positive definite is refused with the reason, not
 repaired. Correlations assembled pairwise routinely describe no joint distribution at all,
@@ -396,13 +404,13 @@ against nothing at all.
   conservatively than an account would be. Portfolio margin is the CBOE equity
   range read off whatever grid was priced, not OCC TIMS, and there is no
   cross-margining, no concentration add-on and no index range.
-- **The portfolio simulator has no bootstrap and no variance gamma.** The
-  crate has the iid and stationary block bootstraps and a single-asset
-  variance-gamma path, but the multi-asset surface runs GBM, Heston and
-  Merton only: a bootstrap or a pure-jump process ignores the Brownian driver
-  that carries the dependence, and the engine refuses it rather than return
-  an uncorrelated run that looks correlated. Nothing fits `nu` or the
-  correlation to history; both are the caller's.
+- **Parametric and resampled runs do not mix.** `runMonteCarlo` takes GBM,
+  Heston and Merton under a Gaussian or t copula; `runResampled` replays
+  history. A book that is half each has no single run, and variance gamma is
+  in neither — a pure-jump process ignores the Brownian driver that carries
+  the dependence, and the engine refuses it rather than return an
+  uncorrelated run that looks correlated. Nothing fits `nu`, the correlation
+  or the mean block length; all three are the caller's.
 - **Margin and the grid are one underlier at a time.** Aggregate Greeks span
   names (`aggregate.ts`); the scenario grid, the flags and both margin numbers
   do not, and there is no cross-underlier scenario with correlated spot moves.

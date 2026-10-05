@@ -374,6 +374,34 @@ function wasmTCopula() {
 
 const tcopula = wasmTCopula();
 
+/** A jointly resampled portfolio, through WASM. */
+function wasmResampled() {
+  const rows = new Map();
+  w.pc_mc_reset();
+  w.pc_mc_add_asset(100, 1, 0, 0, 0);
+  w.pc_mc_add_asset(50, -2, 0, 0, 0);
+  for (let k = 0; k < 97; k += 1) {
+    w.pc_mc_history_push((((k * 37) % 17) - 8) * 0.0012 + 0.0002);
+    w.pc_mc_history_push((((k * 53) % 23) - 11) * 0.001 - 0.0001);
+  }
+  rows.set('boot_run', w.pc_mc_run_resampled(512, 30, 8, 31, 2));
+  const summary = new Float64Array(w.memory.buffer, w.pc_mc_summary(), 9);
+  for (let which = 0; which < 9; which += 1) {
+    rows.set(`boot_summary(${which})`, summary[which]);
+  }
+  for (const q of [0.01, 0.1, 0.5, 0.9, 0.99]) {
+    rows.set(`boot_pct(${q})`, w.pc_mc_percentile(q));
+    rows.set(`boot_dd(${q})`, w.pc_mc_drawdown_percentile(q));
+  }
+  const sample = new Float64Array(w.memory.buffer, w.pc_mc_sample(), 31);
+  for (let step = 0; step <= 30; step += 1) {
+    rows.set(`boot_path(${step})`, sample[step]);
+  }
+  return rows;
+}
+
+const resampled = wasmResampled();
+
 /** Heston closed form and a small calibration, through WASM. */
 function wasmHeston() {
   const rows = new Map();
@@ -430,6 +458,7 @@ function recompute(label) {
   if (hestonRows.has(label)) return hestonRows.get(label);
   if (mixed.has(label)) return mixed.get(label);
   if (tcopula.has(label)) return tcopula.get(label);
+  if (resampled.has(label)) return resampled.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -496,7 +525,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, ` +
     `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

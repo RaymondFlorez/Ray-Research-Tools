@@ -399,6 +399,31 @@ fn main() {
         emit(format!("tcop_path({step})"), unsafe { *sample.add(step) });
     }
 
+    // The joint stationary bootstrap: integer row draws and libm::exp, and a
+    // block structure that sends a path elsewhere on a single differing bit.
+    ffi::pc_mc_reset();
+    ffi::pc_mc_add_asset(100.0, 1.0, 0.0, 0.0, 0.0);
+    ffi::pc_mc_add_asset(50.0, -2.0, 0.0, 0.0, 0.0);
+    // Integer arithmetic then one correctly rounded multiply, so both sides
+    // start from the same bits without trusting either side's sin.
+    for k in 0..97i64 {
+        ffi::pc_mc_history_push(((k * 37) % 17 - 8) as f64 * 0.0012 + 0.0002);
+        ffi::pc_mc_history_push(((k * 53) % 23 - 11) as f64 * 0.001 - 0.0001);
+    }
+    emit("boot_run".to_string(), ffi::pc_mc_run_resampled(512, 30, 8.0, 31.0, 2) as f64);
+    let summary = ffi::pc_mc_summary();
+    for which in 0..ffi::MC_SUMMARY_STRIDE {
+        emit(format!("boot_summary({which})"), unsafe { *summary.add(which) });
+    }
+    for q in [0.01, 0.1, 0.5, 0.9, 0.99] {
+        emit(format!("boot_pct({q})"), ffi::pc_mc_percentile(q));
+        emit(format!("boot_dd({q})"), ffi::pc_mc_drawdown_percentile(q));
+    }
+    let sample = ffi::pc_mc_sample();
+    for step in 0..=30 {
+        emit(format!("boot_path({step})"), unsafe { *sample.add(step) });
+    }
+
     // Heston: a complex characteristic function under a Gauss-Legendre rule,
     // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
     // moves the integrand at every node.

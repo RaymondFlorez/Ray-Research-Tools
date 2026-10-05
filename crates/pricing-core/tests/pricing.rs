@@ -1111,6 +1111,128 @@ mod t_copula_tests {
     }
 }
 
+mod resampled_portfolio_tests {
+    //! PRD 5.8's historical and stationary block bootstrap, as a portfolio
+    //! process: whole historical dates replayed for every asset at once.
+
+    use pricing_core::portfolio::{simulate_resampled_portfolio, AssetSpec, PortfolioConfig, PortfolioError};
+    use pricing_core::rng::Rng;
+
+    fn spec(weight: f64) -> AssetSpec {
+        AssetSpec { spot: 100.0, weight, initial_variance: 0.0 }
+    }
+
+    fn config(paths: usize, steps: usize) -> PortfolioConfig {
+        PortfolioConfig { paths, steps, antithetic: true, seed: 0xB007, sample_paths: 2 }
+    }
+
+    /// 500 dates of two assets' daily log returns, correlated at about 0.6.
+    fn correlated_history() -> Vec<f64> {
+        let mut rng = Rng::new(11);
+        let mut out = Vec::with_capacity(1000);
+        for _ in 0..500 {
+            let common = rng.next_normal();
+            let a = 0.6f64.sqrt() * common + 0.4f64.sqrt() * rng.next_normal();
+            let b = 0.6f64.sqrt() * common + 0.4f64.sqrt() * rng.next_normal();
+            out.push(0.0003 + 0.012 * a);
+            out.push(0.0002 + 0.015 * b);
+        }
+        out
+    }
+
+    #[test]
+    fn iid_resampling_has_a_closed_form_mean() {
+        // With mean block 1 each step is an independent uniform draw of a
+        // row, so E[S_T] = S_0 * (mean of exp(r))^steps exactly.
+        let history = correlated_history();
+        let asset_a: Vec<f64> = history.chunks(2).map(|row| row[0]).collect();
+        let growth = asset_a.iter().map(|r| r.exp()).sum::<f64>() / asset_a.len() as f64;
+        let r = simulate_resampled_portfolio(&history, &[spec(1.0), spec(0.0)], 1.0, &config(50_000, 20)).unwrap();
+        let exact = 100.0 * growth.powi(20);
+        assert!((r.mean - exact).abs() < 3.0 * r.standard_error, "{} against {exact} (se {})", r.mean, r.standard_error);
+    }
+
+    /// Terminal correlation from three sorted runs on one seed — the row
+    /// draws do not depend on the weights, so all three see the same paths.
+    fn terminal_correlation(history: &[f64], mean_block: f64) -> f64 {
+        let run = |wa: f64, wb: f64| {
+            simulate_resampled_portfolio(history, &[spec(wa), spec(wb)], mean_block, &config(40_000, 20)).unwrap().variance
+        };
+        let (va, vb, vp) = (run(1.0, 0.0), run(0.0, 1.0), run(0.5, 0.5));
+        2.0 * (vp - 0.25 * va - 0.25 * vb) / (va.sqrt() * vb.sqrt())
+    }
+
+    #[test]
+    fn keeps_each_date_together_across_assets() {
+        let history = correlated_history();
+        let joint = terminal_correlation(&history, 1.0);
+        // Independent reference: lined-up paths, computed directly.
+        let mut rng = Rng::new(99);
+        let rows = history.len() / 2;
+        let (mut xs, mut ys) = (Vec::new(), Vec::new());
+        for _ in 0..40_000 {
+            let (mut a, mut b) = (0.0, 0.0);
+            for _ in 0..20 {
+                let k = ((rng.next_uniform() * rows as f64) as usize).min(rows - 1);
+                a += history[2 * k];
+                b += history[2 * k + 1];
+            }
+            xs.push(100.0 * a.exp());
+            ys.push(100.0 * b.exp());
+        }
+        let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+        let (mx, my) = (mean(&xs), mean(&ys));
+        let cov = xs.iter().zip(&ys).map(|(x, y)| (x - mx) * (y - my)).sum::<f64>();
+        let vx = xs.iter().map(|x| (x - mx) * (x - mx)).sum::<f64>();
+        let vy = ys.iter().map(|y| (y - my) * (y - my)).sum::<f64>();
+        let reference = cov / (vx * vy).sqrt();
+        assert!((joint - reference).abs() < 0.01, "{joint} against {reference}");
+        assert!((joint - 0.638).abs() < 0.001);
+
+        // Shuffling one asset's dates destroys the cross-section, and the
+        // correlation with it: that is what joint resampling preserves.
+        let mut shuffled = history.clone();
+        let mut r = Rng::new(5);
+        for i in (1..rows).rev() {
+            let j = ((r.next_uniform() * (i + 1) as f64) as usize).min(i);
+            shuffled.swap(2 * i + 1, 2 * j + 1);
+        }
+        assert!(terminal_correlation(&shuffled, 1.0).abs() < 0.02);
+    }
+
+    #[test]
+    fn longer_blocks_keep_the_serial_dependence_iid_destroys() {
+        // An AR(1) with phi 0.5. A twenty-step sum has
+        // 1 + 2 * sum_{k<20} (1 - k/20) phi^k = 2.80 times the variance of
+        // twenty independent draws — closed form, no simulation.
+        let mut rng = Rng::new(3);
+        let mut x = 0.0;
+        let history: Vec<f64> = (0..2000)
+            .map(|_| {
+                x = 0.5 * x + 0.01 * rng.next_normal();
+                x
+            })
+            .collect();
+        let var = |block: f64| simulate_resampled_portfolio(&history, &[spec(1.0)], block, &config(40_000, 20)).unwrap().variance;
+        let phi: f64 = 0.5;
+        let exact = 1.0 + 2.0 * (1..20).map(|k| (1.0 - k as f64 / 20.0) * phi.powi(k)).sum::<f64>();
+        assert!((exact - 2.80).abs() < 0.005);
+        let iid = var(1.0);
+        // Measured: blocks of 40 recover 2.81, blocks of 10 recover 2.52 —
+        // a block shorter than the horizon breaks the dependence it spans.
+        assert!((var(40.0) / iid - exact).abs() < 0.1, "{}", var(40.0) / iid);
+        assert!((var(10.0) / iid - 2.52).abs() < 0.01, "{}", var(10.0) / iid);
+    }
+
+    #[test]
+    fn refuses_a_history_that_is_not_whole_rows() {
+        let err = simulate_resampled_portfolio(&[0.01, 0.02, 0.03], &[spec(1.0), spec(1.0)], 1.0, &config(10, 4)).unwrap_err();
+        assert_eq!(err, PortfolioError::History { values: 3, assets: 2 });
+        let err = simulate_resampled_portfolio(&[], &[spec(1.0)], 1.0, &config(10, 4)).unwrap_err();
+        assert_eq!(err, PortfolioError::History { values: 0, assets: 1 });
+    }
+}
+
 mod complex_tests {
     use pricing_core::complex::Complex;
 

@@ -17,7 +17,10 @@ use crate::implied;
 use crate::de::DeConfig;
 use crate::heston::{self, CalibrationConfig, HestonParams, Quote, Residual, Surface};
 use crate::mc::{Gbm, Process};
-use crate::portfolio::{simulate_portfolio_with, AssetSpec, Dependence, PortfolioConfig, PortfolioResult};
+use crate::portfolio::{
+    simulate_portfolio_with, simulate_resampled_portfolio, AssetSpec, Dependence, PortfolioConfig,
+    PortfolioResult,
+};
 
 #[inline]
 fn inputs(s: f64, k: f64, t: f64, r: f64, q: f64, v: f64, is_call: i32) -> Inputs {
@@ -1118,6 +1121,8 @@ thread_local! {
     static MC_RESULT: RefCell<Option<PortfolioResult>> = const { RefCell::new(None) };
     /// Degrees of freedom of the t copula; zero means Gaussian.
     static MC_NU: core::cell::Cell<f64> = const { core::cell::Cell::new(0.0) };
+    /// Historical log returns for a resampled run, row-major by date.
+    static MC_HISTORY: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
     static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
         const { RefCell::new([0.0; MC_SUMMARY_STRIDE]) };
 }
@@ -1129,6 +1134,68 @@ pub extern "C" fn pc_mc_reset() {
     MC_CORR.with(|c| c.borrow_mut().clear());
     MC_RESULT.with(|r| *r.borrow_mut() = None);
     MC_NU.with(|nu| nu.set(0.0));
+    MC_HISTORY.with(|h| h.borrow_mut().clear());
+}
+
+/// Appends one historical log return. Rows are dates, columns are the assets
+/// in the order they were added.
+#[no_mangle]
+pub extern "C" fn pc_mc_history_push(value: f64) {
+    MC_HISTORY.with(|h| h.borrow_mut().push(value));
+}
+
+/// Replays whole historical dates for every asset at once, by the stationary
+/// bootstrap with the given mean block (1 is iid). Each asset's spot and
+/// weight are used; its process parameters are not. Returns the path count,
+/// `-1` with no assets, `-4` with zero paths or steps, or `-5` when the
+/// history is empty or not a whole number of rows.
+#[no_mangle]
+pub extern "C" fn pc_mc_run_resampled(
+    paths: i32,
+    steps: i32,
+    mean_block: f64,
+    seed: f64,
+    sample_paths: i32,
+) -> i32 {
+    let specs: Vec<AssetSpec> = MC_ASSETS.with(|a| a.borrow().iter().map(|(spec, _)| *spec).collect());
+    if specs.is_empty() {
+        return -1;
+    }
+    if paths <= 0 || steps <= 0 {
+        return -4;
+    }
+    let config = PortfolioConfig {
+        paths: paths as usize,
+        steps: steps as usize,
+        antithetic: false,
+        seed: seed.abs() as u64,
+        sample_paths: sample_paths.max(0) as usize,
+    };
+    let outcome = MC_HISTORY.with(|h| simulate_resampled_portfolio(&h.borrow(), &specs, mean_block, &config));
+    match outcome {
+        Ok(result) => {
+            MC_SUMMARY.with(|summary| {
+                *summary.borrow_mut() = [
+                    result.mean,
+                    result.variance,
+                    result.skewness,
+                    result.excess_kurtosis,
+                    result.standard_error,
+                    result.paths as f64,
+                    result.steps as f64,
+                    result.retained_values as f64,
+                    result.cube_values as f64,
+                ];
+            });
+            let count = result.paths as i32;
+            MC_RESULT.with(|slot| *slot.borrow_mut() = Some(result));
+            count
+        }
+        Err(_) => {
+            MC_RESULT.with(|slot| *slot.borrow_mut() = None);
+            -5
+        }
+    }
 }
 
 /// Gives the next run t-copula dependence with `nu` degrees of freedom, on

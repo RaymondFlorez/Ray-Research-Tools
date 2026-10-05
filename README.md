@@ -88,7 +88,7 @@ name.
 npm install
 npm run build        # build first: typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,626 TypeScript tests across 16 packages
+npm test             # 1,630 TypeScript tests across 16 packages
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
@@ -98,7 +98,7 @@ node apps/canvas-demo/scripts/collab-shots.mjs  # collab: cuts the link, edits b
 node apps/canvas-demo/scripts/gl-shots.mjs      # webgl: verifies the shaders draw, measures 500..10,000 nodes
 
 # the Rust pricing core
-cd crates/pricing-core && cargo test --release   # 216 tests
+cd crates/pricing-core && cargo test --release   # 220 tests
 cargo run --release --example grid_bench --manifest-path crates/pricing-core/Cargo.toml
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 ```

@@ -60,6 +60,7 @@
 use crate::copula::Factor;
 use crate::mc::{sample_gamma, Process, ProcessState};
 use crate::normal::inv_cdf;
+use crate::resample::next_row;
 use crate::rng::Rng;
 use crate::special::student_t_cdf;
 
@@ -152,6 +153,8 @@ pub enum PortfolioError {
     NotDrivenByBrownian { asset: usize },
     /// A t copula needs positive, finite degrees of freedom.
     DegreesOfFreedom,
+    /// A resampling history that is empty or not a whole number of rows.
+    History { values: usize, assets: usize },
 }
 
 /// The `distribution` port, plus the sample.
@@ -420,6 +423,19 @@ pub fn simulate_portfolio_with(
         }
     }
 
+    Ok(finish(terminal, drawdown, sample, config.antithetic, steps, n))
+}
+
+/// Reduces per-path terminals and drawdowns to the `distribution` port.
+fn finish(
+    mut terminal: Vec<f64>,
+    mut drawdown: Vec<f64>,
+    sample: Vec<f64>,
+    paired: bool,
+    steps: usize,
+    n: usize,
+) -> PortfolioResult {
+    let paths = terminal.len();
     // Moments before sorting, because sorting is about to destroy the pairing
     // the standard error depends on.
     let count = terminal.len() as f64;
@@ -446,7 +462,7 @@ pub fn simulate_portfolio_with(
     // correlation the pairing exists to create — the same trap `mc::simulate`
     // fell into and records.
     let standard_error = {
-        let independent: Vec<f64> = if config.antithetic && terminal.len() >= 2 {
+        let independent: Vec<f64> = if paired && terminal.len() >= 2 {
             terminal.chunks(2).map(|pair| pair.iter().sum::<f64>() / pair.len() as f64).collect()
         } else {
             terminal.clone()
@@ -462,8 +478,8 @@ pub fn simulate_portfolio_with(
     drawdown.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
 
     let retained_values = terminal.len() + drawdown.len() + sample.len();
-    Ok(PortfolioResult {
-        paths: config.paths,
+    PortfolioResult {
+        paths,
         steps,
         assets: n,
         mean,
@@ -475,6 +491,90 @@ pub fn simulate_portfolio_with(
         drawdown,
         sample,
         retained_values,
-        cube_values: config.paths.saturating_mul(steps).saturating_mul(n),
-    })
+        cube_values: paths.saturating_mul(steps).saturating_mul(n),
+    }
+}
+
+/// A portfolio driven by its own history: every path replays whole historical
+/// dates, drawn by the stationary bootstrap.
+///
+/// > Processes: ... historical bootstrap, stationary block bootstrap
+/// > (Politis-Romano) ... — PRD 5.8
+///
+/// `history` is row-major, one row per date and one log return per asset.
+/// Each step draws a **row**, so every asset takes its return from the same
+/// date: the cross-section of a historical day — the day the whole semis
+/// complex fell together — stays together, and the dependence is whatever
+/// history had rather than a correlation matrix somebody estimated from it.
+/// `mean_block` is the expected block length in rows: 1 is Efron's iid
+/// bootstrap, longer keeps runs of dates intact and with them the serial
+/// dependence that iid resampling destroys.
+///
+/// Steps are at the history's own frequency; there is no `time` and no
+/// rescaling, for the reason `resample.rs` gives. There is no antithetic
+/// pairing either — a replayed date has no mirror — so `config.antithetic`
+/// is ignored and the standard error is over paths.
+///
+/// What this cannot do is what any bootstrap cannot: produce a day the window
+/// did not contain.
+pub fn simulate_resampled_portfolio(
+    history: &[f64],
+    assets: &[AssetSpec],
+    mean_block: f64,
+    config: &PortfolioConfig,
+) -> Result<PortfolioResult, PortfolioError> {
+    let n = assets.len();
+    if n == 0 || history.is_empty() || history.len() % n != 0 {
+        return Err(PortfolioError::History { values: history.len(), assets: n });
+    }
+    if config.paths == 0 || config.steps == 0 {
+        return Err(PortfolioError::Empty);
+    }
+    let rows = history.len() / n;
+    let restart = if mean_block <= 1.0 { 1.0 } else { 1.0 / mean_block };
+    let steps = config.steps;
+    let mut rng = Rng::new(config.seed);
+
+    let mut terminal = Vec::with_capacity(config.paths);
+    let mut drawdown = Vec::with_capacity(config.paths);
+    let sample_paths = config.sample_paths.min(config.paths);
+    let mut sample = vec![0.0; sample_paths * (steps + 1)];
+    let mut level = vec![0.0; n];
+    let initial: f64 = assets.iter().map(|a| a.weight * a.spot).sum();
+
+    for path in 0..config.paths {
+        for (i, asset) in assets.iter().enumerate() {
+            level[i] = asset.spot;
+        }
+        let mut peak = initial;
+        let mut worst = 0.0f64;
+        let keep = path < sample_paths;
+        if keep {
+            sample[path * (steps + 1)] = initial;
+        }
+        let mut cursor = 0usize;
+        for step in 0..steps {
+            cursor = next_row(rows, restart, step, cursor, &mut rng);
+            let row = &history[cursor * n..(cursor + 1) * n];
+            let mut value = 0.0;
+            for i in 0..n {
+                level[i] *= libm::exp(row[i]);
+                value += assets[i].weight * level[i];
+            }
+            if value > peak {
+                peak = value;
+            }
+            let fall = peak - value;
+            if fall > worst {
+                worst = fall;
+            }
+            if keep {
+                sample[path * (steps + 1) + step + 1] = value;
+            }
+        }
+        terminal.push(assets.iter().enumerate().map(|(i, a)| a.weight * level[i]).sum());
+        drawdown.push(worst);
+    }
+
+    Ok(finish(terminal, drawdown, sample, false, steps, n))
 }

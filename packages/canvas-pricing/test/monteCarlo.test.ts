@@ -3,6 +3,9 @@ import {
   CorrelationRejected,
   DEFAULT_COST_CEILING,
   DependenceRejected,
+  HistoryRejected,
+  runResampled,
+  type ResampleSpec,
   EmptySimulation,
   ResultSuperseded,
   SimulationTooLarge,
@@ -392,5 +395,66 @@ describe('t-copula dependence (PRD 5.8, and 6.2\'s semis cluster)', () => {
   it('refuses degrees of freedom that are not positive and finite', () => {
     expect(() => pair({ kind: 't', nu: 0 })).toThrow(DependenceRejected);
     expect(() => pair({ kind: 't', nu: Number.NaN })).toThrow(DependenceRejected);
+  });
+});
+
+describe('the joint historical bootstrap (PRD 5.8)', () => {
+  // 400 dates of two correlated daily returns, from a seeded generator.
+  const history: number[][] = (() => {
+    let seed = 17;
+    const uniform = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return (seed + 0.5) / 4294967296;
+    };
+    const normal = () => Math.sqrt(-2 * Math.log(uniform())) * Math.cos(2 * Math.PI * uniform());
+    return Array.from({ length: 400 }, () => {
+      const common = normal();
+      return [0.0003 + 0.012 * (0.8 * common + 0.6 * normal()), 0.0001 + 0.015 * (0.8 * common + 0.6 * normal())];
+    });
+  })();
+
+  const resample = (overrides: Partial<ResampleSpec> = {}) =>
+    runResampled(wasm, {
+      assets: [{ id: 'a', spot: 100, weight: 1 }, { id: 'b', spot: 100, weight: 0 }],
+      history,
+      meanBlock: 1,
+      paths: 40_000,
+      steps: 20,
+      seed: 0xb007,
+      ...overrides,
+    });
+
+  it('has the closed-form mean when the draws are iid', () => {
+    const r = resample();
+    const growth = history.reduce((acc, row) => acc + Math.exp(row[0]!), 0) / history.length;
+    expect(Math.abs(r.moments.mean - 100 * growth ** 20)).toBeLessThan(3 * r.moments.standardError);
+    expect(r.dependence).toEqual({ kind: 'replayed', meanBlock: 1, observations: 400 });
+  });
+
+  it('keeps each date together, and loses the dependence when one column is shuffled', () => {
+    const correlation = (h: number[][]) => {
+      const v = (wa: number, wb: number) =>
+        resample({ history: h, assets: [{ id: 'a', spot: 100, weight: wa }, { id: 'b', spot: 100, weight: wb }] }).moments.variance;
+      const [va, vb, vp] = [v(1, 0), v(0, 1), v(0.5, 0.5)];
+      return (2 * (vp - 0.25 * va - 0.25 * vb)) / Math.sqrt(va * vb);
+    };
+    const joint = correlation(history);
+    const shuffled = history.map((row, i) => [row[0]!, history[(i * 211) % history.length]![1]!]);
+    const broken = correlation(shuffled);
+    // Measured: 0.67 joint, against 0.02 once the dates are pulled apart.
+    expect(joint).toBeCloseTo(0.666, 2);
+    expect(Math.abs(broken)).toBeLessThan(0.05);
+  });
+
+  it('refuses a history it cannot line up', () => {
+    expect(() => resample({ history: [] })).toThrow(HistoryRejected);
+    expect(() => resample({ history: [[0.01, 0.02], [0.01]] })).toThrow(/date 1 has 1 returns for 2 assets/);
+    expect(() => resample({ history: [[0.01, Number.NaN]] })).toThrow(HistoryRejected);
+  });
+
+  it('shares the one result slot with the parametric runs, and says so', () => {
+    const replayed = resample({ paths: 1_000 });
+    runMonteCarlo(wasm, spec());
+    expect(() => replayed.terminal()).toThrow(ResultSuperseded);
   });
 });

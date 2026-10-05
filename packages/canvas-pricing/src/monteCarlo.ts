@@ -115,6 +115,15 @@ export type Correlation =
  */
 export type Dependence = { kind: 'gaussian' } | { kind: 't'; nu: number };
 
+/** A resampled run's dependence: whatever the history's dates carried. */
+export interface Replayed {
+  kind: 'replayed';
+  /** Expected block length in dates; 1 is the iid bootstrap. */
+  meanBlock: number;
+  /** Dates in the window resampled from. */
+  observations: number;
+}
+
 export interface McSpec {
   assets: readonly McAsset[];
   correlation: Correlation;
@@ -154,7 +163,7 @@ export interface McResult {
   steps: number;
   assets: number;
   /** What produced the joint law, carried with the numbers it shaped. */
-  dependence: Dependence;
+  dependence: Dependence | Replayed;
   moments: McMoments;
   /** Requested terminal-value percentiles, keyed by the level asked for. */
   percentiles: Record<string, number>;
@@ -232,7 +241,7 @@ export class EmptySimulation extends Error {
 }
 
 /** `paths * steps * assets`, the only thing the cost actually scales with. */
-export function estimateCost(spec: Pick<McSpec, 'assets' | 'paths' | 'steps'>): number {
+export function estimateCost(spec: { assets: readonly unknown[]; paths: number; steps: number }): number {
   return spec.assets.length * Math.max(0, spec.paths) * Math.max(0, spec.steps);
 }
 
@@ -349,6 +358,16 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     );
   }
 
+  return readResult(exports, run, spec, dependence);
+}
+
+/** Reads the module's single result slot into a result tied to `run`. */
+function readResult(
+  exports: PricingExports,
+  run: number,
+  spec: Pick<McSpec, 'percentiles' | 'cvarLevels'> & { assets: readonly unknown[] },
+  dependence: Dependence | Replayed,
+): McResult {
   const summary = readFloats(exports.memory, exports.pc_mc_summary(), 9);
   const paths = summary[5] as number;
   const steps = summary[6] as number;
@@ -408,4 +427,83 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
       return readFloats(exports.memory, exports.pc_mc_drawdown(), paths);
     },
   };
+}
+
+export interface HeldAsset {
+  id: string;
+  spot: number;
+  /** Units held. Negative is short. */
+  weight: number;
+}
+
+export interface ResampleSpec {
+  assets: readonly HeldAsset[];
+  /**
+   * Historical log returns, one row per date, one column per asset in the
+   * order of `assets`. Steps are taken at this frequency; nothing rescales it.
+   */
+  history: ReadonlyArray<readonly number[]>;
+  /** Expected block length in dates. 1 is the iid bootstrap. */
+  meanBlock: number;
+  paths: number;
+  steps: number;
+  seed?: number;
+  samplePaths?: number;
+  percentiles?: readonly number[];
+  cvarLevels?: readonly number[];
+  maxAssetSteps?: number;
+}
+
+export class HistoryRejected extends Error {
+  constructor(readonly detail: string) {
+    super(`the resampling history was refused: ${detail}`);
+    this.name = 'HistoryRejected';
+  }
+}
+
+/**
+ * PRD 5.8's "historical bootstrap, stationary block bootstrap
+ * (Politis-Romano)" as a portfolio process.
+ *
+ * Every step replays one historical date for every asset at once, so the
+ * cross-section of a day stays together and the dependence is history's own
+ * rather than a fitted matrix. `meanBlock` above 1 keeps runs of dates intact
+ * and with them the serial dependence an iid draw destroys: on an AR(1) the
+ * crate measures 40-date blocks recovering 2.81 times the iid variance of a
+ * twenty-step sum, against a closed form of 2.80. No antithetic pairing — a
+ * replayed date has no mirror — and no day the window did not contain.
+ */
+export function runResampled(exports: PricingExports, spec: ResampleSpec): McResult {
+  if (spec.assets.length === 0) throw new EmptySimulation('at least one asset');
+  if (spec.paths <= 0 || spec.steps <= 0) throw new EmptySimulation('paths and steps');
+  if (spec.history.length === 0) throw new HistoryRejected('it has no dates');
+  for (const [i, row] of spec.history.entries()) {
+    if (row.length !== spec.assets.length) {
+      throw new HistoryRejected(`date ${i} has ${row.length} returns for ${spec.assets.length} assets`);
+    }
+    if (!row.every(Number.isFinite)) throw new HistoryRejected(`date ${i} has a return that is not a finite number`);
+  }
+
+  const ceiling = spec.maxAssetSteps ?? DEFAULT_COST_CEILING;
+  const cost = estimateCost(spec);
+  if (cost > ceiling) throw new SimulationTooLarge(cost, ceiling);
+
+  currentRun += 1;
+  const run = currentRun;
+
+  exports.pc_mc_reset();
+  for (const asset of spec.assets) exports.pc_mc_add_asset(asset.spot, asset.weight, 0, 0, 0);
+  for (const row of spec.history) for (const value of row) exports.pc_mc_history_push(value);
+
+  const samplePaths = Math.min(spec.samplePaths ?? 32, spec.paths);
+  const code = exports.pc_mc_run_resampled(spec.paths, spec.steps, spec.meanBlock, spec.seed ?? 0x5eed, samplePaths);
+  if (code === -1) throw new EmptySimulation('at least one asset');
+  if (code === -4) throw new EmptySimulation('paths and steps');
+  if (code < 0) throw new HistoryRejected('it is not a whole number of dates');
+
+  return readResult(exports, run, spec, {
+    kind: 'replayed',
+    meanBlock: Math.max(1, spec.meanBlock),
+    observations: spec.history.length,
+  });
 }

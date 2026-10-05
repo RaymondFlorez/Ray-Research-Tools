@@ -75,19 +75,7 @@ impl<'a> Bootstrap<'a> {
     }
 
     fn draw_index(&self, rng: &mut Rng) -> usize {
-        let n = self.returns.len();
-        if n == 0 {
-            return 0;
-        }
-        // Scaling a uniform is enough here and keeps the draw to one call; the
-        // modulo bias of the alternative is worse than the rounding of this.
-        let u = rng.next_uniform();
-        let index = (u * n as f64) as usize;
-        if index >= n {
-            n - 1
-        } else {
-            index
-        }
+        draw_row(self.returns.len(), rng)
     }
 
     /// Fill `out` with one resampled path of period returns.
@@ -138,6 +126,36 @@ impl<'a> Bootstrap<'a> {
                 }
             }
         }
+    }
+}
+
+/// A uniformly drawn row index in `0..rows`.
+///
+/// Scaling a uniform is enough here and keeps the draw to one call; the
+/// modulo bias of the alternative is worse than the rounding of this.
+fn draw_row(rows: usize, rng: &mut Rng) -> usize {
+    if rows == 0 {
+        return 0;
+    }
+    let u = rng.next_uniform();
+    let index = (u * rows as f64) as usize;
+    if index >= rows {
+        rows - 1
+    } else {
+        index
+    }
+}
+
+/// The next row of a stationary-bootstrap path over `rows` observations.
+///
+/// The same draws, in the same order, as `Bootstrap::resample`, exposed so a
+/// multi-asset resampler can pick one row for every asset at once — which is
+/// what keeps the cross-section of a historical date together.
+pub fn next_row(rows: usize, restart: f64, step: usize, cursor: usize, rng: &mut Rng) -> usize {
+    if step == 0 || rng.next_uniform() < restart {
+        draw_row(rows, rng)
+    } else {
+        (cursor + 1) % rows
     }
 }
 
