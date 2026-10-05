@@ -128,6 +128,7 @@ fallback would make the ladder look more verified than it is.
 | guard → agents | The routing ladder and C.5's independence ladder fall to the same model. |
 | guard → data | A scrub past a source's history names it missing rather than serving the oldest thing on hand, and drops the cache key computed against live data. |
 | guard → sync | Two analysts keep working through a disconnect and merge on reconnect, params included. |
+| guard → TextPad | During a feed outage a transcluded price reads "118.5 (stale data)" with its 8-minute age, the same badge its tile carries. |
 | sim → equity | A backtest returns one fewer return than it has dates. Joined to market returns on `returnDates`, a long book's market line is 0.4065 against a true 0.4205; joined one bar early — same lengths, a clean fit, no warning — the market line is under 0.005 and 0.4256 lands in alpha. The attribution compounds to the engine's own equity curve to twelve places. On a book that flips from long to short halfway, the static fit reports +0.0319 alpha where the only non-market P&L was −0.0163 of costs, and its R-squared warning is the only tell. |
 
 ## A third disagreement, caught before it ran

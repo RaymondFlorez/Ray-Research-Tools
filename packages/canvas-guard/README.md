@@ -207,6 +207,19 @@ tokens with unlimited silent refresh are an unlimited session. After twelve
 hours from the interactive login the user logs in again. The figure is a
 choice made here; the specification does not give one.
 
+## A transcluded number is still a number on screen
+
+PRD 3.3's `TextPad` has "live transclusion of upstream values (`{{node.output.value}}`)".
+`renderTextPad` replaces each reference through `present()`, so a value with no source or
+no as-of does not render, and the caption travels with it. A TextPad is where a number is
+most likely to be read away from its tile, so it is where the rule matters most. A
+reference that cannot be honoured renders as a marker that says why — `[missing: …]`, a
+loose node `[not computed: …]`, `[error in …]`, `[no provenance: …]` — never as an empty
+string or a cached value. A stale or unverified node's value is shown *with* that word, and
+a degradation rung's badge rides along: during a feed outage, "NVDA last 118.5 (stale
+data)". Live means re-rendering: the function is pure in the document and the reader, and
+`transclusions` lists what a pad depends on.
+
 ## What is not here
 
 - **No egress proxy process.** The proxy is a class, not a service in front of

@@ -20,6 +20,7 @@ import {
   LADDER,
   active,
   present,
+  renderTextPad,
   rungFor,
   stillAnswers,
   type SystemHealth,
@@ -163,6 +164,28 @@ describe('rung 3 · the real-time feed drops', () => {
     expect(shown.badge).toBe('stale data');
     expect(shown.caption).toContain('8m old');
     expect(shown.caption).toContain('NVDA last trade');
+  });
+
+  // A TextPad is where a number is most likely to be read without its tile.
+  it('carries the same badge into a TextPad that transcludes the price', () => {
+    const health: SystemHealth = { ...ALL_UP, realtime_feed: 'down' };
+    const rung = rungFor(health, 'realtime_feed')!;
+    const asofMs = 1_772_000_000_000;
+    const doc = createDocument('pad');
+    const tile = createNode({ id: 'nvda', kind: 'DataTile', binding: 'wired', position: { x: 0, y: 0 } });
+    // The tile computed; it is the feed behind it that dropped.
+    tile.state.status = 'ready';
+    doc.nodes.set('nvda', tile);
+    const pad = renderTextPad(
+      'NVDA last {{nvda.last}}.',
+      doc,
+      () => ({ value: 118.5, origin: { source: 'NVDA last trade', asof: '2026-03-11T14:30:00Z', asofMs } }),
+      asofMs + 8 * 60_000,
+      String,
+      () => rung,
+    );
+    expect(pad.text).toBe('NVDA last 118.5 (stale data).');
+    expect(pad.parts[0]!.presented!.caption).toContain('8m old');
   });
 });
 
