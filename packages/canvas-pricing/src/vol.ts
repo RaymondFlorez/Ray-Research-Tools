@@ -85,6 +85,19 @@ export function realizedVol(
   return exports.pc_realized_vol(periodsPerYear);
 }
 
+/**
+ * Sampling error of `realizedVol` over the same closes, from the window's own
+ * fourth moment rather than an assumption of normal returns.
+ */
+export function realizedVolStandardError(
+  exports: PricingExports,
+  closes: readonly number[],
+  periodsPerYear = TRADING_DAYS,
+): number {
+  load(exports, closes);
+  return exports.pc_realized_vol_se(periodsPerYear);
+}
+
 /** The same window as a variance, because squaring a rounded vol is a different number. */
 export function realizedVariance(
   exports: PricingExports,

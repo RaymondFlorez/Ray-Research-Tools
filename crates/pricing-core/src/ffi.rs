@@ -321,6 +321,12 @@ pub extern "C" fn pc_realized_variance(periods_per_year: f64) -> f64 {
     CLOSES.with(|c| crate::vol::realized_variance(&c.borrow(), periods_per_year))
 }
 
+/// Sampling error of the realized volatility, from the window's fourth moment.
+#[no_mangle]
+pub extern "C" fn pc_realized_vol_se(periods_per_year: f64) -> f64 {
+    CLOSES.with(|c| crate::vol::realized_vol_standard_error(&c.borrow(), periods_per_year))
+}
+
 /// The volatility between two expiries. NaN marks a calendar arbitrage.
 #[no_mangle]
 pub extern "C" fn pc_forward_vol(t1: f64, v1: f64, t2: f64, v2: f64) -> f64 {

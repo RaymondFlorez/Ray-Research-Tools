@@ -180,6 +180,7 @@ function wasmVol() {
     if (i % 20 === 19) {
       rows.set(`realized(${i})`, w.pc_realized_vol(252));
       rows.set(`realized_var(${i})`, w.pc_realized_variance(252));
+      rows.set(`realized_se(${i})`, w.pc_realized_vol_se(252));
     }
   }
   return rows;

@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 194 tests
+npm test --workspace @picasso/canvas-pricing    # 197 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -62,6 +62,17 @@ each driver's endpoint for the reason the crate's README measures: a per-step t 
 Gaussian again by the horizon. Through WASM, two names at rho 0.7 lose 95.57 → 92.98 at
 the worst-1% mean and 83.3 → 79.0 at the worst 0.2%, with the median moved by less than
 0.5. The result carries `dependence`, so the numbers travel with what shaped them.
+
+`gbmFromHistory` fits an asset to a chosen window of closes — PRD 5.8's "fit to history
+over a chosen window" — taking only the volatility from it, since the run is priced
+risk-neutral and a historical mean has a standard error larger than itself. The vol
+carries its sampling error, and the first version of that error was wrong in a way a
+coverage test showed. The textbook `vol/√(2n)` assumes normal returns; over 400
+sixty-return windows its 95% interval covered 96.5% of normal ones, 82.5% of Student-t(6)
+and 63% of Student-t(4). The crate now computes it from the window's own fourth moment:
+95.3%, 88.5% and 78.8%. Better, not solved — sixty returns rarely contain the tail that
+sets the true fourth moment — and the figures are asserted so nobody mistakes it for
+solved.
 
 `runResampled` is the historical and stationary block bootstrap as a portfolio process.
 Each step replays one historical *date* for every asset, so the cross-section of a day
@@ -410,7 +421,9 @@ against nothing at all.
   in neither — a pure-jump process ignores the Brownian driver that carries
   the dependence, and the engine refuses it rather than return an
   uncorrelated run that looks correlated. Nothing fits `nu`, the correlation
-  or the mean block length; all three are the caller's.
+  or the mean block length; all three are the caller's. History fits a GBM's
+  volatility only: Merton's jumps and Heston's variance process are not fitted
+  to history (Heston is fitted to the surface).
 - **Margin and the grid are one underlier at a time.** Aggregate Greeks span
   names (`aggregate.ts`); the scenario grid, the flags and both margin numbers
   do not, and there is no cross-underlier scenario with correlated spot moves.

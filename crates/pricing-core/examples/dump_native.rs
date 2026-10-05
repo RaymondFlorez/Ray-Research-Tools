@@ -82,6 +82,7 @@ fn main() {
         if i % 20 == 19 {
             emit(format!("realized({i})"), ffi::pc_realized_vol(252.0));
             emit(format!("realized_var({i})"), ffi::pc_realized_variance(252.0));
+            emit(format!("realized_se({i})"), ffi::pc_realized_vol_se(252.0));
         }
     }
 

@@ -46,6 +46,7 @@
  */
 
 import { readFloats, type PricingExports } from './module.js';
+import { realizedVol, realizedVolStandardError, TRADING_DAYS } from './vol.js';
 
 interface McAssetBase {
   /** For the error message and the output labels. */
@@ -506,4 +507,66 @@ export function runResampled(exports: PricingExports, spec: ResampleSpec): McRes
     meanBlock: Math.max(1, spec.meanBlock),
     observations: spec.history.length,
   });
+}
+
+export interface HistoryFitInput {
+  id: string;
+  /** Closes, oldest first. */
+  closes: readonly number[];
+  weight: number;
+  /** The simulation is risk-neutral: the drift is the rate, not the history's. */
+  rate: number;
+  dividend: number;
+  /** Returns to use, counted back from the last close. All of them when omitted. */
+  window?: number;
+  /** The last close when omitted. */
+  spot?: number;
+  periodsPerYear?: number;
+}
+
+export interface HistoryFit {
+  asset: GbmAsset;
+  /** Returns the volatility rests on. */
+  observations: number;
+  /**
+   * Sampling error of the fitted vol, from the window's own fourth moment.
+   * The textbook `vol / sqrt(2n)` assumes normal returns; measured over
+   * sixty-return Student-t(4) windows its 95% interval covered 63%, and this
+   * one 79% — better, and still short of nominal.
+   */
+  volStandardError: number;
+  warnings: string[];
+}
+
+/** Fewer returns than this and the fit is reported with a warning. */
+export const MIN_FIT_OBSERVATIONS = 20;
+
+/**
+ * A GBM asset fitted to history over a chosen window (PRD 5.8: "parameters
+ * either user-set, fit to history over a chosen window, or fit to the current
+ * option surface").
+ *
+ * Only the volatility comes from the history. The drift does not: the run is
+ * priced risk-neutral, and a historical mean over any window an analyst would
+ * choose has a standard error larger than itself. The vol is the crate's
+ * uncentred close-to-close estimator, the same number `realizedVol` shows,
+ * and it travels with its sampling error and the count of returns behind it.
+ */
+export function gbmFromHistory(exports: PricingExports, input: HistoryFitInput): HistoryFit {
+  const closes = input.window === undefined ? input.closes : input.closes.slice(-(input.window + 1));
+  const observations = Math.max(0, closes.length - 1);
+  const vol = realizedVol(exports, closes, input.periodsPerYear ?? TRADING_DAYS);
+  const warnings: string[] = [];
+  if (!Number.isFinite(vol)) {
+    warnings.push('the window has fewer than two positive closes, so there is no volatility to fit');
+  } else if (observations < MIN_FIT_OBSERVATIONS) {
+    warnings.push(`${observations} returns; the fitted volatility is a number but not yet an estimate`);
+  }
+  const spot = input.spot ?? closes[closes.length - 1] ?? Number.NaN;
+  return {
+    asset: { id: input.id, spot, weight: input.weight, vol, rate: input.rate, dividend: input.dividend },
+    observations,
+    volStandardError: realizedVolStandardError(exports, closes, input.periodsPerYear ?? TRADING_DAYS),
+    warnings,
+  };
 }

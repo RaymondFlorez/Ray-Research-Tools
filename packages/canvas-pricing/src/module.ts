@@ -58,6 +58,7 @@ export interface PricingExports {
   pc_vol_len(): number;
   pc_realized_vol(periodsPerYear: number): number;
   pc_realized_variance(periodsPerYear: number): number;
+  pc_realized_vol_se(periodsPerYear: number): number;
   pc_forward_vol(t1: number, v1: number, t2: number, v2: number): number;
   pc_event_move(tBefore: number, vBefore: number, tAfter: number, vAfter: number): number;
 
@@ -184,7 +185,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_curve_shock_reset', 'pc_curve_shock_point', 'pc_curve_shock_custom',
   'pc_svi_reset', 'pc_svi_quote', 'pc_svi_fit', 'pc_svi_result', 'pc_svi_eval', 'pc_log_moneyness',
   'pc_vol_reset', 'pc_vol_observe', 'pc_vol_len', 'pc_realized_vol', 'pc_realized_variance',
-  'pc_forward_vol', 'pc_event_move',
+  'pc_forward_vol', 'pc_event_move', 'pc_realized_vol_se',
   'pc_book_reset', 'pc_book_add_leg', 'pc_book_len', 'pc_grid_reprice',
   'pc_grid_data', 'pc_grid_stride', 'pc_grid_axis_ptr', 'pc_grid_axis_len',
   'pc_guard_value',

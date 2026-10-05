@@ -46,6 +46,44 @@ pub fn realized_vol(closes: &[f64], periods_per_year: f64) -> f64 {
     sqrt(sum_squares / n * periods_per_year)
 }
 
+/// Sampling error of `realized_vol`, from the window's own fourth moment.
+///
+/// The estimator is the square root of a mean of squared returns, so its
+/// variance follows from that mean's: `Var(mean r^2) = (E r^4 - (E r^2)^2) / n`,
+/// carried through the square root by the delta method and annualized. For
+/// normal returns `E r^4 = 3 (E r^2)^2` and this is the textbook `vol /
+/// sqrt(2n)`. Returns are not normal. Over sixty-return windows of Student-t
+/// returns at four degrees of freedom, the textbook 95% interval covered 63%
+/// of windows and this one 79%; at six, 83% and 89% (`canvas-pricing`'s Monte
+/// Carlo suite holds the figures). Better, not solved: a short window rarely
+/// contains the tail that sets the true fourth moment.
+pub fn realized_vol_standard_error(closes: &[f64], periods_per_year: f64) -> f64 {
+    if closes.len() < 2 {
+        return f64::NAN;
+    }
+    let mut m2 = 0.0;
+    let mut m4 = 0.0;
+    for window in closes.windows(2) {
+        let (previous, current) = (window[0], window[1]);
+        if !(previous > 0.0) || !(current > 0.0) {
+            return f64::NAN;
+        }
+        let r = log(current / previous);
+        let r2 = r * r;
+        m2 += r2;
+        m4 += r2 * r2;
+    }
+    let n = (closes.len() - 1) as f64;
+    m2 /= n;
+    m4 /= n;
+    let vol = sqrt(m2 * periods_per_year);
+    if !(vol > 0.0) {
+        return f64::NAN;
+    }
+    let spread = m4 - m2 * m2;
+    sqrt(if spread > 0.0 { spread } else { 0.0 } / n) * periods_per_year / (2.0 * vol)
+}
+
 /// Realized variance over the window, annualized, for a variance comparison.
 ///
 /// The square of `realized_vol` by construction, and separate because a
@@ -119,6 +157,35 @@ mod tests {
             closes.push(if i % 2 == 0 { previous * (1.0 + step) } else { previous / (1.0 + step) });
         }
         closes
+    }
+
+    #[test]
+    fn standard_error_matches_its_definition_and_the_normal_limit() {
+        // Returns of constant size have no variability in r^2, so the vol is
+        // known exactly from the window and its sampling error is zero — to
+        // the rounding the multiply-then-divide closes leave in each return.
+        let closes = alternating(40, 0.01);
+        // Measured 2.8e-10 on a vol of 0.158: cancellation in E r^4 - (E r^2)^2.
+        let se = realized_vol_standard_error(&closes, TRADING_DAYS);
+        assert!(se < 1e-8 * realized_vol(&closes, TRADING_DAYS));
+
+        // A window built so that E r^4 = 3 (E r^2)^2 — the normal fourth
+        // moment — must give the textbook vol / sqrt(2n). Nine days in ten
+        // move by a and one by b, with x = b^2 / a^2 solving
+        // 0.9 + 0.1 x^2 = 3 (0.9 + 0.1 x)^2, i.e. 0.07 x^2 - 0.54 x - 1.53 = 0.
+        let a = 0.01_f64;
+        let x = (0.54 + sqrt(0.54 * 0.54 + 4.0 * 0.07 * 1.53)) / (2.0 * 0.07);
+        let b = a * sqrt(x);
+        let mut closes = vec![100.0];
+        for i in 0..300 {
+            let size = if i % 10 == 9 { b } else { a };
+            let sign = if i % 2 == 0 { 1.0 } else { -1.0 };
+            let last = *closes.last().unwrap();
+            closes.push(last * libm::exp(sign * size));
+        }
+        let vol = realized_vol(&closes, TRADING_DAYS);
+        let se = realized_vol_standard_error(&closes, TRADING_DAYS);
+        assert!((se - vol / sqrt(600.0)).abs() < 1e-9 * vol, "{se} against {}", vol / sqrt(600.0));
     }
 
     #[test]

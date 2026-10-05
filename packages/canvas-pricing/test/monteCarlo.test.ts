@@ -4,6 +4,7 @@ import {
   DEFAULT_COST_CEILING,
   DependenceRejected,
   HistoryRejected,
+  gbmFromHistory,
   runResampled,
   type ResampleSpec,
   EmptySimulation,
@@ -456,5 +457,75 @@ describe('the joint historical bootstrap (PRD 5.8)', () => {
     const replayed = resample({ paths: 1_000 });
     runMonteCarlo(wasm, spec());
     expect(() => replayed.terminal()).toThrow(ResultSuperseded);
+  });
+});
+
+describe('a GBM asset fitted to history (PRD 5.8 calibration)', () => {
+  // Seeded closes: zero-drift daily log returns at an annual vol of 30%.
+  function closes(n: number, seed: number, draw: (u: () => number) => number): number[] {
+    let state = seed >>> 0;
+    const uniform = () => {
+      state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+      return (state + 0.5) / 4294967296;
+    };
+    const out = [100];
+    for (let i = 0; i < n; i++) out.push(out[i]! * Math.exp(draw(uniform)));
+    return out;
+  }
+  const DAILY = 0.3 / Math.sqrt(252);
+  const normal = (u: () => number) => DAILY * Math.sqrt(-2 * Math.log(u())) * Math.cos(2 * Math.PI * u());
+  // Student-t with `nu` degrees of freedom, scaled to the same daily variance.
+  const student = (nu: number) => (u: () => number) => {
+    const z = Math.sqrt(-2 * Math.log(u())) * Math.cos(2 * Math.PI * u());
+    let chi = 0;
+    for (let k = 0; k < nu; k++) {
+      const g = Math.sqrt(-2 * Math.log(u())) * Math.cos(2 * Math.PI * u());
+      chi += g * g;
+    }
+    return (DAILY * (z / Math.sqrt(chi / nu))) / Math.sqrt(nu / (nu - 2));
+  };
+
+  it('fits the window it was given, priced risk-neutral', () => {
+    const series = closes(500, 1, normal);
+    const fit = gbmFromHistory(wasm, { id: 'X', closes: series, weight: 1, rate: 0.04, dividend: 0, window: 60 });
+    expect(fit.observations).toBe(60);
+    expect(fit.asset.spot).toBe(series[series.length - 1]);
+    expect(fit.asset.rate).toBe(0.04);
+    expect(fit.warnings).toEqual([]);
+    expect(Math.abs(fit.asset.vol - 0.3)).toBeLessThan(3 * fit.volStandardError);
+    // It drives a run like any hand-set asset.
+    const run = runMonteCarlo(wasm, spec({ assets: [fit.asset] }));
+    expect(run.paths).toBe(8_000);
+  });
+
+  it('carries a standard error from the window, not from an assumption of normal returns', () => {
+    // How often the implied 95% interval contains the true 30%, over 400
+    // sixty-day windows; and the same for the textbook vol / sqrt(2n).
+    const coverage = (draw: (u: () => number) => number) => {
+      let fourth = 0;
+      let textbook = 0;
+      for (let seed = 1; seed <= 400; seed++) {
+        const fit = gbmFromHistory(wasm, { id: 'X', closes: closes(60, seed * 7919, draw), weight: 1, rate: 0, dividend: 0 });
+        const miss = Math.abs(fit.asset.vol - 0.3);
+        if (miss < 1.96 * fit.volStandardError) fourth++;
+        if (miss < (1.96 * fit.asset.vol) / Math.sqrt(2 * fit.observations)) textbook++;
+      }
+      return { fourth: fourth / 400, textbook: textbook / 400 };
+    };
+    // Normal returns: both are right.
+    expect(coverage(normal)).toEqual({ fourth: 0.9525, textbook: 0.965 });
+    // Fat tails: the textbook interval collapses; the fourth-moment one holds
+    // up better and still falls short, because sixty returns rarely contain
+    // the tail that sets the true fourth moment. Better, not solved.
+    expect(coverage(student(6))).toEqual({ fourth: 0.885, textbook: 0.825 });
+    expect(coverage(student(4))).toEqual({ fourth: 0.7875, textbook: 0.63 });
+  });
+
+  it('warns on a short window and refuses to invent a vol from nothing', () => {
+    const short = gbmFromHistory(wasm, { id: 'X', closes: closes(10, 3, normal), weight: 1, rate: 0, dividend: 0 });
+    expect(short.warnings[0]).toMatch(/10 returns/);
+    const none = gbmFromHistory(wasm, { id: 'X', closes: [100], weight: 1, rate: 0, dividend: 0 });
+    expect(Number.isNaN(none.asset.vol)).toBe(true);
+    expect(none.warnings[0]).toMatch(/fewer than two positive closes/);
   });
 });
