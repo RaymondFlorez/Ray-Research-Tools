@@ -435,6 +435,27 @@ function wasmDividends() {
 
 const dividendRows = wasmDividends();
 
+/** American Greeks by adjoint, through WASM. */
+function wasmAmericanGreeks() {
+  const rows = new Map();
+  const contracts = [
+    [100, 105, 0.5, 0.05, 0.02, 0.3, 0],
+    [100, 80, 2, 0.03, 0.04, 0.15, 1],
+    [100, 120, 0.1, 0.08, 0.02, 0.35, 0],
+    [60, 100, 0.5, 0.08, 0, 0.2, 0],
+  ];
+  for (const [index, args] of contracts.entries()) {
+    // The call first: the tape can grow memory, which detaches any buffer
+    // read before it.
+    const pointer = w.pc_american_greeks(...args);
+    const g = new Float64Array(w.memory.buffer, pointer, 10);
+    for (let which = 0; which < 10; which += 1) rows.set(`amgreek(${index}/${which})`, g[which]);
+  }
+  return rows;
+}
+
+const americanGreekRows = wasmAmericanGreeks();
+
 /** Cash dividends in the portfolio simulator, through WASM. */
 function wasmDividendPortfolio() {
   const rows = new Map();
@@ -523,6 +544,7 @@ function recompute(label) {
   if (resampled.has(label)) return resampled.get(label);
   if (dividendRows.has(label)) return dividendRows.get(label);
   if (dividendPortfolio.has(label)) return dividendPortfolio.get(label);
+  if (americanGreekRows.has(label)) return americanGreekRows.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -589,7 +611,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends (scalar, on the grid and in a portfolio run), ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends (scalar, on the grid and in a portfolio run), American Greeks by adjoint, ` +
     `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

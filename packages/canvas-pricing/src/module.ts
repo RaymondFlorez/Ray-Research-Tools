@@ -29,6 +29,10 @@ export interface PricingExports {
   pc_american_detail(
     s: number, k: number, t: number, r: number, q: number, v: number, isCall: number,
   ): number;
+  /** Pointer to ten floats in `pc_greek`'s order, valid until the next call. */
+  pc_american_greeks(
+    s: number, k: number, t: number, r: number, q: number, v: number, isCall: number,
+  ): number;
   pc_implied_vol(
     s: number, k: number, t: number, r: number, q: number, price: number, isCall: number,
   ): number;
@@ -192,6 +196,7 @@ export interface PricingExports {
 const REQUIRED: readonly (keyof PricingExports)[] = [
   'memory',
   'pc_price', 'pc_greek', 'pc_american_fast', 'pc_american_exact', 'pc_american_detail',
+  'pc_american_greeks',
   'pc_implied_vol', 'pc_implied_vol_reason', 'pc_norm_cdf',
   'pc_pin_sigmas', 'pc_early_exercise_carry', 'pc_discount',
   'pc_curve_shock_reset', 'pc_curve_shock_point', 'pc_curve_shock_custom',

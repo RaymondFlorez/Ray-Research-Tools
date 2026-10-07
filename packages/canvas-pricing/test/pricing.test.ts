@@ -127,3 +127,24 @@ describe('discrete dividends (PRD 5.4)', () => {
     expect(pricer.priceWithDividends(name, [{ time: 0.1, amount: 150 }], { style: 'american' })).toBeNaN();
   });
 });
+
+describe('American Greeks by adjoint (PRD 5.4, 9.2)', () => {
+  const put = { spot: 100, strike: 105, time: 0.5, rate: 0.05, dividend: 0.02, vol: 0.3, kind: 'put' as const };
+
+  it('are the derivatives of the detail price, through the boundary', () => {
+    const g = pricer.americanGreeks(put);
+    expect(g.price).toBe(pricer.americanDetail(put));
+    const h = 1e-5;
+    const at = (o: Partial<typeof put>) => pricer.americanDetail({ ...put, ...o });
+    expect(g.delta).toBeCloseTo((at({ spot: 100 + h }) - at({ spot: 100 - h })) / (2 * h), 6);
+    expect(g.vega).toBeCloseTo((at({ vol: 0.3 + h }) - at({ vol: 0.3 - h })) / (2 * h), 4);
+    expect(g.theta).toBeCloseTo(-(at({ time: 0.5 + h }) - at({ time: 0.5 - h })) / (2 * h), 4);
+    expect(g.gamma).toBeGreaterThan(0);
+    expect(Object.values(g).every(Number.isFinite)).toBe(true);
+  });
+
+  it('are the closed forms where there is nothing to exercise', () => {
+    const call = { ...put, kind: 'call' as const, dividend: 0 };
+    expect(pricer.americanGreeks(call)).toEqual(pricer.greeks(call));
+  });
+});

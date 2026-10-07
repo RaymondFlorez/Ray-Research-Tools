@@ -93,7 +93,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | 5.3 cross-asset transmission with R² per mapping | Built | `canvas-pricing` transmission |
 | 5.4 implied vol, SVI with arbitrage flags, BSM, Andersen-Lake, all ten Greeks | Built | `pricing-core` |
 | 5.4 discrete dividends | Built | Scalar pricer and the scenario grid, escrowed model, checked against Roll-Geske-Whaley and per-spot trees; StrategyNode carries the schedule; the portfolio Monte Carlo escrows a schedule per asset. Single-asset `european_mc` and the bootstrap take none |
-| 5.4 Greeks by adjoint differentiation | Partial | Finite differences on the exact path, stated as a deviation |
+| 5.4 Greeks by adjoint differentiation | Built, deviation stated | `adjoint.rs`: a reverse-mode tape through Andersen-Lake, all ten American Greeks; the PRD's lattice was built, measured off by several percent, and is not used (crate README) |
 | 5.4 strategy surface, pin and assignment risk, margin, aggregate Greeks, vol analytics | Built | `canvas-pricing` |
 | 5.5 chain metrics, funding/basis, unlocks, protocol revenue | Built | `canvas-markets` chain |
 | 5.5 liquidation clusters, MEV, node RPC/indexer | Infra | Data-dependent; nothing to fit without feeds |

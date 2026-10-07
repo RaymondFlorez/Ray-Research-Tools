@@ -73,6 +73,27 @@ pub extern "C" fn pc_greek(
     }
 }
 
+thread_local! {
+    static AMERICAN_GREEKS: RefCell<[f64; 10]> = const { RefCell::new([0.0; 10]) };
+}
+
+/// All ten Greeks of an American option, by adjoint differentiation of the
+/// pinned-position price, in `pc_greek`'s order: price, delta, gamma, vega,
+/// theta, rho, vanna, volga, charm, speed. Returns a pointer to the ten,
+/// valid until the next call.
+///
+/// One call rather than ten selected by index, because each costs two sweeps
+/// of a tape of about 119,000 operations and the ten come out of the same two.
+#[allow(clippy::too_many_arguments)]
+#[no_mangle]
+pub extern "C" fn pc_american_greeks(s: f64, k: f64, t: f64, r: f64, q: f64, v: f64, is_call: i32) -> *const f64 {
+    let g = american::exact_greeks(&inputs(s, k, t, r, q, v, is_call));
+    AMERICAN_GREEKS.with(|out| {
+        *out.borrow_mut() = [g.price, g.delta, g.gamma, g.vega, g.theta, g.rho, g.vanna, g.volga, g.charm, g.speed];
+        out.borrow().as_ptr()
+    })
+}
+
 /// Fast American price, as used on grid and portfolio paths.
 #[no_mangle]
 pub extern "C" fn pc_american_fast(

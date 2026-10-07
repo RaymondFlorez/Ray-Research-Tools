@@ -303,37 +303,9 @@ pub fn detail_price(inputs: &Inputs) -> f64 {
     crate::andersen_lake::accurate_price(inputs)
 }
 
-/// Greeks by central difference on the exact lattice, for a pinned position.
-///
-/// The PRD calls for adjoint differentiation here. Finite differences on a
-/// 512-step lattice are far slower and are what this is: correct, and honest
-/// about being the slow path. It runs on single positions, not on grids.
+/// All ten Greeks for a pinned position, by adjoint differentiation of the
+/// price `detail_price` quotes. `adjoint` has why that is Andersen-Lake and not
+/// the lattice the PRD names.
 pub fn exact_greeks(inputs: &Inputs) -> bsm::Greeks {
-    let ds = inputs.spot * 1e-4;
-    let dvol = 1e-4;
-    let dt = (inputs.time * 1e-3).min(1.0 / 365.0);
-
-    let bump = |f: &dyn Fn(&mut Inputs)| {
-        let mut copy = *inputs;
-        f(&mut copy);
-        detail_price(&copy)
-    };
-
-    let base = detail_price(inputs);
-    let up = bump(&|i: &mut Inputs| i.spot += ds);
-    let down = bump(&|i: &mut Inputs| i.spot -= ds);
-    let vol_up = bump(&|i: &mut Inputs| i.vol += dvol);
-    let vol_down = bump(&|i: &mut Inputs| i.vol -= dvol);
-    let time_down = bump(&|i: &mut Inputs| i.time = (i.time - dt).max(0.0));
-
-    bsm::Greeks {
-        price: base,
-        delta: (up - down) / (2.0 * ds),
-        gamma: (up - 2.0 * base + down) / (ds * ds),
-        vega: (vol_up - vol_down) / (2.0 * dvol),
-        theta: if dt > 0.0 { (time_down - base) / dt } else { 0.0 },
-        // The remaining Greeks are not differenced here: each costs another
-        // pair of lattices, and nothing on the detail path asks for them yet.
-        ..Default::default()
-    }
+    crate::adjoint::american_greeks(inputs)
 }

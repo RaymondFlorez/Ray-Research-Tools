@@ -195,6 +195,21 @@ impl Solver {
         }
     }
 
+    /// The quadrature rule inside the fixed-point equation.
+    pub(crate) fn equation_rule(&self) -> &Legendre {
+        &self.equation
+    }
+
+    /// The quadrature rule for the pricing integral.
+    pub(crate) fn pricing_rule(&self) -> &Legendre {
+        &self.pricing
+    }
+
+    /// The Chebyshev nodes the boundary is held at.
+    pub(crate) fn collocation(&self) -> &Chebyshev {
+        &self.cheb
+    }
+
     /// Solves for the boundary of an American put.
     ///
     /// Requires `rate > 0`: at or below zero there is no exercise region for a

@@ -116,6 +116,12 @@ impl Chebyshev {
     }
 
     /// Barycentric evaluation of the interpolant through `values` at `z`.
+    /// The barycentric weight at node `i`, for an evaluation written over
+    /// another number type (`adjoint`'s differentiable twin of `eval`).
+    pub fn weight(&self, i: usize) -> f64 {
+        self.weights[i]
+    }
+
     pub fn eval(&self, values: &[f64; MAX_NODES], z: f64) -> f64 {
         let mut numerator = 0.0;
         let mut denominator = 0.0;

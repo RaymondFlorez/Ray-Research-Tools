@@ -45,7 +45,10 @@ obvious guess; tail dependence does not decay slowly in the degrees of freedom.
 Later ones: a t copula applied per step is Gaussian at the horizon; Roll's
 spread estimator reports tens of basis points on a series with no spread; the
 textbook standard errors for impact calibration and for realized vol both
-under-covered once noise was heteroskedastic or fat-tailed.
+under-covered once noise was heteroskedastic or fat-tailed. And the PRD's
+"lattice with adjoint differentiation" gives Greeks off by several percent on
+American options, because a lattice price is a staircase in vol and rate; the
+adjoint now runs through Andersen-Lake instead.
 Before concluding the code is wrong, check whether the test encodes the same
 assumption the code does — twice it did.
 
@@ -90,4 +93,4 @@ Only `libm`. Everything compiles to both a native target and
 `wasm32-unknown-unknown` and must produce identical bits: use `libm` rather
 than `std` float methods, integer-only RNG, and bisection rather than Newton
 where control flow would otherwise depend on a value rather than a sign.
-`scripts/verify-wasm-parity.mjs` enforces this across 5,757 values.
+`scripts/verify-wasm-parity.mjs` enforces this across 5,797 values.

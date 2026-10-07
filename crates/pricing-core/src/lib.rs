@@ -8,6 +8,7 @@
 //! identically in a native service and in WASM in a browser, and the arithmetic
 //! this crate does is arithmetic the standard library already has.
 
+pub mod adjoint;
 pub mod american;
 pub mod de;
 pub mod dividends;

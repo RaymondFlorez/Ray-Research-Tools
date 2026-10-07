@@ -462,6 +462,22 @@ fn main() {
         }
     }
 
+    // American Greeks by adjoint: a tape of about 119,000 hyper-dual
+    // operations swept backwards, twice, where every partial is a product of
+    // transcendentals a differing bit would move.
+    let contracts = [
+        (100.0, 105.0, 0.5, 0.05, 0.02, 0.3, 0),
+        (100.0, 80.0, 2.0, 0.03, 0.04, 0.15, 1),
+        (100.0, 120.0, 0.1, 0.08, 0.02, 0.35, 0),
+        (60.0, 100.0, 0.5, 0.08, 0.0, 0.2, 0),
+    ];
+    for (index, &(s, k, t, r, q, v, call)) in contracts.iter().enumerate() {
+        let g = ffi::pc_american_greeks(s, k, t, r, q, v, call);
+        for which in 0..10 {
+            emit(format!("amgreek({index}/{which})"), unsafe { *g.add(which) });
+        }
+    }
+
     // Cash dividends in the portfolio simulator: an exp per dividend per step
     // in the escrow table, and the escrowed level added back at every step.
     ffi::pc_mc_reset();

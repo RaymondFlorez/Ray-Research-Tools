@@ -7,7 +7,7 @@
  * because the server has no copy of this file.
  */
 
-import type { PricingExports } from './module.js';
+import { readFloats, type PricingExports } from './module.js';
 
 export type OptionKind = 'call' | 'put';
 
@@ -124,6 +124,29 @@ export class Pricer {
   /** Andersen-Lake at its most accurate scheme, for a position the analyst pinned as exact. */
   americanDetail(inputs: OptionInputs): number {
     return this.exports.pc_american_detail(...this.args(inputs));
+  }
+
+  /**
+   * All ten Greeks of an American option, for a position pinned as exact
+   * (PRD 5.4, 9.2): the exact derivatives of `americanDetail`'s price, by
+   * adjoint differentiation through Andersen-Lake. `price` is that price, to
+   * the bit.
+   *
+   * The PRD names a lattice for this. A lattice snaps the exercise boundary to
+   * its nodes, so its price is a staircase in vol and rate and its exact vega
+   * missed by up to 3% at 400 steps; the crate's README has the measurement.
+   * About 27 prices' worth of work: a detail-view call, not a grid one.
+   */
+  americanGreeks(inputs: OptionInputs): Greeks {
+    // The call first: its tape can grow linear memory, which detaches any
+    // view taken before it.
+    const pointer = this.exports.pc_american_greeks(...this.args(inputs));
+    const values = readFloats(this.exports.memory, pointer, GREEK_ORDER.length);
+    const out = {} as Greeks;
+    GREEK_ORDER.forEach((name, i) => {
+      out[name] = values[i]!;
+    });
+    return out;
   }
 
   /**

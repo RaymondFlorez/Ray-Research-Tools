@@ -280,10 +280,11 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,757 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,797 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
-cash dividends in the scalar pricers, the grid and a portfolio run, Heston with its
+cash dividends in the scalar pricers, the grid and a portfolio run, American Greeks by
+adjoint, Heston with its
 calibration, the pin and early-exercise thresholds, the volatility analytics, and two
 complete SVI fits. It currently reports agreement on every bit.
 
@@ -597,6 +598,57 @@ the legs were priced on the tree, not that a guard passed. In WASM under V8 the 
 takes 125–132ms at Standard and 76–80ms at Draft across runs (`scripts/bench-dividend-grid-wasm.mjs`), so a
 browser drags at Draft, as it already does for the plain American grid, and the server
 settles at Standard.
+
+## American Greeks by adjoint, and why not on the lattice
+
+PRD 5.4 wants Greeks "by adjoint differentiation" where there is no closed form, and 9.2 puts
+detail views on "the CRR/lattice path with adjoint differentiation". `adjoint.rs` records a
+pricer's arithmetic on a tape and sweeps it backwards; the pricer it differentiates is
+Andersen-Lake at the pinned-position scheme, not a lattice, because the lattice was built
+first and measured (`examples/adjoint_scan.rs`, 180 contracts):
+
+| Exact derivatives of | vega, worst gap | rho, worst gap | gamma, worst gap |
+|---|---|---|---|
+| Broadie-Detemple lattice with Richardson, 200 steps | 1.01 on 44.3 | 1.61 on 39.0 | 0.049 on 0.073 |
+| the same at 400 steps | 0.49 on 16.8 | 1.20 on 32.1 | 0.051 on 0.073 |
+| Leisen-Reimer, 201 steps | 0.61 on 48.1 | 1.45 on 81.5 | 0.028 on 0.073 |
+
+The differentiation was not the problem: through the tape, the lattice's exact delta matches its
+own central difference to ten digits. What is differentiated is — its exact vega and its own
+difference at a bump of 1e-4 already disagree in the fourth decimal, because the bump crosses
+steps. A lattice puts the exercise
+boundary on its nodes, and as vol or rate moves, nodes flip between exercise and hold one at a
+time, so the price is a staircase in the inputs with steps far below a tick. Its exact
+derivative is the staircase's slope. Doubling the steps roughly halves the vega error, so a
+tenth of a vega point would take tens of thousands. Leisen-Reimer, whose nodes are placed
+relative to the strike, fixes the European case — its exact volga matches the closed form to
+2e-4 — and not the American one, where the staircase is the exercise decision itself.
+
+Andersen-Lake runs a fixed number of iterations over fixed quadrature nodes, so its price is a
+smooth function of every input. `Solver::price_over` is its twin written over a generic number
+type, held to the same bits as `price` on every scheme and contract in the tests. Over it:
+
+- **The machinery is checked where the answer is known.** The same tape run over
+  Black-Scholes-Merton reproduces all ten closed forms in `bsm::greeks` to 1e-11 relative.
+- **The American Greeks are the derivatives of the quoted price.** Delta, vega, rho and theta
+  match central differences of `accurate_price` at a step of 1e-5 to 1e-6 relative; gamma,
+  vanna, volga, charm and speed match differences of the adjoint Greeks they differentiate to
+  1e-5. Vanna from a spot-seeded sweep and from a vol-seeded one agree to 1e-10. With bumps of
+  1e-3 the gap to vega and rho is 2e-3 on some contracts, and it closes as the bump shrinks: it
+  is the bump's own error, from strong curvature in vol and rate.
+- **Second-order Greeks come out of a first-order sweep.** The tape's partials are hyper-dual
+  numbers, so the adjoints carry their own derivatives: spot seeded twice gives delta with
+  gamma and speed attached, vega with vanna, and maturity with charm; a second sweep seeded on
+  vol gives volga.
+
+It does not buy speed. With five inputs, reverse mode has nothing to amortize: all ten Greeks
+take 26 to 28 prices' worth across runs (5.3ms, a price being about 200µs), where bumping them
+takes 25.
+What it buys is exact derivatives of the price on the screen, with no step size to choose.
+Where Andersen-Lake hands a contract to Black-Scholes — no exercise region, or degenerate
+inputs — the Greeks are the closed forms. One finding worth knowing: as the rate goes to zero
+the American put's Greeks converge on the European ones except rho, because the early-exercise
+premium grows about in proportion to the rate and its rate derivative does not vanish with it.
 
 ## Cash dividends in the portfolio simulator
 

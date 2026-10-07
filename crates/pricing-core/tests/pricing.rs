@@ -2273,3 +2273,156 @@ mod portfolio_dividend_tests {
         );
     }
 }
+
+mod adjoint_tests {
+    //! Greeks by adjoint differentiation, checked against code that does not
+    //! differentiate anything.
+
+    use pricing_core::adjoint::{american_greeks, european, greeks_of, vanna_from_vol_side, Contract};
+    use pricing_core::andersen_lake::{self, accurate_price, solver_for, ACCURATE, FAST, GUARD};
+    use pricing_core::bsm::{self, Greeks, Inputs, OptionType};
+
+    fn corpus() -> Vec<Inputs> {
+        let mut out = Vec::new();
+        for kind in [OptionType::Call, OptionType::Put] {
+            for k in [80.0, 100.0, 120.0] {
+                for t in [0.1, 0.75, 2.0] {
+                    for (r, q) in [(0.05, 0.0), (0.03, 0.04), (0.08, 0.02)] {
+                        for v in [0.15, 0.35] {
+                            out.push(Inputs { spot: 100.0, strike: k, time: t, rate: r, dividend: q, vol: v, kind });
+                        }
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    fn contract(i: &Inputs) -> Contract<f64> {
+        Contract { spot: i.spot, strike: i.strike, time: i.time, rate: i.rate, dividend: i.dividend, vol: i.vol, kind: i.kind }
+    }
+
+    fn ten(g: &Greeks) -> [f64; 10] {
+        [g.price, g.delta, g.gamma, g.vega, g.theta, g.rho, g.vanna, g.volga, g.charm, g.speed]
+    }
+
+    #[test]
+    fn the_differentiable_twin_prices_to_the_same_bits() {
+        // The Greeks are derivatives of the price only if the code they are
+        // taken through *is* the pricer. Every scheme, every contract.
+        for scheme in [FAST, GUARD, ACCURATE] {
+            let solver = solver_for(scheme);
+            for i in corpus() {
+                assert_eq!(solver.price_over(&contract(&i)).to_bits(), andersen_lake::price(&i, scheme).to_bits(), "{i:?}");
+            }
+        }
+        for i in corpus() {
+            assert_eq!(european(&contract(&i)).to_bits(), bsm::price(&i).to_bits(), "{i:?}");
+        }
+    }
+
+    #[test]
+    fn on_black_scholes_the_tape_reproduces_every_closed_form() {
+        // The check on the machinery: `bsm::greeks` is ten formulas written
+        // out by hand, and the tape has never seen them.
+        let mut worst = 0.0f64;
+        for i in corpus() {
+            let (a, b) = (ten(&greeks_of(&i, |c| european(c))), ten(&bsm::greeks(&i)));
+            for j in 0..10 {
+                worst = worst.max((a[j] - b[j]).abs() / 1.0f64.max(b[j].abs()));
+            }
+        }
+        assert!(worst < 1e-11, "worst relative gap {worst:e}");
+    }
+
+    #[test]
+    fn american_greeks_are_the_derivatives_of_the_quoted_price() {
+        // Central differences of `accurate_price` converge onto the adjoint as
+        // the step shrinks; at 1e-5 the gap is the differences' own error.
+        let p = |i: Inputs| accurate_price(&i);
+        let h = 1e-5;
+        let mut worst = [0.0f64; 4];
+        for c in corpus() {
+            let g = american_greeks(&c);
+            assert_eq!(g.price.to_bits(), accurate_price(&c).to_bits());
+            let fd = [
+                (p(Inputs { spot: c.spot + h, ..c }) - p(Inputs { spot: c.spot - h, ..c })) / (2.0 * h),
+                (p(Inputs { vol: c.vol + h, ..c }) - p(Inputs { vol: c.vol - h, ..c })) / (2.0 * h),
+                (p(Inputs { rate: c.rate + h, ..c }) - p(Inputs { rate: c.rate - h, ..c })) / (2.0 * h),
+                -(p(Inputs { time: c.time + h, ..c }) - p(Inputs { time: c.time - h, ..c })) / (2.0 * h),
+            ];
+            for (j, ad) in [g.delta, g.vega, g.rho, g.theta].iter().enumerate() {
+                worst[j] = worst[j].max((ad - fd[j]).abs() / 1.0f64.max(fd[j].abs()));
+            }
+        }
+        assert!(worst.iter().all(|w| *w < 1e-6), "delta, vega, rho, theta: {worst:?}");
+    }
+
+    #[test]
+    fn the_higher_greeks_are_derivatives_of_the_lower_ones() {
+        // Gamma, vanna, volga, charm and speed, each against a central
+        // difference of the adjoint Greek it differentiates.
+        let h = 1e-4;
+        let mut worst = [0.0f64; 5];
+        for c in corpus() {
+            let g = american_greeks(&c);
+            let at = |i: Inputs| american_greeks(&i);
+            let (su, sd) = (at(Inputs { spot: c.spot + h, ..c }), at(Inputs { spot: c.spot - h, ..c }));
+            let (vu, vd) = (at(Inputs { vol: c.vol + h, ..c }), at(Inputs { vol: c.vol - h, ..c }));
+            let (tu, td) = (at(Inputs { time: c.time + h, ..c }), at(Inputs { time: c.time - h, ..c }));
+            let fd = [
+                (su.delta - sd.delta) / (2.0 * h),
+                (su.vega - sd.vega) / (2.0 * h),
+                (vu.vega - vd.vega) / (2.0 * h),
+                // Charm is d(delta)/d(calendar time): maturity shortening.
+                -(tu.delta - td.delta) / (2.0 * h),
+                (su.gamma - sd.gamma) / (2.0 * h),
+            ];
+            for (j, ad) in [g.gamma, g.vanna, g.volga, g.charm, g.speed].iter().enumerate() {
+                worst[j] = worst[j].max((ad - fd[j]).abs() / 1.0f64.max(fd[j].abs()));
+            }
+        }
+        assert!(worst.iter().all(|w| *w < 1e-5), "gamma, vanna, volga, charm, speed: {worst:?}");
+    }
+
+    #[test]
+    fn vanna_comes_out_the_same_from_either_side() {
+        let solver = solver_for(ACCURATE);
+        for c in corpus().into_iter().filter(|c| c.kind == OptionType::Put) {
+            let from_spot = american_greeks(&c).vanna;
+            let from_vol = vanna_from_vol_side(&c, |x| solver.price_over(x));
+            assert!((from_spot - from_vol).abs() < 1e-10 * 1.0f64.max(from_spot.abs()), "{c:?}: {from_spot} {from_vol}");
+        }
+    }
+
+    #[test]
+    fn inside_the_exercise_region_the_greeks_are_the_payoffs() {
+        // Deep enough that exercising now is optimal: the option is K - S.
+        let c = Inputs { spot: 60.0, strike: 100.0, time: 0.5, rate: 0.08, dividend: 0.0, vol: 0.2, kind: OptionType::Put };
+        let g = american_greeks(&c);
+        assert_eq!(g.price, 40.0);
+        assert_eq!((g.delta, g.gamma, g.vega, g.rho, g.theta, g.speed), (-1.0, 0.0, 0.0, 0.0, 0.0, 0.0));
+    }
+
+    #[test]
+    fn with_no_exercise_region_they_are_the_closed_forms() {
+        let call = Inputs { spot: 100.0, strike: 95.0, time: 1.0, rate: 0.05, dividend: 0.0, vol: 0.25, kind: OptionType::Call };
+        assert_eq!(american_greeks(&call), bsm::greeks(&call));
+        let put = Inputs { rate: -0.01, kind: OptionType::Put, ..call };
+        assert_eq!(american_greeks(&put), bsm::greeks(&put));
+        // As the early-exercise premium vanishes, the American Greeks run into
+        // the European ones through the tape, not by a branch — all but rho.
+        // The premium grows about in proportion to the rate, so its rate
+        // derivative is about premium / rate and does not vanish with it: at a
+        // rate of 1e-4 the premium is 2.4e-4 and the rho gap is 2.6. The
+        // obvious test, that rho converges too, was wrong.
+        let faint = Inputs { rate: 1e-4, kind: OptionType::Put, ..call };
+        let (a, e) = (ten(&american_greeks(&faint)), ten(&bsm::greeks(&faint)));
+        for j in (0..10).filter(|&j| j != 5) {
+            assert!((a[j] - e[j]).abs() < 1e-3 * 1.0f64.max(e[j].abs()), "greek {j}: {} against {}", a[j], e[j]);
+        }
+        let per_unit_rate = (a[0] - e[0]) / faint.rate;
+        let rho_gap = a[5] - e[5];
+        assert!(rho_gap > 0.0 && (rho_gap / per_unit_rate - 1.0).abs() < 0.15, "rho gap {rho_gap}, premium per unit rate {per_unit_rate}");
+    }
+}
