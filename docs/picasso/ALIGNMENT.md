@@ -45,7 +45,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.2.4 sketch and live frames | Built | `canvas-core` frame, binding |
 | 3.2.5 notes are intent, never data | Built | `canvas-agents` context `itemFor`; enforced in three places (`margin.test.ts`) |
 | 3.3 port types and validation, one-click fixes | Built | `canvas-core` ports; the resample fix is applicable (`resample-fix.test.ts`) |
-| 3.3 node kinds | Partial | See *Node kinds* below |
+| 3.3 node kinds | Built in code; two Infra, one Refused | See *Node kinds* below |
 | 3.4 DAG, dirty propagation, cache keys, viewport-scoped evaluation, 200-node cap by viewport distance | Built | `canvas-core` graph, cacheKey |
 | 3.6 passive mode: halos, ribbon, digest | Built | `canvas-data` anomaly, `canvas-render` wash/ribbon, `canvas-gl` severity, `canvas-agents` digest |
 | 3.7 shape pass and arrow-to-edge | Built | `canvas-ink` recognize, semantic |
@@ -61,11 +61,12 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 HeatmapNode (`canvas-data` cross-sectional wash); CurveNode; UniverseNode (`screener`);
 TransformNode ops (`canvas-data` transform); MonteCarloNode; BacktestNode; OptimizerNode
 (`canvas-pricing` optimizer — objective decided below); FactorNode (`canvas-equity`
-factors); ScenarioNode including trees; CausalNode/edge; StrategyNode; ChainMetricNode;
+factors); ScenarioNode including trees; CausalNode/edge; StrategyNode; SurfaceNode; ChainMetricNode;
 ProbabilityCurveNode; HypothesisNode; QueryNode; AgentNode; TextPad with transclusion
 (`canvas-guard` transclude); EvidenceNode; FrameNode; InkLayer.
-Partial: **SurfaceNode** — the strategy's `surface` port and a 2D spot × vol cell drawing in
-the payoff demo (`payoff.html`); no 3D rendering.
+**SurfaceNode** is now built: heatmap and 3D surface with picking and the break-even
+contour (`canvas-render` surface), wired from a StrategyNode's P&L port and checked at the
+seam (`surface.test.ts`) and in a browser (`payoff.html`).
 Infra: **CodeNode** and **TableNode**'s query bar (DuckDB-WASM, Pyodide, a sandbox).
 Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never defined.
 

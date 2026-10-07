@@ -18,12 +18,29 @@ import {
   createStrategyNode,
   evaluateStrategy,
   instantiatePricing,
+  pnlSurface,
   readBook,
-  type Cell,
   type GridResult,
   type Leg,
   type Market,
 } from '@picasso/canvas-pricing';
+import {
+  contour,
+  frontDepth,
+  heatmapCells,
+  heatmapPick,
+  heatmapPoint,
+  orbit,
+  project,
+  surfaceColor,
+  surfaceMesh,
+  surfacePick,
+  worldPoint,
+  zDomain,
+  type Camera,
+  type Picked,
+  type SurfaceGrid,
+} from '@picasso/canvas-render';
 
 const WASM_URL = '/crates/pricing-core/target/wasm32-unknown-unknown/release/pricing_core.wasm';
 
@@ -88,6 +105,8 @@ const hud = document.getElementById('hud') as HTMLElement;
 const badge = document.getElementById('badge') as HTMLElement;
 const picker = document.getElementById('strategy') as HTMLSelectElement;
 const decay = document.getElementById('decay') as HTMLInputElement;
+const view = document.getElementById('view') as HTMLSelectElement;
+const readout = document.getElementById('readout') as HTMLElement;
 
 const exports = await instantiatePricing(fetch(WASM_URL));
 const grid = new GridPricer(exports);
@@ -103,6 +122,12 @@ const requested = new URLSearchParams(location.search).get('book');
 if (requested !== null && requested in STRATEGIES) picker.value = requested;
 
 let latest: GridResult | undefined;
+/** The P&L surface drawn: each cell's mark less today's. */
+let surface: SurfaceGrid | undefined;
+let todayMark = 0;
+let camera: Camera = { azimuth: -0.6, elevation: 0.55, distance: 4, rect: { minX: 0, minY: 0, maxX: 1, maxY: 1 } };
+let plot = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+let hovered: Picked | undefined;
 
 function compute(): void {
   const chosen = STRATEGIES[picker.value] ?? (STRATEGIES.spread as { label: string; legs: Leg[] });
@@ -119,6 +144,13 @@ function compute(): void {
     return;
   }
   latest = evaluation.result;
+  // Today's mark, from the engine, with no decay: the P&L is measured from it,
+  // so decay shows up as the loss it is. The grid's own centre is today's mark
+  // only when no decay was applied.
+  todayMark = Number(decay.value) === 0
+    ? atTheMoney(latest).value
+    : atTheMoney(grid.reprice(chosen.legs, market, { spotSteps: 25, spotRange: 0.25, volSteps: 15, volRange: 0.1 })).value;
+  surface = pnlSurface(latest, todayMark);
 
   const centre = atTheMoney(latest);
   const book = readBook(node);
@@ -142,7 +174,8 @@ function compute(): void {
     `${book.legs.length} legs  ·  ${latest.cells.length} cells  ·  ` +
       `${latest.guard.repricings.toLocaleString()} repricings`,
     `wasm call            ${latest.elapsedMs.toFixed(2)}ms  / 90ms budget`,
-    `value at spot        ${fmt(centre.value)}`,
+    `mark today           ${fmt(todayMark)}`,
+    `P&L at spot          ${fmt(centre.value - todayMark)}`,
     `delta / gamma        ${fmt(centre.delta)} / ${fmt(centre.gamma)}`,
     `vega / theta         ${fmt(centre.vega)} / ${fmt(centre.theta)}`,
     `front leg iv         ${implied.ok ? implied.vol.toFixed(4) : implied.display}`,
@@ -156,20 +189,11 @@ function fmt(value: number): string {
   return value.toLocaleString('en-US', { maximumFractionDigits: 0 }).padStart(10);
 }
 
-/**
- * Diverging fill around zero P&L.
- *
- * Around zero rather than around the midpoint of the range: an analyst reads
- * this surface to find where the book stops making money, and a ramp whose
- * neutral point floats with the data hides exactly that line.
- */
-function fill(value: number, scale: number): string {
-  const t = Math.max(-1, Math.min(1, value / scale));
-  if (t >= 0) return `rgb(${Math.round(247 - 70 * t)}, ${Math.round(249 - 40 * t)}, ${Math.round(244 - 120 * t)})`;
-  return `rgb(${Math.round(247 + 8 * -t)}, ${Math.round(249 - 90 * -t)}, ${Math.round(244 - 100 * -t)})`;
-}
+const rgb = (c: [number, number, number], shade = 1) =>
+  `rgb(${Math.round(c[0] * shade)}, ${Math.round(c[1] * shade)}, ${Math.round(c[2] * shade)})`;
 
 function draw(result: GridResult): void {
+  if (!surface) return;
   const dpr = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -177,60 +201,149 @@ function draw(result: GridResult): void {
   canvas.height = Math.round(height * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-
   const pad = { left: 64, right: 16, top: 16, bottom: 40 };
-  const plotW = width - pad.left - pad.right;
-  const plotH = height - pad.top - pad.bottom;
-  const cw = plotW / result.spotCount;
-  const ch = plotH / result.volCount;
+  plot = { minX: pad.left, minY: pad.top, maxX: width - pad.right, maxY: height - pad.bottom };
+  camera = { ...camera, rect: plot };
+  const domain = zDomain(surface);
+  // Around zero P&L rather than the middle of the range: the analyst reads this
+  // to find where the book stops making money, and a ramp whose neutral point
+  // floats with the data hides exactly that line.
+  if (view.value === '3d') draw3d(surface, domain);
+  else drawHeatmap(result, surface, domain);
+}
 
-  const scale = Math.max(...result.cells.map((c) => Math.abs(c.value))) || 1;
-
-  for (let si = 0; si < result.spotCount; si += 1) {
-    for (let vi = 0; vi < result.volCount; vi += 1) {
-      const cell: Cell = result.cell(si, vi);
-      const x = pad.left + si * cw;
-      // Vol increases upward, which is how a surface is read.
-      const y = pad.top + (result.volCount - 1 - vi) * ch;
-      ctx.fillStyle = fill(cell.value, scale);
-      ctx.fillRect(x, y, cw + 0.5, ch + 0.5);
-
-      if (cell.exact) {
-        // The guard escalated this cell. Marked, because "which numbers did
-        // you actually compute exactly" is a question an analyst will ask.
-        ctx.fillStyle = 'rgba(28,26,23,0.55)';
-        ctx.beginPath();
-        ctx.arc(x + cw / 2, y + ch / 2, 1.6, 0, Math.PI * 2);
-        ctx.fill();
-      }
+function drawHeatmap(result: GridResult, grid: SurfaceGrid, domain: { min: number; max: number }): void {
+  const cells = heatmapCells(grid, plot);
+  for (const cell of cells) {
+    const r = cell.rect;
+    ctx.fillStyle = rgb(surfaceColor(cell.value, domain, 'diverging'));
+    ctx.fillRect(r.minX, r.minY, r.maxX - r.minX + 0.5, r.maxY - r.minY + 0.5);
+    if (result.cell(cell.i, cell.j).exact) {
+      // The guard escalated this cell. Marked, because "which numbers did you
+      // actually compute exactly" is a question an analyst will ask.
+      ctx.fillStyle = 'rgba(28,26,23,0.55)';
+      ctx.beginPath();
+      ctx.arc((r.minX + r.maxX) / 2, (r.minY + r.maxY) / 2, 1.6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
+  // Break-even.
+  ctx.strokeStyle = '#1c1a17';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (const [a, b] of contour(grid)) {
+    const p = heatmapPoint(grid, plot, a.i, a.j);
+    const q = heatmapPoint(grid, plot, b.i, b.j);
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+  }
+  ctx.stroke();
 
+  const cw = (plot.maxX - plot.minX) / result.spotCount;
+  const ch = (plot.maxY - plot.minY) / result.volCount;
   ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
   ctx.fillStyle = '#6f6a61';
-
   ctx.textAlign = 'center';
   for (let si = 0; si < result.spotCount; si += 4) {
-    ctx.fillText((result.spotAxis[si] as number).toFixed(0), pad.left + (si + 0.5) * cw, height - 24);
+    ctx.fillText((result.spotAxis[si] as number).toFixed(0), plot.minX + (si + 0.5) * cw, plot.maxY + 16);
   }
-  ctx.fillText('spot', pad.left + plotW / 2, height - 8);
-
+  ctx.fillText('spot', (plot.minX + plot.maxX) / 2, plot.maxY + 32);
   ctx.textAlign = 'right';
   for (let vi = 0; vi < result.volCount; vi += 2) {
     const shift = (result.volAxis[vi] as number) * 100;
-    const y = pad.top + (result.volCount - 1 - vi + 0.5) * ch + 3;
-    ctx.fillText(`${shift > 0 ? '+' : ''}${shift.toFixed(0)}`, pad.left - 8, y);
+    ctx.fillText(`${shift > 0 ? '+' : ''}${shift.toFixed(0)}`, plot.minX - 8, plot.maxY - (vi + 0.5) * ch + 3);
   }
-
   // The unshocked column, so the eye has somewhere to start.
   const centreCol = (result.spotCount - 1) >> 1;
   ctx.strokeStyle = 'rgba(28,26,23,0.35)';
   ctx.lineWidth = 1;
-  ctx.strokeRect(pad.left + centreCol * cw, pad.top, cw, plotH);
+  ctx.strokeRect(plot.minX + centreCol * cw, plot.minY, cw, plot.maxY - plot.minY);
+  if (hovered) {
+    const p = heatmapPoint(grid, plot, hovered.i, hovered.j);
+    ctx.strokeStyle = '#1c1a17';
+    ctx.strokeRect(p.x - cw / 2, p.y - ch / 2, cw, ch);
+  }
 }
+
+function draw3d(grid: SurfaceGrid, domain: { min: number; max: number }): void {
+  const mesh = surfaceMesh(grid, camera);
+  ctx.lineJoin = 'round';
+  for (const t of mesh) {
+    const colour = rgb(surfaceColor(t.value, domain, 'diverging'), t.shade);
+    ctx.fillStyle = colour;
+    ctx.strokeStyle = colour; // closes the hairline seams between triangles
+    ctx.lineWidth = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(t.points[0].x, t.points[0].y);
+    ctx.lineTo(t.points[1].x, t.points[1].y);
+    ctx.lineTo(t.points[2].x, t.points[2].y);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+  // Break-even, where a ridge does not cover it.
+  ctx.strokeStyle = '#1c1a17';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (const [a, b] of contour(grid)) {
+    const p = project(camera, worldPoint(grid, domain, a.i, a.j, 0));
+    const q = project(camera, worldPoint(grid, domain, b.i, b.j, 0));
+    const mid = { x: (p.x + q.x) / 2, y: (p.y + q.y) / 2 };
+    const front = frontDepth(mesh, mid);
+    if (front !== undefined && front < (p.depth + q.depth) / 2 - 0.01) continue;
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+  }
+  ctx.stroke();
+  if (hovered) {
+    const p = project(camera, worldPoint(grid, domain, hovered.i, hovered.j, hovered.value));
+    ctx.fillStyle = '#1c1a17';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace';
+  ctx.fillStyle = '#6f6a61';
+  ctx.textAlign = 'left';
+  ctx.fillText('drag to turn · spot runs left to right at the front, vol shift front to back', plot.minX, plot.maxY + 32);
+}
+
+/** The grid point under a screen point, in whichever view is showing. */
+function pickAt(x: number, y: number): Picked | undefined {
+  if (!surface) return undefined;
+  return view.value === '3d' ? surfacePick(surface, surfaceMesh(surface, camera), { x, y }) : heatmapPick(surface, plot, { x, y });
+}
+
+let dragFrom: { x: number; y: number } | undefined;
+canvas.addEventListener('pointerdown', (e) => {
+  if (view.value !== '3d') return;
+  dragFrom = { x: e.clientX, y: e.clientY };
+  try {
+    canvas.setPointerCapture(e.pointerId);
+  } catch {
+    // nothing to capture for a synthetic pointer
+  }
+});
+canvas.addEventListener('pointermove', (e) => {
+  const box = canvas.getBoundingClientRect();
+  if (dragFrom) {
+    camera = orbit(camera, e.clientX - dragFrom.x, e.clientY - dragFrom.y);
+    dragFrom = { x: e.clientX, y: e.clientY };
+  } else {
+    hovered = pickAt(e.clientX - box.left, e.clientY - box.top);
+    readout.textContent = hovered
+      ? `spot ${hovered.x.toFixed(1)} · vol ${hovered.y >= 0 ? '+' : ''}${(hovered.y * 100).toFixed(0)}pts · P&L ${hovered.value.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+      : 'hover the surface for a cell';
+  }
+  if (latest) draw(latest);
+});
+canvas.addEventListener('pointerup', () => {
+  dragFrom = undefined;
+});
 
 picker.addEventListener('change', compute);
 decay.addEventListener('input', compute);
+view.addEventListener('change', () => { if (latest) draw(latest); });
 window.addEventListener('resize', () => { if (latest) draw(latest); });
 compute();
 
@@ -238,4 +351,19 @@ compute();
 Object.assign(window as unknown as Record<string, unknown>, {
   __payoff: () => latest,
   __recompute: compute,
+  __surface: () => ({
+    view: view.value,
+    camera: { azimuth: camera.azimuth, elevation: camera.elevation },
+    todayMark,
+    centrePnl: surface ? (surface.z[7 * 25 + 12] as number) : Number.NaN,
+    breakEvenSegments: surface ? contour(surface).length : 0,
+    pick: (x: number, y: number) => pickAt(x, y),
+    /** Screen position of grid point (i, j) in the current view. */
+    at: (i: number, j: number) => {
+      if (!surface) return undefined;
+      if (view.value !== '3d') return heatmapPoint(surface, plot, i, j);
+      const p = project(camera, worldPoint(surface, zDomain(surface), i, j, surface.z[j * 25 + i] as number));
+      return { x: p.x, y: p.y };
+    },
+  }),
 });

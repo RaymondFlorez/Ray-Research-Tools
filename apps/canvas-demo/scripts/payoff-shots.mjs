@@ -125,6 +125,52 @@ try {
 
   await page.screenshot({ path: `${OUT}/payoff-spread.png` });
 
+  // 2b. The colour is P&L, not the mark: zero at spot, a break-even line drawn.
+  const pnl = await page.evaluate(() => {
+    const s = window.__surface();
+    return { centre: s.centrePnl, mark: s.todayMark, segments: s.breakEvenSegments };
+  });
+  check('the surface is P&L against today\'s mark: zero at spot', pnl.centre === 0 && pnl.mark > 1000,
+    `mark ${pnl.mark.toFixed(0)}`);
+  check('a break-even line is drawn where the spread stops making money', pnl.segments > 5, `${pnl.segments} segments`);
+  // Hovering reads the engine's own number back, through the heatmap.
+  const hoverAt = await page.evaluate(() => window.__surface().at(18, 3));
+  const box = await page.locator('#surface').boundingBox();
+  await page.mouse.move(box.x + hoverAt.x, box.y + hoverAt.y);
+  const hover = await page.evaluate(([x, y]) => {
+    const p = window.__surface().pick(x, y);
+    const r = window.__payoff();
+    return { i: p.i, j: p.j, value: p.value, engine: r.cell(18, 3).value - window.__surface().todayMark };
+  }, [hoverAt.x, hoverAt.y]);
+  check('heatmap hover reads the engine\'s P&L at that cell', hover.i === 18 && hover.j === 3 && hover.value === hover.engine,
+    `${hover.value.toFixed(0)}`);
+
+  // 2c. The 3D surface: drawn, picked, turned.
+  await page.selectOption('#view', '3d');
+  const painted3d = await sampleSurface(page);
+  // In perspective at the default camera the surface covers about a tenth of
+  // this canvas (measured: 10%), not the four fifths the heatmap fills.
+  check('the 3D surface is drawn', painted3d.painted > painted3d.pixels * 0.05 && painted3d.distinctColours > 8,
+    `${((painted3d.painted / painted3d.pixels) * 100).toFixed(0)}% of pixels, ${painted3d.distinctColours} colours`);
+  const peak = await page.evaluate(() => {
+    const s = window.__surface();
+    const at = s.at(12, 0);
+    const p = s.pick(at.x, at.y);
+    return { i: p?.i, j: p?.j };
+  });
+  check('a 3D pick at a grid point\'s screen position returns that point', peak.i === 12 && peak.j === 0, `${peak.i}, ${peak.j}`);
+  await page.screenshot({ path: `${OUT}/payoff-spread-3d.png` });
+  const before3d = await page.evaluate(() => window.__surface().camera);
+  await page.mouse.move(box.x + 400, box.y + 300);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 520, box.y + 330, { steps: 6 });
+  await page.mouse.up();
+  const after3d = await page.evaluate(() => window.__surface().camera);
+  check('dragging turns the surface', Math.abs(after3d.azimuth - before3d.azimuth - 1.2) < 1e-9 && after3d.elevation > before3d.elevation,
+    `azimuth +${(after3d.azimuth - before3d.azimuth).toFixed(2)}`);
+  await page.screenshot({ path: `${OUT}/payoff-spread-3d-turned.png` });
+  await page.selectOption('#view', 'heatmap');
+
   // 3. Every book computes, and the 40-leg one holds the budget in-browser.
   const timings = [];
   for (const key of ['reversal', 'butterfly', 'book']) {
@@ -153,6 +199,12 @@ try {
   const decayed = await page.evaluate(() => window.__payoff().cell(12, 7).value);
   await page.screenshot({ path: `${OUT}/payoff-decayed.png` });
   check('decay changes the surface', Number.isFinite(decayed) && decayed !== book.centre?.value);
+  // Measured from today's mark, decay is a P&L, not a new zero.
+  await page.selectOption('#strategy', 'spread');
+  await page.waitForTimeout(200);
+  const decayedPnl = await page.evaluate(() => window.__surface().centrePnl);
+  check('with decay, P&L at spot is what the decay cost, not zero', Number.isFinite(decayedPnl) && decayedPnl !== 0,
+    `${decayedPnl.toFixed(0)}`);
 
   check('no console errors', consoleErrors.length === 0, consoleErrors.slice(0, 2).join(' | '));
 

@@ -25,7 +25,8 @@
       {
         "imports": {
           "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
-          "@picasso/canvas-pricing": "/packages/canvas-pricing/dist/index.js"
+          "@picasso/canvas-pricing": "/packages/canvas-pricing/dist/index.js",
+          "@picasso/canvas-render": "/packages/canvas-render/dist/index.js"
         }
       }
     </script>
@@ -43,12 +44,18 @@
           <label for="decay">days of decay</label>
           <input id="decay" type="range" min="0" max="60" step="1" value="0" />
         </div>
+        <div>
+          <label for="view">view</label>
+          <select id="view"><option value="heatmap">heatmap, spot × vol</option><option value="3d">3D surface</option></select>
+        </div>
+        <div id="readout">hover the surface for a cell</div>
         <div id="badge">—</div>
         <div id="hud"></div>
         <p>
           Priced in WebAssembly by the same Rust the server runs, so the
           optimistic local number and the authoritative one agree bit for bit.
           Dotted cells are the ones the accuracy guard repriced on the lattice.
+          Colour is P&amp;L against today's mark; the black line is break-even.
         </p>
       </div>
     </div>

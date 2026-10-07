@@ -131,7 +131,16 @@ cost the WebGL instanced path exists to remove, and it is the reason the PRD spe
 `payoff.html` is the layers meeting: a `StrategyNode` from `canvas-core` holds the book,
 `canvas-pricing` reprices it through the same Rust the server runs, and the surface is
 drawn from cells read out of WASM linear memory. Pick a book, drag the decay slider, and
-the whole pipeline re-runs.
+the whole pipeline re-runs. The view switches between the spot × vol heatmap and a 3D
+surface you drag to turn; both draw the break-even line, and hovering reads the engine's
+P&L at the grid point under the cursor.
+
+The colour is P&L against today's mark, and it was not always: a grid cell's `value` is the
+book's mark under that shock, and the page used to colour the mark on a scale centred on
+zero, under a comment saying it was P&L. A long call spread's mark is positive on every
+cell — 8,754 at spot — so it came out in shades of green with no break-even line at all. Today's mark is now priced
+by the engine with no decay, so decay shows as the loss it is: 45 days cost the spread 371
+at spot.
 
 `scripts/payoff-shots.mjs` verifies it in headless Chromium, which is the only place the
 claim actually has to hold — streaming instantiation refuses a module served with the

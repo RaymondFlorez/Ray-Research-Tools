@@ -18,6 +18,7 @@ npm test --workspace @picasso/canvas-render
 | `chart.ts` | 7.1, 3.3 | Crosshair resolution, range select, and min/max decimation — the interaction half of a chart node |
 | `wash.ts` | 3.6 | Passive-mode heat with a 20 minute half-life, and anomaly halo severity |
 | `ribbon.ts` | 3.6 | The event ribbon: ninety minutes of firings by time, merged where they collide, and the click that flies to them |
+| `surface.ts` | 3.3, 5.4 | `SurfaceNode`: heatmap layout, the 3D orbit camera and painted mesh, picking, and the break-even contour |
 | `theme.ts` | — | Light and dark token sets |
 
 ## Chart interaction, and the number that decided how it is written
@@ -115,6 +116,28 @@ time — and refuses to fly. A mark stamped ahead of this clock is pinned to the
 right edge and flagged `clockAhead` rather than drawn where nothing can reach
 it.
 
+## The surface
+
+`SurfaceNode` draws a grid — a StrategyNode's P&L, a vol surface, a scenario matrix — as a
+heatmap or as a 3D surface under an orbit camera, and `surface.ts` is the geometry of both:
+cell layout, projection, a mesh in painting order with Lambert shading, the grid point
+under the cursor, and marching-squares contours, which on a P&L are the break-even line.
+
+A pick returns the nearest *grid point* and its value, in either view, never an
+interpolated number: a P&L grid is a set of full revaluations, and between two of them
+there is no number. The contour is the one interpolation, linear along each cell edge, and
+it is drawn, not reported. The camera is not a node parameter — turning a surface is looking
+at it, and a parameter would move the node's cache key on every drag.
+
+Canvas2D has no depth buffer, so the mesh is sorted by centroid depth and painted far to
+near, which can go wrong. The tests compute the front surface independently — depth at each
+sample, no sorting — and on a P&L-shaped surface from eighteen views, over 50,000 samples,
+the painter never leaves a farther surface on top; where it picks a different triangle, the
+two are at the same depth on a shared edge. Picking is checked the same way: every grid
+point the depth buffer says is visible picks back to itself. And through
+`canvas-integration`'s `surface.test.ts`, a StrategyNode wired into a SurfaceNode reads the
+engine's own P&L back at every heatmap cell and under the cursor in 3D.
+
 ## What is not here
 
 - **No painting.** This package produces draw lists and layouts; the ribbon,
@@ -126,3 +149,9 @@ it.
   to a series.
 - **No DOM.** `mount.ts` says which nodes the DOM layer should mount; mounting
   them is the app's.
+- **The surface's painter is measured, not proven.** Painting order was checked on one
+  surface shape from eighteen views; a grid much coarser than its features is where it
+  would fail first. There is no GPU path for the surface, so a grid of tens of thousands of
+  points would be slow in Canvas2D; the grids the PRD names are hundreds. The 3D view has no
+  axis ticks — the payoff demo labels the axes in words — and contours are drawn at one
+  level, unlabelled.

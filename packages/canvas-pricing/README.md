@@ -15,7 +15,7 @@ node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 | `module.ts` | Instantiation, the hand-written export signature, and the reads out of linear memory |
 | `pricing.ts` | One option: price, ten Greeks, both American paths, implied vol |
 | `grid.ts` | A book across a spot-vol grid, in one boundary crossing, with the guard's report |
-| `strategy.ts` | `StrategyNode`: the book in params, the surface out, the badge in runtime state |
+| `strategy.ts` | `StrategyNode`: the book in params, the surface out, the badge in runtime state; `pnlSurface` turns its grid into the P&L a `SurfaceNode` draws |
 | `curve.ts` | Curves: bootstrap from deposits, futures and swaps; fit Nelson-Siegel-Svensson; shock |
 | `bonds.ts` | Yield, duration, convexity, z-spread, asset swap, and OAS on a Hull-White lattice |
 | `curveNode.ts` | `CurveNode` and `RateShockNode`: the curve surface as nodes in the DAG |

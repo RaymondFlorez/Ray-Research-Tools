@@ -226,3 +226,26 @@ export function atTheMoney(result: GridResult): GridResult['cells'][number] {
   const volIndex = (result.volCount - 1) >> 1;
   return result.cell(spotIndex, volIndex);
 }
+
+/**
+ * The grid as a P&L surface, in the shape a `SurfaceNode` draws (canvas-render's
+ * `SurfaceGrid`): spot across, vol shift up, row-major by vol.
+ *
+ * A cell's `value` is the book's mark under that shock, not its P&L, so the
+ * surface is each mark less `base`. The default base is the centre cell —
+ * spot and vol unshocked — which is today's mark only when the grid applies no
+ * decay; with `decayDays` set, pass today's mark, or the decay is subtracted
+ * out of every cell and theta disappears from the picture.
+ */
+export function pnlSurface(
+  result: GridResult,
+  base: number = atTheMoney(result).value,
+): { xs: number[]; ys: number[]; z: Float64Array; scale: 'diverging' } {
+  const nx = result.spotCount;
+  const ny = result.volCount;
+  const z = new Float64Array(nx * ny);
+  for (let j = 0; j < ny; j += 1) {
+    for (let i = 0; i < nx; i += 1) z[j * nx + i] = result.cell(i, j).value - base;
+  }
+  return { xs: Array.from(result.spotAxis), ys: Array.from(result.volAxis), z, scale: 'diverging' };
+}
