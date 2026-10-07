@@ -150,6 +150,20 @@ drawn with a dot, and on the 40-leg book they form three contiguous columns arou
 88 to 93 — the band where the American puts carry early-exercise value. The guard
 escalates a region, which is what Appendix C.2 says it should.
 
+## Tools
+
+`tools.html` is PRD 3.2.3's table on a live canvas: `V` pointer, `P` pen, `W` wire, `C`
+causal, `T` sticky, `Shift T` TextPad. `scripts/tools-shots.mjs` drives it with real mouse
+events and synthetic pen and touch ones through the same listeners, and checks fourteen
+things: that the drawn scene is byte-identical across every tool switch; that a mouse drag
+moves a node; that a stylus inks over a node with the pointer chosen, moves nothing, and
+hands the pointer back on lift; that a touch landing while the pen is down is refused as the
+palm, and a finger alone never switches the tool; that a wire from a port lights up exactly
+the compatible input, is refused on a monthly input with the reason, and lands as a data edge
+on the daily one; that a wire from empty space is an annotation arrow; that the causal tool
+opens the parameter editor; that `T` and `Shift T` make a loose sticky and a bound TextPad; and
+that keys typed into a field stay text.
+
 ## Rates
 
 `rates.html` is the rate branch of the PRD's own walkthrough, made runnable. Section 7.4

@@ -59,7 +59,7 @@ jobs:
         working-directory: crates/pricing-core
       - name: Demo surfaces in headless Chromium
         run: |
-          for check in screenshot ink-shots inkgl-shots gl-shots collab-shots payoff-shots rates-shots csp-check; do
+          for check in screenshot ink-shots inkgl-shots gl-shots collab-shots payoff-shots rates-shots tools-shots csp-check; do
             echo "::group::$check"
             node "apps/canvas-demo/scripts/$check.mjs"
             echo "::endgroup::"

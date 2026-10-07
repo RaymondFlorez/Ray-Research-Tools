@@ -41,7 +41,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.1 coordinates, spatial index, LOD, culling | Built | `canvas-core` spatial/viewport, `canvas-render` scene |
 | 3.2 three binding states, promotion and demotion, reversible by undo | Built | `canvas-core` binding, `canvas-sync` undo |
 | 3.2.2 arrows: data, causal, annotation | Built | `canvas-core` arrows |
-| 3.2.3 tools, not modes | Partial | Tool semantics in arrows and ink; no keyboard/tool-switching UI beyond the demos |
+| 3.2.3 tools, not modes | Built | `canvas-core` tools: keys, stylus override, palm refusal, drag intents, live-checked wire; `tools.html` drives every row with mouse, pen and touch and holds the scene byte-identical across switches |
 | 3.2.4 sketch and live frames | Built | `canvas-core` frame, binding |
 | 3.2.5 notes are intent, never data | Built | `canvas-agents` context `itemFor`; enforced in three places (`margin.test.ts`) |
 | 3.3 port types and validation, one-click fixes | Built | `canvas-core` ports; the resample fix is applicable (`resample-fix.test.ts`) |

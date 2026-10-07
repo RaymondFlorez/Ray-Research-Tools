@@ -31,7 +31,7 @@ async function resolveChromium() {
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const PORT = Number(process.env.PORT ?? 8341);
-const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates'];
+const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates', 'tools'];
 
 const server = spawn(process.execPath, ['scripts/serve.mjs'], {
   cwd: ROOT,

@@ -30,6 +30,32 @@ npm run typecheck --workspaces
 | `search.ts` | 3.8 | The fuzzy matcher, the command palette ranking, spatial content search, and the fly-to framing |
 | `template.ts` | 3.9 | Canvas templates: keep the structure and the layout, strip the subject |
 | `frame.ts` | 3.8, 3.2.4 | `Cmd G` framing, collapse as a view operation, and the edges that cross a folded boundary |
+| `tools.ts` | 3.2.3, 3.8 | Tools, not modes: the five tools and their keys, the stylus override, palm refusal, what a drag does, and the live-checked wire |
+
+## Tools, not modes
+
+PRD 3.2.3: switching tools "changes what a drag does. It never changes what is visible, never
+re-lays-out the canvas, and never hides the other class of object." That is enforced by what
+each side can reach. `ToolState` holds the chosen tool and which pointers are down — no
+document, no viewport. `dragIntent(tool, hit)` returns what a drag will do and mutates
+nothing. `buildScene` in `canvas-render` takes no tool. So a tool switch has no path to the
+picture, and `apps/canvas-demo/scripts/tools-shots.mjs` checks the consequence in a browser:
+the drawn scene is byte-identical across V, P, W, C, T and Shift T.
+
+The rest of the table, as built and as the browser check drives it with real mouse, pen and
+touch events: the pointer moves what it is dropped on, at any binding state; the pen inks
+wherever it starts, over a node too; the wire from a port lights up exactly the inputs that
+will take it — `wireTargets` runs the same validation `connect` will, cycles and occupied
+ports included — and a drop elsewhere is refused with the reason and the one-click fix (a
+daily series on a monthly input offers the resample); the wire from anywhere else is an
+annotation arrow; the causal tool opens the parameter editor; `T` is a loose sticky and
+`Shift T` a bound TextPad.
+
+A stylus takes the pen on contact and gives back on lift whatever was chosen, including a
+choice made while it was down. A mouse or a finger never switches anything. The "palm-and-
+scroll conflict" the PRD says this kills is a touch landing while the pen writes, so a touch
+while a stylus is down is refused as the palm. Keys with Ctrl, Cmd or Alt are other people's
+shortcuts (`Ctrl V` is paste), and keys typed into a note are text.
 
 ## Three rules that are easy to state and easy to get wrong
 
@@ -143,9 +169,15 @@ called twice is grouped, not collapsed by name, so its second call's edit is exp
 `cacheKeyInput` reads those inputs off a document; `canvas-router`'s `fingerprintOf` turns
 a routing decision into the fingerprint that feeds them.
 
-## Not here yet
+## Not here
 
-Phase 0 continues with the renderer and collaboration layers, which land next: the
-WebGL/DOM hybrid renderer with LOD proxies, ink capture, and Yjs document sync. Causal
-fixed-point evaluation (PRD 3.4.4) is scheduled with the causal graph work in Phase 4;
-this package detects and rejects dataflow cycles but does not yet evaluate causal ones.
+The renderer, ink and collaboration layers are their own packages (`canvas-render`,
+`canvas-gl`, `canvas-ink`, `canvas-sync`), and causal propagation is `canvas-causal`'s; this
+package detects and rejects dataflow cycles and evaluates none.
+
+From the tools: what a drag *looks like* while it is in progress — the rubber band, the
+cursor, the ghost of a sticky — is the client's, and the demo draws only the dimmed and lit
+ports. Arrows drawn from empty space are returned as an intent and stored by the client;
+nothing here gives them a node to attach to. The stylus's eraser end, and `Escape` to cancel a
+drag, are not handled. The palm rule refuses any touch while a pen is down, including a
+deliberate second finger.
