@@ -92,7 +92,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | 5.3 bootstrap, NSS, shocks, drawn curves, bond analytics, KRDs, OAS via Hull-White | Built | `pricing-core`, `canvas-pricing` curve/bonds |
 | 5.3 cross-asset transmission with R² per mapping | Built | `canvas-pricing` transmission |
 | 5.4 implied vol, SVI with arbitrage flags, BSM, Andersen-Lake, all ten Greeks | Built | `pricing-core` |
-| 5.4 discrete dividends | Built | Scalar pricer and the scenario grid, escrowed model, checked against Roll-Geske-Whaley and per-spot trees; StrategyNode carries the schedule. Monte Carlo takes a continuous yield |
+| 5.4 discrete dividends | Built | Scalar pricer and the scenario grid, escrowed model, checked against Roll-Geske-Whaley and per-spot trees; StrategyNode carries the schedule; the portfolio Monte Carlo escrows a schedule per asset. Single-asset `european_mc` and the bootstrap take none |
 | 5.4 Greeks by adjoint differentiation | Partial | Finite differences on the exact path, stated as a deviation |
 | 5.4 strategy surface, pin and assignment risk, margin, aggregate Greeks, vol analytics | Built | `canvas-pricing` |
 | 5.5 chain metrics, funding/basis, unlocks, protocol revenue | Built | `canvas-markets` chain |

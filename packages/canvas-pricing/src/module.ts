@@ -163,6 +163,7 @@ export interface PricingExports {
     vol: number, intensity: number, jumpMean: number, jumpVol: number,
   ): void;
   pc_mc_asset_count(): number;
+  pc_mc_asset_dividend(index: number, time: number, amount: number): number;
   pc_mc_corr_push(value: number): void;
   pc_mc_corr_equicorrelated(rho: number): void;
   pc_mc_dependence_t(nu: number): number;
@@ -213,6 +214,7 @@ const REQUIRED: readonly (keyof PricingExports)[] = [
   'pc_nss_warning_ptr', 'pc_nss_warning_len',
   'pc_div_reset', 'pc_div_add', 'pc_price_dividends', 'pc_grid_use_dividends',
   'pc_mc_reset', 'pc_mc_add_asset', 'pc_mc_add_heston', 'pc_mc_add_merton', 'pc_mc_asset_count',
+  'pc_mc_asset_dividend',
   'pc_mc_corr_push', 'pc_mc_corr_equicorrelated', 'pc_mc_dependence_t', 'pc_mc_run',
   'pc_mc_history_push', 'pc_mc_run_resampled',
   'pc_mc_keep_scenarios', 'pc_mc_scenarios', 'pc_mc_scenario_len',

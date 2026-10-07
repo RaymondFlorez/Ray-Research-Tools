@@ -46,6 +46,7 @@
  */
 
 import { readFloats, type PricingExports } from './module.js';
+import type { CashDividend } from './pricing.js';
 import { realizedVol, realizedVolStandardError, TRADING_DAYS } from './vol.js';
 
 interface McAssetBase {
@@ -55,7 +56,20 @@ interface McAssetBase {
   /** Units held. Negative is short, and the drawdown statistics follow it. */
   weight: number;
   rate: number;
+  /** A continuous yield, applied on top of any `dividends`. */
   dividend: number;
+  /**
+   * Cash dividends, on the escrowed model the pricer and the grid use: the
+   * process drives the stock less the dividends still to come before the
+   * horizon, and the reported level adds them back, so the price drops on
+   * each ex-date.
+   *
+   * The terminal law is the same as a continuous yield with the same forward,
+   * so the scenarios an optimizer reads do not change. The path does, and with
+   * it the drawdowns — shallower, measured, not deeper: the stock diffuses on
+   * the smaller escrowed base until each ex-date.
+   */
+  dividends?: readonly CashDividend[];
 }
 
 /** Geometric Brownian motion. The default when no process is named. */
@@ -264,6 +278,16 @@ export class ResultSuperseded extends Error {
   }
 }
 
+export class DividendsRejected extends Error {
+  constructor(
+    readonly asset: string,
+    detail: string,
+  ) {
+    super(`the cash dividends on ${asset} were refused: ${detail}`);
+    this.name = 'DividendsRejected';
+  }
+}
+
 export class EmptySimulation extends Error {
   constructor(what: string) {
     super(`a simulation needs ${what}`);
@@ -348,6 +372,17 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     );
   }
 
+  spec.assets.forEach((asset, index) => {
+    for (const d of asset.dividends ?? []) {
+      // The engine skips a dividend it cannot place; a NaN amount skipped
+      // silently is a schedule that is not the one the analyst entered.
+      if (!(Number.isFinite(d.time) && Number.isFinite(d.amount) && d.amount >= 0)) {
+        throw new DividendsRejected(asset.id, `${d.amount} at ${d.time} is not a cash amount at a time`);
+      }
+      exports.pc_mc_asset_dividend(index, d.time, d.amount);
+    }
+  });
+
   const matrix = correlationMatrix(spec);
   if (matrix === 'equicorrelated') {
     exports.pc_mc_corr_equicorrelated(
@@ -385,6 +420,13 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
     }
     if (code === -4) throw new EmptySimulation('paths and steps');
     if (code === -6) throw new ScenariosTooLarge(spec.paths * spec.assets.length);
+    if (code === -7) {
+      const asset = spec.assets.find((a) => escrowed(a, spec.time) <= 0);
+      throw new DividendsRejected(
+        asset?.id ?? 'an asset',
+        'the dividends due before the horizon are worth the whole stock',
+      );
+    }
     throw new CorrelationRejected(
       'it is not a valid correlation matrix — the diagonal must be one, it must be symmetric, ' +
         'and it must be positive definite. Correlations assembled pair by pair routinely are not.',
@@ -392,6 +434,14 @@ export function runMonteCarlo(exports: PricingExports, spec: McSpec): McResult {
   }
 
   return readResult(exports, run, spec, dependence, held(spec));
+}
+
+/** Spot less the present value of the dividends due by `horizon`, as the engine escrows it. */
+function escrowed(asset: McAsset, horizon: number): number {
+  const pv = (asset.dividends ?? [])
+    .filter((d) => d.time > 0 && d.time <= horizon && d.amount > 0)
+    .reduce((sum, d) => sum + d.amount * Math.exp(-asset.rate * d.time), 0);
+  return asset.spot - pv;
 }
 
 function held(spec: { assets: ReadonlyArray<{ id: string; spot: number }>; keepScenarios?: boolean }) {

@@ -2079,3 +2079,197 @@ mod calibration_tests {
         );
     }
 }
+
+mod portfolio_dividend_tests {
+    //! Cash dividends in the portfolio Monte Carlo, on the escrowed model.
+
+    use pricing_core::bsm::{Inputs, OptionType};
+    use pricing_core::copula::Factor;
+    use pricing_core::dividends::{european_price, CashDividend};
+    use pricing_core::mc::{Gbm, Heston, Process};
+    use pricing_core::portfolio::{
+        simulate_portfolio_dividends, simulate_portfolio_scenarios, AssetSpec, Dependence, PortfolioConfig,
+        PortfolioError,
+    };
+
+    fn spec(spot: f64) -> AssetSpec {
+        AssetSpec { spot, weight: 1.0, initial_variance: 0.0 }
+    }
+
+    fn quarterly() -> Vec<CashDividend> {
+        [0.15, 0.4, 0.65, 0.9].iter().map(|&time| CashDividend { time, amount: 1.25 }).collect()
+    }
+
+    /// Present value at `t` of what is still to come by `horizon`, written
+    /// here rather than imported.
+    fn ahead(divs: &[CashDividend], rate: f64, t: f64, horizon: f64) -> f64 {
+        divs.iter().filter(|d| d.time > t && d.time <= horizon).map(|d| d.amount * (-rate * (d.time - t)).exp()).sum()
+    }
+
+    #[test]
+    fn no_schedule_changes_nothing_to_the_bit() {
+        let a = Gbm { rate: 0.03, dividend: 0.01, vol: 0.2 };
+        let b = Heston { rate: 0.03, dividend: 0.0, kappa: 2.0, theta: 0.04, sigma: 0.4, rho: -0.6, initial_variance: 0.05 };
+        let processes: Vec<&dyn Process> = vec![&a, &b];
+        let assets = [spec(100.0), AssetSpec { spot: 50.0, weight: -2.0, initial_variance: 0.05 }];
+        let factor = Factor::equicorrelated(2, 0.4).unwrap();
+        let config = PortfolioConfig { paths: 2_000, steps: 24, antithetic: true, seed: 3, sample_paths: 4 };
+        let (base, base_rows) =
+            simulate_portfolio_scenarios(&processes, &assets, &factor, 1.0, &config, Dependence::Gaussian).unwrap();
+        let after_horizon = vec![vec![CashDividend { time: 1.5, amount: 3.0 }], vec![CashDividend { time: 0.0, amount: 3.0 }]];
+        for schedules in [vec![], vec![vec![], vec![]], after_horizon] {
+            let (run, rows) = simulate_portfolio_dividends(
+                &processes, &assets, &factor, 1.0, &config, Dependence::Gaussian, &schedules, true,
+            )
+            .unwrap();
+            assert_eq!(rows.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), base_rows.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
+            assert_eq!(run.sample.iter().map(|v| v.to_bits()).collect::<Vec<_>>(), base.sample.iter().map(|v| v.to_bits()).collect::<Vec<_>>());
+            assert_eq!(run.drawdown, base.drawdown);
+        }
+    }
+
+    #[test]
+    fn with_no_volatility_the_path_is_the_escrowed_formula() {
+        // Every step of the reported path is the escrowed stock grown at the
+        // rate, plus what is still to come, and it falls on each ex-date even
+        // though the drift is positive.
+        let rate = 0.05;
+        let process = Gbm { rate, dividend: 0.0, vol: 0.0 };
+        let divs = quarterly();
+        let steps = 20;
+        let config = PortfolioConfig { paths: 1, steps, antithetic: false, seed: 1, sample_paths: 1 };
+        let (run, _) = simulate_portfolio_dividends(
+            &[&process], &[spec(100.0)], &Factor::equicorrelated(1, 0.0).unwrap(), 1.0, &config, Dependence::Gaussian, &[divs.clone()], false,
+        )
+        .unwrap();
+        let x0 = 100.0 - ahead(&divs, rate, 0.0, 1.0);
+        let expected: Vec<f64> = (0..=steps)
+            .map(|k| {
+                let t = k as f64 / steps as f64;
+                if k == 0 { 100.0 } else { x0 * (rate * t).exp() + ahead(&divs, rate, t, 1.0) }
+            })
+            .collect();
+        for (k, (got, want)) in run.sample.iter().zip(&expected).enumerate() {
+            assert!((got - want).abs() < 1e-11, "step {k}: {got} against {want}");
+        }
+        let falls = run.sample.windows(2).filter(|w| w[1] < w[0]).count();
+        assert_eq!(falls, 4, "one fall per ex-date: {:?}", run.sample);
+        // The worst fall is the drawdown, and with no volatility it is the
+        // largest ex-date drop net of the drift accrued since the last peak.
+        let mut peak = f64::MIN;
+        let mut worst = 0.0f64;
+        for &v in &expected {
+            peak = peak.max(v);
+            worst = worst.max(peak - v);
+        }
+        assert!((run.drawdown[0] - worst).abs() < 1e-11);
+        // Less than the 1.25 dividend, by no more than one step's growth on
+        // the stock: 100 (e^{0.05 / 20} - 1) is about 0.25.
+        assert!(worst < 1.25 && worst > 1.25 - 100.0 * ((rate / steps as f64).exp() - 1.0) * 1.1, "{worst}");
+    }
+
+    #[test]
+    fn the_terminal_law_is_a_matched_continuous_yield_and_prices_to_the_escrowed_formula() {
+        // Escrowed and continuous-yield models with the same forward and the
+        // same vol give the same terminal law: X0 e^{(r - s^2/2)T + s W} either
+        // way. On the same draws the terminals agree to rounding — a check on
+        // the escrow's start and end that needs no standard error.
+        let (rate, vol, time) = (0.04, 0.3, 1.0);
+        let divs = quarterly();
+        let pv = ahead(&divs, rate, 0.0, time);
+        let q = -((100.0 - pv) / 100.0).ln() / time;
+        let config = PortfolioConfig { paths: 100_000, steps: 8, antithetic: true, seed: 17, sample_paths: 0 };
+        let factor = Factor::equicorrelated(1, 0.0).unwrap();
+        let cash = Gbm { rate, dividend: 0.0, vol };
+        let yielded = Gbm { rate, dividend: q, vol };
+        let (_, escrowed) = simulate_portfolio_dividends(
+            &[&cash], &[spec(100.0)], &factor, time, &config, Dependence::Gaussian, &[divs.clone()], true,
+        )
+        .unwrap();
+        let (_, matched) =
+            simulate_portfolio_scenarios(&[&yielded], &[spec(100.0)], &factor, time, &config, Dependence::Gaussian).unwrap();
+        let worst = escrowed.iter().zip(&matched).map(|(a, b)| ((a - b) / b).abs()).fold(0.0, f64::max);
+        assert!(worst < 1e-12, "largest relative gap {worst:e}");
+
+        // And a call on it prices to Black-Scholes-Merton on the escrowed spot,
+        // inside the run's own standard error over antithetic pairs.
+        let strike = 100.0;
+        let discount = (-rate * time).exp();
+        let pairs: Vec<f64> =
+            escrowed.chunks(2).map(|p| discount * p.iter().map(|s| (s - strike).max(0.0)).sum::<f64>() / 2.0).collect();
+        let m = pairs.len() as f64;
+        let mean = pairs.iter().sum::<f64>() / m;
+        let se = (pairs.iter().map(|p| (p - mean).powi(2)).sum::<f64>() / (m - 1.0) / m).sqrt();
+        let exact = european_price(
+            &Inputs { spot: 100.0, strike, time, rate, dividend: 0.0, vol, kind: OptionType::Call },
+            &divs,
+        );
+        assert!((mean - exact).abs() < 3.0 * se, "{mean} against {exact}, se {se}");
+    }
+
+    #[test]
+    fn the_path_is_where_the_two_models_part() {
+        // Same forward, same vol, same terminal law, different paths. The
+        // obvious guess is that the ex-date drops make drawdowns deeper. They
+        // come out shallower: the escrowed stock diffuses on the base less the
+        // dividends, so it moves fewer dollars a day until each ex-date, and
+        // four 1.25 drops do not make that up. Measured at 200,000 paths,
+        // weekly steps: mean maximum drawdown 22.02 under the cash schedule
+        // against 22.32 under the matched yield, a gap of 0.30 against a
+        // standard error of 0.027.
+        let (rate, vol, time) = (0.04, 0.2, 1.0);
+        let divs = quarterly();
+        let pv = ahead(&divs, rate, 0.0, time);
+        let q = -((100.0 - pv) / 100.0).ln() / time;
+        let config = PortfolioConfig { paths: 200_000, steps: 52, antithetic: true, seed: 5, sample_paths: 0 };
+        let factor = Factor::equicorrelated(1, 0.0).unwrap();
+        let cash = Gbm { rate, dividend: 0.0, vol };
+        let yielded = Gbm { rate, dividend: q, vol };
+        let (escrowed, _) = simulate_portfolio_dividends(
+            &[&cash], &[spec(100.0)], &factor, time, &config, Dependence::Gaussian, &[divs], false,
+        )
+        .unwrap();
+        let (matched, _) =
+            simulate_portfolio_scenarios(&[&yielded], &[spec(100.0)], &factor, time, &config, Dependence::Gaussian).unwrap();
+        let moments = |v: &[f64]| {
+            let n = v.len() as f64;
+            let m = v.iter().sum::<f64>() / n;
+            (m, v.iter().map(|x| (x - m).powi(2)).sum::<f64>() / (n - 1.0))
+        };
+        let ((a, va), (b, vb)) = (moments(&escrowed.drawdown), moments(&matched.drawdown));
+        // Unpaired, and ignoring the antithetic pairing, so conservative.
+        let se = ((va + vb) / escrowed.drawdown.len() as f64).sqrt();
+        println!("mean max drawdown: cash {a:.4}, matched yield {b:.4}, se of gap {se:.4}");
+        assert!(b - a > 4.0 * se, "{a} against {b}, se {se}");
+    }
+
+    #[test]
+    fn refuses_what_it_cannot_escrow() {
+        let factor = Factor::equicorrelated(1, 0.0).unwrap();
+        let config = PortfolioConfig { paths: 10, steps: 4, antithetic: false, seed: 1, sample_paths: 0 };
+        let gbm = Gbm { rate: 0.03, dividend: 0.0, vol: 0.2 };
+        let huge = vec![vec![CashDividend { time: 0.5, amount: 150.0 }]];
+        assert_eq!(
+            simulate_portfolio_dividends(&[&gbm], &[spec(100.0)], &factor, 1.0, &config, Dependence::Gaussian, &huge, false).unwrap_err(),
+            PortfolioError::DividendsExceedSpot { asset: 0 }
+        );
+        let two = vec![vec![], vec![]];
+        assert_eq!(
+            simulate_portfolio_dividends(&[&gbm], &[spec(100.0)], &factor, 1.0, &config, Dependence::Gaussian, &two, false).unwrap_err(),
+            PortfolioError::DividendSchedules { schedules: 2, assets: 1 }
+        );
+        // A process with no rate of its own is refused rather than handed one.
+        struct Rateless;
+        impl Process for Rateless {
+            fn step(&self, spot: f64, _: &mut pricing_core::mc::ProcessState, _: f64, w: f64, _: &[f64], _: &mut pricing_core::rng::Rng) -> f64 {
+                spot * (1.0 + w)
+            }
+        }
+        let quarterly = vec![quarterly()];
+        assert_eq!(
+            simulate_portfolio_dividends(&[&Rateless], &[spec(100.0)], &factor, 1.0, &config, Dependence::Gaussian, &quarterly, false)
+                .unwrap_err(),
+            PortfolioError::DividendsWithoutRate { asset: 0 }
+        );
+    }
+}

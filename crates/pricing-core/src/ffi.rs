@@ -18,7 +18,7 @@ use crate::de::DeConfig;
 use crate::heston::{self, CalibrationConfig, HestonParams, Quote, Residual, Surface};
 use crate::mc::{Gbm, Process};
 use crate::portfolio::{
-    simulate_portfolio_scenarios, simulate_portfolio_with, simulate_resampled_portfolio,
+    simulate_portfolio_dividends, simulate_portfolio_scenarios, simulate_portfolio_with, simulate_resampled_portfolio,
     simulate_resampled_scenarios, AssetSpec, Dependence, PortfolioConfig, PortfolioError,
     PortfolioResult,
 };
@@ -1135,6 +1135,9 @@ thread_local! {
     static MC_KEEP_SCENARIOS: core::cell::Cell<bool> = const { core::cell::Cell::new(false) };
     /// The last run's scenarios, row-major by path. Empty unless asked for.
     static MC_SCENARIOS: RefCell<Vec<f64>> = const { RefCell::new(Vec::new()) };
+    /// Cash dividends per asset, by index; shorter than the asset list when
+    /// the later assets pay nothing.
+    static MC_DIVIDENDS: RefCell<Vec<Vec<crate::dividends::CashDividend>>> = const { RefCell::new(Vec::new()) };
     static MC_SUMMARY: RefCell<[f64; MC_SUMMARY_STRIDE]> =
         const { RefCell::new([0.0; MC_SUMMARY_STRIDE]) };
 }
@@ -1149,6 +1152,7 @@ pub extern "C" fn pc_mc_reset() {
     MC_HISTORY.with(|h| h.borrow_mut().clear());
     MC_KEEP_SCENARIOS.with(|k| k.set(false));
     MC_SCENARIOS.with(|v| v.borrow_mut().clear());
+    MC_DIVIDENDS.with(|d| d.borrow_mut().clear());
 }
 
 /// Asks the next run to retain every path's terminal level for every asset,
@@ -1186,6 +1190,30 @@ fn with_scenarios(
     Ok(result)
 }
 
+/// Adds a cash dividend to the asset at `index` (in the order assets were
+/// added): `amount` per share, going ex `time` years from now. The run then
+/// escrows it, as `portfolio::simulate_portfolio_dividends` describes. Returns
+/// `0`, or `-1` when no asset has that index.
+#[no_mangle]
+pub extern "C" fn pc_mc_asset_dividend(index: i32, time: f64, amount: f64) -> i32 {
+    let n = MC_ASSETS.with(|a| a.borrow().len());
+    if index < 0 || index as usize >= n {
+        return -1;
+    }
+    MC_DIVIDENDS.with(|d| {
+        let mut d = d.borrow_mut();
+        if d.len() <= index as usize {
+            d.resize(index as usize + 1, Vec::new());
+        }
+        d[index as usize].push(crate::dividends::CashDividend { time, amount });
+    });
+    0
+}
+
+fn has_dividends() -> bool {
+    MC_DIVIDENDS.with(|d| d.borrow().iter().any(|s| !s.is_empty()))
+}
+
 /// Appends one historical log return. Rows are dates, columns are the assets
 /// in the order they were added.
 #[no_mangle]
@@ -1196,8 +1224,10 @@ pub extern "C" fn pc_mc_history_push(value: f64) {
 /// Replays whole historical dates for every asset at once, by the stationary
 /// bootstrap with the given mean block (1 is iid). Each asset's spot and
 /// weight are used; its process parameters are not. Returns the path count,
-/// `-1` with no assets, `-4` with zero paths or steps, or `-5` when the
-/// history is empty or not a whole number of rows.
+/// `-1` with no assets, `-4` with zero paths or steps, `-5` when the
+/// history is empty or not a whole number of rows, or `-7` when cash dividends
+/// were added: a replay of history has no riskless rate to escrow them at, and
+/// the returns it replays already carry whatever dividends history paid.
 #[no_mangle]
 pub extern "C" fn pc_mc_run_resampled(
     paths: i32,
@@ -1212,6 +1242,10 @@ pub extern "C" fn pc_mc_run_resampled(
     }
     if paths <= 0 || steps <= 0 {
         return -4;
+    }
+    if has_dividends() {
+        MC_RESULT.with(|slot| *slot.borrow_mut() = None);
+        return -7;
     }
     let config = PortfolioConfig {
         paths: paths as usize,
@@ -1409,7 +1443,9 @@ pub extern "C" fn pc_mc_corr_equicorrelated(rho: f64) {
 ///
 /// `-1` no assets, `-2` the correlation matrix is the wrong size, `-3` the
 /// matrix is not a valid correlation matrix (not symmetric, diagonal not one,
-/// or not positive definite), `-4` zero paths or steps.
+/// or not positive definite), `-4` zero paths or steps, `-6` retaining the
+/// scenarios would pass `MAX_SCENARIO_VALUES`, `-7` an asset's dividends before
+/// the horizon are worth the whole stock.
 ///
 /// The not-positive-definite case is worth its own code rather than being
 /// folded into a generic failure: it is the one an analyst causes, by
@@ -1461,11 +1497,27 @@ pub extern "C" fn pc_mc_run(
         let nu = MC_NU.with(|cell| cell.get());
         let dependence = if nu > 0.0 { Dependence::Student { nu } } else { Dependence::Gaussian };
         let keep = MC_KEEP_SCENARIOS.with(|k| k.get());
-        match with_scenarios(
-            keep,
-            || simulate_portfolio_with(&processes, &specs, &factor, time, &config, dependence),
-            || simulate_portfolio_scenarios(&processes, &specs, &factor, time, &config, dependence),
-        ) {
+        let outcome = if has_dividends() {
+            // One schedule per asset, the later ones empty if never added to.
+            let mut schedules = MC_DIVIDENDS.with(|d| d.borrow().clone());
+            schedules.resize(n, Vec::new());
+            MC_SCENARIOS.with(|v| v.borrow_mut().clear());
+            simulate_portfolio_dividends(&processes, &specs, &factor, time, &config, dependence, &schedules, keep).map(
+                |(result, scenarios)| {
+                    if keep {
+                        MC_SCENARIOS.with(|v| *v.borrow_mut() = scenarios);
+                    }
+                    result
+                },
+            )
+        } else {
+            with_scenarios(
+                keep,
+                || simulate_portfolio_with(&processes, &specs, &factor, time, &config, dependence),
+                || simulate_portfolio_scenarios(&processes, &specs, &factor, time, &config, dependence),
+            )
+        };
+        match outcome {
             Ok(result) => {
                 MC_SUMMARY.with(|summary| {
                     *summary.borrow_mut() = [
@@ -1484,8 +1536,15 @@ pub extern "C" fn pc_mc_run(
                 MC_RESULT.with(|slot| *slot.borrow_mut() = Some(result));
                 count
             }
-            Err(PortfolioError::ScenarioCap { .. }) => -6,
-            Err(_) => -3,
+            // A failed run leaves no result, as `pc_mc_terminal` promises.
+            Err(error) => {
+                MC_RESULT.with(|slot| *slot.borrow_mut() = None);
+                match error {
+                    PortfolioError::ScenarioCap { .. } => -6,
+                    PortfolioError::DividendsExceedSpot { .. } => -7,
+                    _ => -3,
+                }
+            }
         }
     })
 }

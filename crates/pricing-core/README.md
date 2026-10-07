@@ -280,11 +280,12 @@ no-dependencies rule stated in `lib.rs`: the rule exists because every dependenc
 work identically on both targets, and this is the dependency that *makes* them identical.
 
 `scripts/verify-wasm-parity.mjs` compares raw f64 bit patterns — not decimals, which would
-hide exactly the disagreement it exists to find — across 5,680 values spanning BSM, all ten
+hide exactly the disagreement it exists to find — across 5,757 values spanning BSM, all ten
 Greeks, both American paths, implied vol, every cell and guard figure of a 40-leg 25x15
 grid, curves, bonds, the Hull-White lattice, Monte Carlo, a mixed-process portfolio,
-Heston with its calibration, the pin and early-exercise thresholds, the volatility
-analytics, and two complete SVI fits. It currently reports agreement on every bit.
+cash dividends in the scalar pricers, the grid and a portfolio run, Heston with its
+calibration, the pin and early-exercise thresholds, the volatility analytics, and two
+complete SVI fits. It currently reports agreement on every bit.
 
 **The grid had to be added before the second failure showed up.** Every one of the 2250
 cell values already agreed; one guard figure did not, and only that one. The cells are the
@@ -597,6 +598,31 @@ takes 125–132ms at Standard and 76–80ms at Draft across runs (`scripts/bench
 browser drags at Draft, as it already does for the plain American grid, and the server
 settles at Standard.
 
+## Cash dividends in the portfolio simulator
+
+`simulate_portfolio_dividends` (and `pc_mc_asset_dividend` at the boundary) takes one
+cash-dividend schedule per asset, on the same escrowed model as the scalar pricers and the
+grid: each process drives the stock less the present value of the dividends still to come
+before the horizon, and the reported level adds that present value back. The price falls on
+each ex-date; the terminal level is the escrowed process; a call on it prices to
+Black-Scholes-Merton on the escrowed spot inside the run's own standard error. With no
+schedule, or only empty ones, the run is bit-identical to the one without the argument.
+
+The terminal law is not what this changes. A continuous yield chosen to give the same forward,
+at the same vol, has exactly the same terminal distribution, and on the same draws the two
+runs' terminal levels agree to 1e-12. So per-asset scenarios handed to the optimizer are no
+different, and the reason to give the schedule is the path: the `distribution` port's
+drawdowns and the path sample. There the obvious guess — the ex-date drops make drawdowns
+deeper — is wrong. The escrowed stock diffuses on the smaller base until each ex-date, and
+that outweighs the drops: with four 1.25 dividends at 20% vol, the mean maximum drawdown is
+22.02 under the cash schedule against 22.32 under the matched yield, a gap of eleven standard
+errors (`the_path_is_where_the_two_models_part`).
+
+The portfolio value is price, not total return: the dividend leaves the stock and is not
+reinvested, as the yield's `r - q` drift already treats it. A replay of history has no rate to
+escrow at and its returns already carry what history paid, so the bootstrap refuses a schedule
+(`-7`), as does a run whose dividends before the horizon are worth the whole stock.
+
 ## Pin and early exercise, and why they are here
 
 `risk.rs` is four small functions and none of them is interesting arithmetic:
@@ -678,7 +704,11 @@ WASM.
   t copula) and the joint bootstrap are separate runs, and variance gamma is in neither.
 - **Arbitrage-free surfaces by construction.** SVI is raw SVI fitted per slice, with the
   butterfly condition penalised and the calendar condition checked afterwards, not SSVI.
-- **Discrete dividends in Monte Carlo and Andersen-Lake.** The scalar pricers and the
-  grid take a cash-dividend schedule (escrowed model, checked against Roll-Geske-Whaley);
-  Andersen-Lake and the Monte Carlo paths take a continuous yield only.
+- **Discrete dividends in single-asset Monte Carlo and Andersen-Lake.** The scalar
+  pricers, the grid and the portfolio simulator take a cash-dividend schedule (escrowed
+  model, checked against Roll-Geske-Whaley and Black-Scholes-Merton); Andersen-Lake and
+  `mc::european_mc` take a continuous yield only, and the joint bootstrap takes none.
+- **The escrowed model's own approximation.** It applies the vol to the stock less the
+  dividends, so a vol quoted on the stock itself understates long-dated options with large
+  dividends a little. The simulator inherits this; it is a question of which vol to feed in.
 

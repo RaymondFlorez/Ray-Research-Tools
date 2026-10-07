@@ -2,6 +2,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CorrelationRejected,
   DEFAULT_COST_CEILING,
+  DividendsRejected,
+  Pricer,
   DependenceRejected,
   HistoryRejected,
   gbmFromHistory,
@@ -527,5 +529,51 @@ describe('a GBM asset fitted to history (PRD 5.8 calibration)', () => {
     const none = gbmFromHistory(wasm, { id: 'X', closes: [100], weight: 1, rate: 0, dividend: 0 });
     expect(Number.isNaN(none.asset.vol)).toBe(true);
     expect(none.warnings[0]).toMatch(/fewer than two positive closes/);
+  });
+});
+
+describe('cash dividends (PRD 5.4 in the simulator)', () => {
+  const quarterly = [0.15, 0.4, 0.65, 0.9].map((time) => ({ time, amount: 1.25 }));
+
+  it('changes nothing when the schedule is empty', () => {
+    const a = runMonteCarlo(wasm, spec({ percentiles: [0.05, 0.5, 0.95], samplePaths: 2 }));
+    const b = runMonteCarlo(wasm, spec({ assets: [asset({ dividends: [] })], percentiles: [0.05, 0.5, 0.95], samplePaths: 2 }));
+    expect(b.percentiles).toEqual(a.percentiles);
+    expect(b.sample).toEqual(a.sample);
+  });
+
+  it('drops the price on each ex-date and prices a call to the escrowed formula', () => {
+    // Through the boundary: the reported path falls on the ex-dates with no
+    // volatility to hide it, and with volatility a call on the kept scenarios
+    // matches the pricer's own escrowed Black-Scholes.
+    const flat = runMonteCarlo(wasm, spec({ assets: [asset({ vol: 0, dividends: quarterly })], paths: 2, steps: 20, samplePaths: 1, antithetic: false }));
+    const path = flat.sample[0]!;
+    expect(path.slice(1).filter((v, k) => v < path[k]!)).toHaveLength(4);
+
+    const run = runMonteCarlo(wasm, spec({ assets: [asset({ dividends: quarterly })], paths: 100_000, steps: 8, keepScenarios: true }));
+    const levels = run.scenarios!.levels();
+    const discount = Math.exp(-0.03);
+    const pairs: number[] = [];
+    for (let i = 0; i + 1 < levels.length; i += 2) {
+      pairs.push((discount * (Math.max(levels[i]! - 100, 0) + Math.max(levels[i + 1]! - 100, 0))) / 2);
+    }
+    const mean = pairs.reduce((a, b) => a + b, 0) / pairs.length;
+    const se = Math.sqrt(pairs.reduce((a, p) => a + (p - mean) ** 2, 0) / (pairs.length - 1) / pairs.length);
+    const exact = new Pricer(wasm).priceWithDividends(
+      { spot: 100, strike: 100, time: 1, rate: 0.03, dividend: 0, vol: 0.25, kind: 'call' },
+      quarterly,
+      { style: 'european' },
+    );
+    expect(Math.abs(mean - exact)).toBeLessThan(3 * se);
+  });
+
+  it('refuses a schedule it cannot honour, and names the asset', () => {
+    const bad = (dividends: { time: number; amount: number }[]) =>
+      () => runMonteCarlo(wasm, spec({ assets: [asset(), asset({ id: 'XYZ', dividends })], correlation: { kind: 'independent' } }));
+    expect(bad([{ time: 0.5, amount: Number.NaN }])).toThrow(DividendsRejected);
+    expect(bad([{ time: 0.5, amount: -1 }])).toThrow(/XYZ/);
+    expect(bad([{ time: 0.5, amount: 150 }])).toThrow(/XYZ were refused: the dividends due before the horizon are worth the whole stock/);
+    // A dividend after the horizon is no claim on this run, whatever its size.
+    expect(bad([{ time: 2, amount: 150 }])).not.toThrow();
   });
 });

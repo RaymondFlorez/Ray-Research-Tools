@@ -462,6 +462,36 @@ fn main() {
         }
     }
 
+    // Cash dividends in the portfolio simulator: an exp per dividend per step
+    // in the escrow table, and the escrowed level added back at every step.
+    ffi::pc_mc_reset();
+    ffi::pc_mc_add_asset(100.0, 1.0, 0.25, 0.04, 0.0);
+    ffi::pc_mc_add_asset(60.0, -1.5, 0.35, 0.04, 0.005);
+    ffi::pc_mc_add_heston(80.0, 2.0, 0.04, 0.0, 0.0625, 0.09, 1.6, 0.6, -0.65);
+    ffi::pc_mc_corr_equicorrelated(0.5);
+    for time in [0.1, 0.35, 0.6, 0.85] {
+        ffi::pc_mc_asset_dividend(0, time, 0.9);
+        ffi::pc_mc_asset_dividend(2, time + 0.05, 0.6);
+    }
+    ffi::pc_mc_keep_scenarios(1);
+    emit("divmc_run".to_string(), ffi::pc_mc_run(1.0, 512, 26, 1, 515.0, 2) as f64);
+    let summary = ffi::pc_mc_summary();
+    for which in 0..ffi::MC_SUMMARY_STRIDE {
+        emit(format!("divmc_summary({which})"), unsafe { *summary.add(which) });
+    }
+    for q in [0.01, 0.1, 0.5, 0.9, 0.99] {
+        emit(format!("divmc_pct({q})"), ffi::pc_mc_percentile(q));
+        emit(format!("divmc_dd({q})"), ffi::pc_mc_drawdown_percentile(q));
+    }
+    let sample = ffi::pc_mc_sample();
+    for step in 0..=26 {
+        emit(format!("divmc_path({step})"), unsafe { *sample.add(step) });
+    }
+    let scenarios = ffi::pc_mc_scenarios();
+    for k in 0..30 {
+        emit(format!("divmc_scen({k})"), unsafe { *scenarios.add(k) });
+    }
+
     // Heston: a complex characteristic function under a Gauss-Legendre rule,
     // where a single differing bit in `exp`, `ln` or `sqrt` of a complex number
     // moves the integrand at every node.

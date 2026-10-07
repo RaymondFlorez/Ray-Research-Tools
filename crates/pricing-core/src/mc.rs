@@ -76,6 +76,17 @@ pub trait Process {
     fn uses_brownian(&self) -> bool {
         true
     }
+
+    /// The riskless rate the process grows at under the pricing measure.
+    ///
+    /// A cash dividend's present value is discounted at it, so this is what
+    /// `portfolio::simulate_portfolio_dividends` asks before it escrows one. A
+    /// process with no such rate — a replay of history — answers `None`, and
+    /// is refused cash dividends rather than handed a rate from somewhere else.
+    fn rate(&self) -> Option<f64> {
+        None
+    }
+
     /// Advances one step. `w` is the Brownian increment for this step.
     ///
     /// `rng` is for processes whose increments need rejection sampling — a
@@ -114,6 +125,10 @@ pub struct Gbm {
 }
 
 impl Process for Gbm {
+    fn rate(&self) -> Option<f64> {
+        Some(self.rate)
+    }
+
     fn step(
         &self,
         spot: f64,
@@ -152,6 +167,10 @@ pub struct Heston {
 }
 
 impl Process for Heston {
+    fn rate(&self) -> Option<f64> {
+        Some(self.rate)
+    }
+
     fn extra_dimensions(&self) -> usize {
         1
     }
@@ -197,6 +216,10 @@ pub struct Merton {
 }
 
 impl Process for Merton {
+    fn rate(&self) -> Option<f64> {
+        Some(self.rate)
+    }
+
     fn extra_dimensions(&self) -> usize {
         // One uniform to count jumps, one normal to size them.
         2
@@ -262,6 +285,10 @@ pub struct VarianceGamma {
 }
 
 impl Process for VarianceGamma {
+    fn rate(&self) -> Option<f64> {
+        Some(self.rate)
+    }
+
     fn extra_dimensions(&self) -> usize {
         1
     }

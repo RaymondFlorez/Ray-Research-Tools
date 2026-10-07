@@ -435,6 +435,35 @@ function wasmDividends() {
 
 const dividendRows = wasmDividends();
 
+/** Cash dividends in the portfolio simulator, through WASM. */
+function wasmDividendPortfolio() {
+  const rows = new Map();
+  w.pc_mc_reset();
+  w.pc_mc_add_asset(100, 1, 0.25, 0.04, 0);
+  w.pc_mc_add_asset(60, -1.5, 0.35, 0.04, 0.005);
+  w.pc_mc_add_heston(80, 2, 0.04, 0, 0.0625, 0.09, 1.6, 0.6, -0.65);
+  w.pc_mc_corr_equicorrelated(0.5);
+  for (const time of [0.1, 0.35, 0.6, 0.85]) {
+    w.pc_mc_asset_dividend(0, time, 0.9);
+    w.pc_mc_asset_dividend(2, time + 0.05, 0.6);
+  }
+  w.pc_mc_keep_scenarios(1);
+  rows.set('divmc_run', w.pc_mc_run(1, 512, 26, 1, 515, 2));
+  const summary = new Float64Array(w.memory.buffer, w.pc_mc_summary(), 9);
+  for (let which = 0; which < 9; which += 1) rows.set(`divmc_summary(${which})`, summary[which]);
+  for (const q of [0.01, 0.1, 0.5, 0.9, 0.99]) {
+    rows.set(`divmc_pct(${q})`, w.pc_mc_percentile(q));
+    rows.set(`divmc_dd(${q})`, w.pc_mc_drawdown_percentile(q));
+  }
+  const sample = new Float64Array(w.memory.buffer, w.pc_mc_sample(), 27);
+  for (let step = 0; step <= 26; step += 1) rows.set(`divmc_path(${step})`, sample[step]);
+  const scenarios = new Float64Array(w.memory.buffer, w.pc_mc_scenarios(), 30);
+  for (let k = 0; k < 30; k += 1) rows.set(`divmc_scen(${k})`, scenarios[k]);
+  return rows;
+}
+
+const dividendPortfolio = wasmDividendPortfolio();
+
 /** Heston closed form and a small calibration, through WASM. */
 function wasmHeston() {
   const rows = new Map();
@@ -493,6 +522,7 @@ function recompute(label) {
   if (tcopula.has(label)) return tcopula.get(label);
   if (resampled.has(label)) return resampled.get(label);
   if (dividendRows.has(label)) return dividendRows.get(label);
+  if (dividendPortfolio.has(label)) return dividendPortfolio.get(label);
 
   let match = /^norm_cdf\((-?[\d.]+)\)$/.exec(label);
   if (match) return w.pc_norm_cdf(Number(match[1]));
@@ -559,7 +589,7 @@ for (const [label, nativeBits] of native) {
 
 console.log(
   `compared ${native.length} values across BSM, Greeks, American, implied vol ` +
-    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends (scalar and on the grid), ` +
+    `a 40-leg grid, curves (drawn shocks included), bonds, a Hull-White lattice, Monte Carlo, a mixed-process portfolio, a t-copula portfolio, a jointly resampled portfolio, discrete dividends (scalar, on the grid and in a portfolio run), ` +
     `Heston with its calibration, the pin and early-exercise thresholds, the vol analytics and SVI fits` +
     `${nans > 0 ? ` (${nans} NaN by design)` : ''}`,
 );

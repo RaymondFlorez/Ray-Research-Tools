@@ -5,7 +5,7 @@ through it. This is where the engine stops being a library and becomes a node on
 canvas.
 
 ```bash
-npm test --workspace @picasso/canvas-pricing    # 225 tests
+npm test --workspace @picasso/canvas-pricing    # 228 tests
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 node apps/canvas-demo/scripts/payoff-shots.mjs  # the same thing in a browser
 ```
@@ -168,6 +168,15 @@ copies its grid field by field and the new field was not on the list, so a divid
 book priced on a continuous yield without a word. A test now fails if it ever does again.
 How the grid prices American legs under dividends, and why there is no guarded fast path,
 is in the crate's README.
+
+`runMonteCarlo` takes a schedule per asset (`McAsset.dividends`) on the same model, and a
+call on its kept scenarios prices to `priceWithDividends` inside the run's standard error. It
+is worth knowing what the schedule changes. The terminal law is that of a continuous yield
+with the same forward, so an optimizer reading the scenarios sees nothing new. The path is
+what moves: the price drops on each ex-date, and the drawdowns come out *shallower* than under
+the matched yield, not deeper — the escrowed stock diffuses on the smaller base until each
+ex-date. The crate's README has the measurement. A schedule with a non-finite or negative
+amount is refused rather than skipped, and so is one worth the whole stock, naming the asset.
 
 ## Heston, and where it belongs
 
@@ -493,8 +502,9 @@ against nothing at all.
   which days count as policy events, happens before it.
 - **Cash dividends on the grid are over budget in the browser at Standard.** A book of
   40 dividend-paying American legs reprices in 59ms native but 125–132ms in WASM at Standard,
-  76–80ms at Draft; the browser should drag at Draft. Monte Carlo still takes a continuous
-  yield only.
+  76–80ms at Draft; the browser should drag at Draft.
+- **The bootstrap takes no cash dividends.** `runResampled` replays history, whose returns
+  already carry what history paid, and has no rate to escrow a schedule at.
 - **Pricing off the surface is opt-in.** `evaluateStrategy` reads every
   leg's vol off a fitted surface when given one and uses each leg's own vol
   otherwise; nothing fits or refreshes a surface automatically from a chain.

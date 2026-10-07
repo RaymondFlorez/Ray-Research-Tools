@@ -39,7 +39,7 @@ pub struct CashDividend {
 
 /// Present value now of the dividends that go ex strictly after `from` and at
 /// or before `expiry`.
-fn pv_between(dividends: &[CashDividend], rate: f64, from: f64, expiry: f64) -> f64 {
+pub(crate) fn pv_between(dividends: &[CashDividend], rate: f64, from: f64, expiry: f64) -> f64 {
     dividends
         .iter()
         .filter(|d| d.time > from && d.time <= expiry && d.amount > 0.0)
