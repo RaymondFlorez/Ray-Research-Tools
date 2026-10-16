@@ -1,8 +1,8 @@
 # Working in this repository
 
 Picasso, built against `docs/picasso/PRD.md`. Sixteen npm workspace packages
-under `packages/`, one Rust crate under `crates/pricing-core`, demo surfaces
-under `apps/canvas-demo`.
+under `packages/`, one Rust crate under `crates/pricing-core`, one Go module
+under `services/dataplane`, demo surfaces under `apps/canvas-demo`.
 
 ## Commands
 
@@ -18,7 +18,17 @@ npm test             # vitest, per workspace; suites that load the WASM build
 
 cd crates/pricing-core && cargo test --release
 node scripts/verify-wasm-parity.mjs   # native vs WASM, bit for bit
+
+cd services/dataplane && go test -race ./...
+# DATAPLANE_PG_URL=postgres://... adds the Postgres store; CI also sets
+# DATAPLANE_REQUIRE_PG=1 so those tests fail rather than skip without one.
 ```
+
+The Go data plane and `canvas-data` implement the same point-in-time,
+conflation and entitlement rules. `canvas-data/test/conformance.test.ts`
+writes `services/dataplane/testdata/conformance.json` and the Go tests must
+reproduce it; change a rule on one side and both suites say so.
+`UPDATE_CONFORMANCE=1` regenerates the file — a change to the contract.
 
 `.github/workflows/ci.yml` runs all of this, plus the demo's browser checks,
 from a clean checkout. Verify a build-system change the same way — a fresh

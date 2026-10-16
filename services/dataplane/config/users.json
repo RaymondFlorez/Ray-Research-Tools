@@ -1,0 +1,4 @@
+{
+  "analyst": { "tenant": "dev", "vendors": [], "positions": false, "mnpi": false },
+  "pm": { "tenant": "dev", "vendors": ["vendor-b"], "positions": true, "mnpi": false }
+}

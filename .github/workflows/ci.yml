@@ -64,3 +64,34 @@ jobs:
             node "apps/canvas-demo/scripts/$check.mjs"
             echo "::endgroup::"
           done
+
+  # The Go data plane, against a real Postgres. DATAPLANE_REQUIRE_PG turns the
+  # tests that would skip without a database into failures, so this job cannot
+  # pass by not running them. The conformance file it reads is the one the
+  # typescript job regenerates and compares; both must agree with it.
+  dataplane:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATAPLANE_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+      DATAPLANE_REQUIRE_PG: '1'
+    defaults:
+      run:
+        working-directory: services/dataplane
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/dataplane/go.mod
+          cache-dependency-path: services/dataplane/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - run: go test -race ./...

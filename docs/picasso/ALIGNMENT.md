@@ -34,6 +34,15 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 
 ## By section
 
+### 2 · Architecture: the data plane
+
+| Requirement | Status | Where |
+|---|---|---|
+| 2.3 `stream-ingest`: adapters, normalization, sequence gaps, staleness, partitioning, subjects | Partial | `services/dataplane` ingest, stream: vendor-independent and tested; no vendor adapter (none chosen, and the network policy refuses every market data host) |
+| 2.3 `data-access`: point-in-time, entitlement-filtered reads | Built, on Postgres | `services/dataplane` pit, access, server; held to `canvas-data`'s answers by a shared conformance file |
+| 2.3 Redpanda, ClickHouse, Iceberg, NATS, WebTransport | Infra | Not in this environment; SSE stands in for WebTransport |
+| 7.3 server-side conflation in the ingest tier | Built | `services/dataplane` conflate, bit-identical to `canvas-data` on the contract |
+
 ### 3 · Canvas and spatial model
 
 | Requirement | Status | Where |
@@ -151,7 +160,9 @@ needs it in both solvers.
 ## Critical path to production
 
 Everything left is integration with real systems, in roughly this order of leverage:
-market data plane and point-in-time store (unblocks live tiles, CodeNode's SQL, real
-backtests); model fleet behind the router's manifests (unblocks the semantic and text ink
+market data plane — the vendor-independent service is built (`services/dataplane`); what
+remains is a vendor adapter, which needs a chosen vendor, its host allowed by the network
+policy and its key, then wiring the live tile to `/v1/stream` (unblocks live tiles,
+CodeNode's SQL, real backtests); model fleet behind the router's manifests (unblocks the semantic and text ink
 passes, QueryNode end to end); collaboration server and Postgres snapshots; the code
 sandbox; GPU verification of Phase 0's frame budget on real hardware.

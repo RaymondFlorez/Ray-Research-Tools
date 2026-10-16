@@ -1,0 +1,4 @@
+[
+  { "feed": "feed-a", "symbol": "NVDA", "id": "NVDA", "assetClass": "equity", "class": "public" },
+  { "feed": "feed-a", "symbol": "AMD", "id": "AMD", "assetClass": "equity", "class": "licensed", "vendor": "vendor-b" }
+]

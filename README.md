@@ -49,6 +49,12 @@ README carries the figure it was measured at and the gaps it does not close.
 |---|---|
 | [`pricing-core`](crates/pricing-core) | Rust: BSM and the full Greek set, implied vol, Andersen-Lake American exercise with the C.2 accuracy guard, curves, bonds, a Hull-White lattice, Monte Carlo with four processes, bootstraps and copulas. Compiles native and to WASM, verified bit-identical. |
 
+## Services
+
+| Service | Description |
+|---|---|
+| [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. No vendor adapter yet. |
+
 ## Apps
 
 | App | Description |
@@ -88,7 +94,7 @@ name.
 npm install
 npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,761 TypeScript tests across 16 packages
+npm test             # 1,762 TypeScript tests across 16 packages
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
@@ -101,6 +107,9 @@ node apps/canvas-demo/scripts/gl-shots.mjs      # webgl: verifies the shaders dr
 cd crates/pricing-core && cargo test --release   # 247 tests
 cargo run --release --example grid_bench --manifest-path crates/pricing-core/Cargo.toml
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
+
+# the Go data plane
+cd services/dataplane && go test -race ./...     # 16 tests; DATAPLANE_PG_URL adds the Postgres store
 ```
 
 CI (`.github/workflows/ci.yml`) runs all of the above from a clean checkout, plus all eight

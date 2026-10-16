@@ -339,6 +339,14 @@ written so it cannot leak:
 
 Each output lists the ops applied, in words.
 
+## The same rules, in Go
+
+`services/dataplane` is the server side of three of these modules: point-in-time reads,
+conflation and entitlements. `test/conformance.test.ts` writes what the TypeScript does on a
+fixed set of cases to `services/dataplane/testdata/conformance.json` and fails if that
+changes; the Go tests read the same file and must match it, bit for bit. Changing one of
+these rules here is a change to that contract, and `UPDATE_CONFORMANCE=1` is how it is made.
+
 ## What is not covered
 
 - **The production data plane.** No ClickHouse, Iceberg, Redpanda, vendor feed or
