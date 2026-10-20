@@ -18,7 +18,9 @@
     "@picasso/canvas-ink": "*",
     "@picasso/canvas-sync": "*",
     "@picasso/canvas-gl": "*",
-    "@picasso/canvas-pricing": "*"
+    "@picasso/canvas-pricing": "*",
+    "@picasso/canvas-data": "*",
+    "@picasso/canvas-guard": "*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

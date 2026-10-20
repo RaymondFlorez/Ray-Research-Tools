@@ -173,6 +173,28 @@ on the daily one; that a wire from empty space is an annotation arrow; that the 
 opens the parameter editor; that `T` and `Shift T` make a loose sticky and a bound TextPad; and
 that keys typed into a field stay text.
 
+## Live
+
+`live.html` is a pair of live tiles over the Go data plane (`services/dataplane`), read
+through the demo server, which proxies `/v1/` when `DATAPLANE_URL` is set. Every number goes
+through canvas-guard's `present()`, so its source and age travel with it; the source is
+whatever the data plane says feeds it, which today is a replayed recording named as such.
+
+`scripts/live-shots.mjs` builds the Go binary, replays a synthetic recording through it (eight
+seconds, two channels, three messages missing on one), and checks eleven things in Chromium:
+- as an unlicensed analyst, NVDA shows a value, and AMD shows "blocked · Requires a vendor-b
+  licence." and no number;
+- 100 ticks a second arrive as at most four updates a second;
+- as the PM, AMD appears, and after the gap it says "recovering after a feed gap", naming the
+  missing sequence range, while NVDA on the other channel stays live;
+- when the recording ends, NVDA says "3s old · stale data", and its age keeps counting;
+- AMD stays recovering, because silence does not clear a gap.
+
+Making it run turned up two bugs. canvas-guard built its red-team corpus with Node's `Buffer`
+when the module loaded, so canvas-guard could not be imported in a browser at all. And the
+first version of the proxy tore down every upstream request at once: a Node request emits
+`close` when its body has been read, which for a GET is immediately.
+
 ## Rates
 
 `rates.html` is the rate branch of the PRD's own walkthrough, made runnable. Section 7.4

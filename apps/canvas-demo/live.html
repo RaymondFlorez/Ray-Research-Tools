@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso live tiles</title>
+    <style>
+      html, body { margin: 0; background: #f6f5f2; color: #1c1a17; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+      #tiles { display: grid; grid-template-columns: repeat(auto-fill, 260px); gap: 16px; }
+      .tile { background: #fff; border: 1px solid #c9c6bf; border-radius: 6px; padding: 14px 16px; min-height: 110px; }
+      .tile.stale { border-color: #b08234; background: #fdf6e7; }
+      .tile.recovering { border-color: #b5532a; background: #fbefe9; }
+      .tile.blocked { background: #efeeea; color: #6f6a61; }
+      .sym { font-weight: 600; letter-spacing: 0.04em; }
+      .value { font-size: 28px; margin: 6px 0 2px; }
+      .caption { color: #3a362f; }
+      .detail { color: #6f6a61; font-size: 11px; margin-top: 4px; }
+      label { color: #6f6a61; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-data": "/packages/canvas-data/dist/index.js",
+          "@picasso/canvas-router": "/packages/canvas-router/dist/index.js",
+          "@picasso/canvas-hypothesis": "/packages/canvas-hypothesis/dist/index.js",
+          "@picasso/canvas-agents": "/packages/canvas-agents/dist/index.js",
+          "@picasso/canvas-guard": "/packages/canvas-guard/dist/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <div>
+        <label for="user">viewing as</label>
+        <select id="user"><option value="analyst">analyst (no vendor-b licence)</option><option value="pm">pm (vendor-b licensed)</option></select>
+      </div>
+      <div id="status">connecting</div>
+      <div id="tiles"></div>
+      <p>Each number is drawn through present(): its source and its age travel with it, and a series that stops updating says so instead of freezing.</p>
+    </main>
+    <script type="module" src="/apps/canvas-demo/dist/live.js"></script>
+  </body>
+</html>

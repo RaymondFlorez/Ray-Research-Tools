@@ -22,7 +22,7 @@ go run ./cmd/dataplane -users config/users.json -symbology config/symbology.json
 | `ingest` | 2.3 | Adapter interface, the canonical wire format, symbology, sequence gaps, series health, subjects, partitions |
 | `conflate` | 7.3 | 4Hz per series, field by field |
 | `stream` | 2.3, 7.3 | The hub: decode, sequence, health, one conflator per subscriber; replay of a recording |
-| `server` | 2.3 | `/v1/asof`, `/v1/stream` (Server-Sent Events), `/v1/counts` |
+| `server` | 2.3 | `/v1/asof`, `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
 
@@ -81,7 +81,9 @@ half a second of 200-a-second ticks arrives as two to four updates.
 - **Server-Sent Events, JSON-encoded**, not WebTransport with a binary encoding (PRD 2.3).
 - **No snapshot recovery.** A gap is detected and reported; requesting a snapshot from the
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.
-- **No canvas wiring yet.** No node in the canvas reads `/v1/asof` or `/v1/stream`; the live
-  tile is the next step.
+- **One consumer.** `apps/canvas-demo/live.html` reads `/v1/stream` through the demo server's
+  proxy, with canvas-data's `LiveTiles`, and `live-shots.mjs` checks it against this binary in
+  Chromium. No canvas node reads `/v1/asof` yet; the time scrub still reads canvas-data's
+  in-memory store.
 - **Throughput is not measured.** The PRD's 1.5M messages a second through Redpanda is a
   cluster figure; nothing here claims it.

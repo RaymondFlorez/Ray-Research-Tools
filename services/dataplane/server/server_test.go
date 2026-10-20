@@ -62,6 +62,9 @@ func get(t *testing.T, url, user string) (*http.Response, map[string]any) {
 
 func TestReadsAreRefusedWithoutAUserOrAKnowledgeTime(t *testing.T) {
 	ts, _ := fixture(t)
+	if _, body := get(t, ts.URL+"/v1/feed", "pm"); body["feed"] != "no feed connected" {
+		t.Fatalf("feed: %v", body)
+	}
 	if res, _ := get(t, ts.URL+"/v1/asof?key=NVDA.revenue&knowledge=2026-01-01", ""); res.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("no user: %d", res.StatusCode)
 	}

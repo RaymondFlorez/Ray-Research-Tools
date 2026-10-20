@@ -1,5 +1,5 @@
 /** Minimal static server for the demo. Serves the repo root so the import map resolves. */
-import { createServer } from 'node:http';
+import { createServer, request } from 'node:http';
 import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
@@ -21,8 +21,45 @@ const TYPES = {
   '.wasm': 'application/wasm',
 };
 
+/**
+ * Where `/v1/` goes: the Go data plane (services/dataplane), when one is
+ * running. Proxied rather than called cross-origin so the pages keep
+ * `connect-src 'self'`, and streamed through unbuffered so a Server-Sent Event
+ * reaches the page when it is sent, not when a buffer fills.
+ */
+const DATAPLANE = process.env.DATAPLANE_URL;
+
+function proxy(req, res) {
+  if (!DATAPLANE) {
+    res.writeHead(502, { 'content-type': 'text/plain' }).end('no data plane: set DATAPLANE_URL\n');
+    return;
+  }
+  const target = new URL(req.url ?? '/', DATAPLANE);
+  const upstream = request(
+    target,
+    { method: req.method, headers: { ...req.headers, host: target.host } },
+    (up) => {
+      res.writeHead(up.statusCode ?? 502, { ...up.headers, ...securityHeaders() });
+      up.pipe(res);
+    },
+  );
+  upstream.on('error', (err) => {
+    if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
+    res.end(`data plane unreachable: ${err.message}\n`);
+  });
+  // The response's close, not the request's: a request emits `close` as soon
+  // as its body is read, which for a GET is at once, and tearing the upstream
+  // down then kills every stream before its first event.
+  res.on('close', () => upstream.destroy());
+  req.pipe(upstream);
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
+  if (url.pathname.startsWith('/v1/')) {
+    proxy(req, res);
+    return;
+  }
   let path = decodeURIComponent(url.pathname);
   if (path === '/') path = '/apps/canvas-demo/index.html';
   const resolved = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));

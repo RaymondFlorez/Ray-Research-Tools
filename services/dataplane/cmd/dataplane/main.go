@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -115,7 +116,9 @@ func main() {
 	}
 
 	hub := stream.NewHub(sym, *staleAfter)
+	feed := "no feed connected"
 	if *replay != "" {
+		feed = "replay of " + filepath.Base(*replay)
 		f, err := os.Open(*replay)
 		if err != nil {
 			log.Fatal(err)
@@ -128,7 +131,7 @@ func main() {
 		}()
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: (&server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: *addr, Handler: (&server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Feed: feed}).Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

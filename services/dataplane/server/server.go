@@ -36,6 +36,10 @@ type Server struct {
 	Reader access.Reader
 	Hub    *stream.Hub
 	Users  Users
+	// Feed names what feeds the stream, in the analyst's terms — "replay of
+	// a recording", once there is one, a vendor's name. Shown as each tile's
+	// source, so a replay is never mistaken for a market.
+	Feed string
 	// Drain and health cadence for streams; zero means 50ms and 1s.
 	DrainEvery, HealthEvery time.Duration
 	Now                     func() time.Time
@@ -46,6 +50,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /v1/asof", s.withUser(s.asOf))
 	mux.HandleFunc("GET /v1/stream", s.withUser(s.stream))
+	mux.HandleFunc("GET /v1/feed", s.withUser(func(w http.ResponseWriter, _ *http.Request, _ entitle.Entitlements) {
+		feed := s.Feed
+		if feed == "" {
+			feed = "no feed connected"
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"feed": feed})
+	}))
 	mux.HandleFunc("GET /v1/counts", s.withUser(func(w http.ResponseWriter, _ *http.Request, _ entitle.Entitlements) {
 		writeJSON(w, http.StatusOK, s.Hub.Counts())
 	}))

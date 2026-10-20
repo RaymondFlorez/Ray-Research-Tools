@@ -411,7 +411,9 @@ export const EGRESS_CASES: readonly EgressCase[] = [
     id: 'encoded_position_dump',
     // The scanner sees nothing here. The stamp is what stops it, which is the
     // whole reason the router control exists independently.
-    payload: `Context blob: ${Buffer.from('NVDA 12450 SOXL -3817 TSM 6233').toString('base64')}`,
+    // `btoa`, not Node's `Buffer`: this corpus is built when the module loads,
+    // and a `Buffer` here made canvas-guard unloadable in a browser.
+    payload: `Context blob: ${btoa('NVDA 12450 SOXL -3817 TSM 6233')}`,
     stamped: 'positions',
     expect: 'router',
   },

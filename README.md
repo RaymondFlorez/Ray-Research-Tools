@@ -94,7 +94,7 @@ name.
 npm install
 npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,762 TypeScript tests across 16 packages
+npm test             # 1,768 TypeScript tests across 16 packages
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
@@ -112,5 +112,5 @@ node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 cd services/dataplane && go test -race ./...     # 16 tests; DATAPLANE_PG_URL adds the Postgres store
 ```
 
-CI (`.github/workflows/ci.yml`) runs all of the above from a clean checkout, plus all eight
-browser checks under `apps/canvas-demo/scripts`.
+CI (`.github/workflows/ci.yml`) runs all of the above from a clean checkout, plus all ten
+browser checks under `apps/canvas-demo/scripts`, one of them against the Go data plane.

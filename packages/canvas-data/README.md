@@ -19,6 +19,7 @@ npm test --workspace @picasso/canvas-data
 | `screener.ts` | 3.3, 5.8 | The `UniverseNode`'s screener: a hand-parsed expression, three-valued over missing data, resolved as of a date |
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
+| `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale or recovering |
 
 ## Scope: what this is and is not
 
@@ -339,6 +340,17 @@ written so it cannot leak:
 
 Each output lists the ops applied, in words.
 
+## Live tiles
+
+`live.ts` turns `services/dataplane`'s `/v1/stream` into what each tile shows, and holds three
+states it may not fake. A tile the user is not licensed for shows the reason and no number,
+even one that arrived before the block. A stale series keeps counting its age between the
+server's health reports, on the local clock, so a dead feed does not leave "2s ago" frozen on
+screen. And a series whose channel had a sequence gap says *recovering* until the server
+clears it — silence does not clear a gap. `apps/canvas-demo/live.html` draws the tiles
+through canvas-guard's `present()`, and `live-shots.mjs` checks all of it in Chromium against
+the real Go service.
+
 ## The same rules, in Go
 
 `services/dataplane` is the server side of three of these modules: point-in-time reads,
@@ -351,7 +363,10 @@ these rules here is a change to that contract, and `UPDATE_CONFORMANCE=1` is how
 
 - **The production data plane.** No ClickHouse, Iceberg, Redpanda, vendor feed or
   DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
-  those implement; everything here runs against in-memory stores.
+  those implement; everything here runs against in-memory stores. `services/dataplane` is
+  the Go side, on Postgres, and `live.ts` reads its stream.
+- **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
+  reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor
   file or reconciles two vendors' corporate-action calendars.
 - **The alert engine.** The detectors are functions over an array, not the `alert-engine`

@@ -31,7 +31,7 @@ async function resolveChromium() {
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const PORT = Number(process.env.PORT ?? 8341);
-const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates', 'tools'];
+const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates', 'tools', 'live'];
 
 const server = spawn(process.execPath, ['scripts/serve.mjs'], {
   cwd: ROOT,
@@ -70,6 +70,10 @@ try {
     page.on('console', (msg) => {
       const text = msg.text();
       if (/Content Security Policy|Refused to/i.test(text)) refused.push(text);
+      // The live page's data comes from the Go data plane, which this check
+      // does not start, so its two requests to /v1/ answer 502 here — and
+      // only those, on only that page. live-shots.mjs runs it with one.
+      else if (name === 'live' && /status of 502/.test(text)) return;
       else if (msg.type() === 'error') errors.push(text);
     });
     page.on('pageerror', (error) => errors.push(String(error)));
