@@ -22,6 +22,7 @@ node scripts/verify-wasm-parity.mjs   # native vs WASM, bit for bit
 cd services/dataplane && go test -race ./...
 # DATAPLANE_PG_URL=postgres://... adds the Postgres store; CI also sets
 # DATAPLANE_REQUIRE_PG=1 so those tests fail rather than skip without one.
+DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs
 ```
 
 The Go data plane and `canvas-data` implement the same point-in-time,

@@ -35,7 +35,9 @@ func fixture(t *testing.T) (*httptest.Server, *stream.Hub) {
 		Users: Users{
 			"analyst": {UserID: "analyst", Vendors: map[string]bool{}},
 			"pm":      {UserID: "pm", Vendors: map[string]bool{"vendor-b": true}},
+			"loader":  {UserID: "loader", Vendors: map[string]bool{}},
 		},
+		Writers:     map[string]bool{"loader": true},
 		DrainEvery:  20 * time.Millisecond,
 		HealthEvery: 100 * time.Millisecond,
 	}
@@ -165,5 +167,47 @@ loop:
 	}
 	if staleHealth == 0 {
 		t.Fatal("the feed went silent and no stale health event arrived")
+	}
+}
+
+func post(t *testing.T, url, user, body string) (*http.Response, map[string]any) {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	req.Header.Set(UserHeader, user)
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var out map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&out)
+	return res, out
+}
+
+func TestOnlyAWriterAppendsAndOnlyClassifiedFacts(t *testing.T) {
+	ts, _ := fixture(t)
+	later := `[{"key":"NVDA.revenue","validTime":"2024-06-30","knowledgeTime":"2026-09-01","value":29.4,"restatement":true,"dataClass":"licensed","vendor":"vendor-b"}]`
+	if res, _ := post(t, ts.URL+"/v1/facts", "pm", later); res.StatusCode != http.StatusForbidden {
+		t.Fatalf("a reader appended: %d", res.StatusCode)
+	}
+	if res, body := post(t, ts.URL+"/v1/facts", "loader", `[{"key":"k","validTime":"2024-01-01","knowledgeTime":"2024-01-02","value":1}]`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("an unclassified fact was taken: %d %v", res.StatusCode, body)
+	}
+	if res, _ := post(t, ts.URL+"/v1/facts", "loader", `[{"key":"k","validTime":"2024-01-01","knowledgeTime":"2024-01-02","value":1,"dataClass":"public","colour":"red"}]`); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("an unknown field was ignored: %d", res.StatusCode)
+	}
+	if res, body := post(t, ts.URL+"/v1/facts", "loader", later); res.StatusCode != http.StatusOK || body["appended"].(float64) != 1 {
+		t.Fatalf("append: %d %v", res.StatusCode, body)
+	}
+	// The history shows every version to a licensed reader, and withholds the
+	// licensed ones from an unlicensed reader without hiding that they exist.
+	_, pm := get(t, ts.URL+"/v1/history?key=NVDA.revenue&valid=2024-06-30", "pm")
+	if v := pm["versions"].([]any); len(v) != 3 || v[2].(map[string]any)["value"].(float64) != 29.4 {
+		t.Fatalf("pm history: %v", pm)
+	}
+	_, analyst := get(t, ts.URL+"/v1/history?key=NVDA.revenue&valid=2024-06-30", "analyst")
+	v := analyst["versions"].([]any)
+	if len(v) != 3 || v[0].(map[string]any)["value"].(float64) != 30.04 || v[1].(map[string]any)["blocked"] == nil || v[1].(map[string]any)["value"] != nil {
+		t.Fatalf("analyst history: %v", analyst)
 	}
 }

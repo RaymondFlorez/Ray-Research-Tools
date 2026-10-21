@@ -36,6 +36,7 @@ type userFile map[string]struct {
 	Vendors   []string `json:"vendors"`
 	Positions bool     `json:"positions"`
 	MNPI      bool     `json:"mnpi"`
+	Write     bool     `json:"write,omitempty"`
 }
 
 type symbolFile []struct {
@@ -75,7 +76,9 @@ func main() {
 		log.Fatalf("users: %v", err)
 	}
 	users := server.Users{}
+	writers := map[string]bool{}
 	for id, u := range uf {
+		writers[id] = u.Write
 		vendors := map[string]bool{}
 		for _, v := range u.Vendors {
 			vendors[v] = true
@@ -131,7 +134,7 @@ func main() {
 		}()
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: (&server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Feed: feed}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	srv := &http.Server{Addr: *addr, Handler: (&server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Writers: writers, Feed: feed}).Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -99,3 +99,15 @@ jobs:
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - run: go vet ./...
       - run: go test -race ./...
+      # Phase 1's exit criterion through the service: the historical morning
+      # loaded into Postgres over HTTP and read back by canvas-data's client.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        working-directory: .
+      - run: npm run build --workspace @picasso/canvas-core --workspace @picasso/canvas-data
+        working-directory: .
+      - run: node scripts/historical-morning-remote.mjs
+        working-directory: .

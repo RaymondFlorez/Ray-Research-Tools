@@ -22,7 +22,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 |---|---|---|---|
 | 0 | 5,000 empty nodes at 60fps | Partial | Two draw calls from 500 to 10,000 nodes; 5,000 at p50 7.1ms on a *software* rasterizer. No GPU here, so 60fps on hardware is inferred, not measured (`canvas-gl`) |
 | 0 | Two-user concurrent edit | Built | Twelve concurrent editors converge; offline edits merge (`canvas-sync`, `collab-shots.mjs`) |
-| 1 | Time scrub reproduces a historical morning exactly | Built | Restatements, a split and later snapshots; byte-identical replays (`canvas-data/test/historical-morning.test.ts`) |
+| 1 | Time scrub reproduces a historical morning exactly | Built | Restatements, a split and later snapshots; byte-identical replays (`canvas-data/test/historical-morning.test.ts`); and through the Go data plane on Postgres, with entitlements, in CI (`scripts/historical-morning-remote.mjs`) |
 | 2 | 40-leg book over 375 cells under 90ms p95 | Built | 60.5ms p95 native, 40 American legs with the guard sampling (`pricing-core`); WASM is slower and a quality setting decides the scheme |
 | 3 | Cascade ends >70% at cheap tier, <1% quality delta | Built, simulated fleet | 86.8% / 0.00% on 400 simulated `sql.generate` requests; the fleet's costs and qualities are stated, not measured (`canvas-router`) |
 | 4 | Shuffle test flags a leaky backtest | Built | `canvas-sim` detectors |

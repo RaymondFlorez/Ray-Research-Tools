@@ -14,6 +14,7 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"sort"
@@ -36,6 +37,9 @@ type Server struct {
 	Reader access.Reader
 	Hub    *stream.Hub
 	Users  Users
+	// Writers may append facts. Reading is not writing: an analyst who can
+	// see a series has no business adding versions of it.
+	Writers map[string]bool
 	// Feed names what feeds the stream, in the analyst's terms — "replay of
 	// a recording", once there is one, a vendor's name. Shown as each tile's
 	// source, so a replay is never mistaken for a market.
@@ -57,6 +61,8 @@ func (s *Server) Handler() http.Handler {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"feed": feed})
 	}))
+	mux.HandleFunc("POST /v1/facts", s.withUser(s.appendFacts))
+	mux.HandleFunc("GET /v1/history", s.withUser(s.history))
 	mux.HandleFunc("GET /v1/counts", s.withUser(func(w http.ResponseWriter, _ *http.Request, _ entitle.Entitlements) {
 		writeJSON(w, http.StatusOK, s.Hub.Counts())
 	}))
@@ -103,6 +109,77 @@ func (s *Server) asOf(w http.ResponseWriter, r *http.Request, e entitle.Entitlem
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// maxAppend bounds one append request's body.
+const maxAppend = 8 << 20
+
+func (s *Server) appendFacts(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {
+	if !s.Writers[e.UserID] {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "this user may read, not append"})
+		return
+	}
+	var facts []pit.Fact
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxAppend))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&facts); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body must be a JSON array of facts: " + err.Error()})
+		return
+	}
+	for _, f := range facts {
+		if f.Key == "" || f.ValidTime == "" || f.KnowledgeTime == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "every fact needs a key, a valid time and a knowledge time"})
+			return
+		}
+	}
+	if err := s.Reader.Store.Append(r.Context(), facts...); err != nil {
+		var unclassified pit.ErrUnclassified
+		if errors.As(err, &unclassified) {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"appended": len(facts)})
+}
+
+// HistoryEntry is one version of a fact, or the reason it is withheld.
+type HistoryEntry struct {
+	KnowledgeTime string            `json:"knowledgeTime"`
+	Value         *float64          `json:"value,omitempty"`
+	Restatement   bool              `json:"restatement,omitempty"`
+	Source        string            `json:"source,omitempty"`
+	Blocked       *entitle.Decision `json:"blocked,omitempty"`
+}
+
+func (s *Server) history(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {
+	q := r.URL.Query()
+	key, valid := q.Get("key"), q.Get("valid")
+	if key == "" || valid == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key and valid are required"})
+		return
+	}
+	facts, err := s.Reader.Store.History(r.Context(), key, valid)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	out := make([]HistoryEntry, 0, len(facts))
+	for _, f := range facts {
+		entry := HistoryEntry{KnowledgeTime: f.KnowledgeTime, Restatement: f.Restatement}
+		// The same rule as a read: a version the caller may not see is
+		// reported as withheld, with when it became known, and no value.
+		if d := entitle.Check(f.Class, f.Vendor, e); d.Allowed {
+			v := f.Value
+			entry.Value = &v
+			entry.Source = f.Source
+		} else {
+			entry.Blocked = &d
+		}
+		out = append(out, entry)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"versions": out})
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {

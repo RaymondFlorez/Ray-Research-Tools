@@ -19,6 +19,7 @@ npm test --workspace @picasso/canvas-data
 | `screener.ts` | 3.3, 5.8 | The `UniverseNode`'s screener: a hand-parsed expression, three-valued over missing data, resolved as of a date |
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
+| `remote.ts` | 2.3, 3.8 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale or recovering |
 
 ## Scope: what this is and is not
@@ -365,6 +366,9 @@ these rules here is a change to that contract, and `UPDATE_CONFORMANCE=1` is how
   DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
   those implement; everything here runs against in-memory stores. `services/dataplane` is
   the Go side, on Postgres, and `live.ts` reads its stream.
+- **No node reads remotely yet.** `RemotePointInTime` is the client and
+  `scripts/historical-morning-remote.mjs` drives it against Postgres; the canvas's nodes still
+  read `BitemporalStore`, and switching one is a wiring change, not a new rule.
 - **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
   reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor

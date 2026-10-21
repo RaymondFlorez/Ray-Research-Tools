@@ -6,7 +6,7 @@ point-in-time store on Postgres, entitlement-filtered reads, and a live stream c
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 16 tests
+go test -race ./...                                    # 17 tests
 DATAPLANE_PG_URL=postgres://... go test ./pit/         # the Postgres store too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -22,7 +22,7 @@ go run ./cmd/dataplane -users config/users.json -symbology config/symbology.json
 | `ingest` | 2.3 | Adapter interface, the canonical wire format, symbology, sequence gaps, series health, subjects, partitions |
 | `conflate` | 7.3 | 4Hz per series, field by field |
 | `stream` | 2.3, 7.3 | The hub: decode, sequence, health, one conflator per subscriber; replay of a recording |
-| `server` | 2.3 | `/v1/asof`, `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
+| `server` | 2.3 | `/v1/asof`, `/v1/history`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
 
@@ -40,6 +40,19 @@ Instants are ISO strings compared byte for byte, as the TypeScript compares them
 Postgres columns are `text COLLATE "C"`, not timestamps: a timestamp column orders a bare
 date and that date's midnight as equal, and the TypeScript does not.
 
+## The historical morning, on Postgres
+
+Phase 1 exits on "global time scrub reproduces a historical morning exactly", and
+`canvas-data`'s test holds that against the in-memory store. `scripts/historical-morning-remote.mjs`
+holds it through this service: it loads the same morning into Postgres over `POST /v1/facts`
+— Q2 revenue from the 10-Q, then two restatements from a licensed feed, then Q3 — and reads
+it back with `canvas-data`'s `RemotePointInTime`, the way a scrubbed canvas reads. Scrubbed to
+09:30 on 2024-08-05, Postgres returns exactly what the in-memory store returns; live, the
+licensed reader gets the restatements and the unlicensed one gets Q2 *blocked*, not the
+superseded 30.04; a restatement that lands afterwards leaves the morning byte-identical; and
+the history shows every version, withholding the licensed ones without hiding that they
+exist. CI runs it in the `dataplane` job, against the job's Postgres.
+
 ## Rules enforced where they cannot be skipped
 
 - **Append-only is the database's rule.** Triggers refuse `UPDATE`, `DELETE` and `TRUNCATE`
@@ -51,6 +64,8 @@ date and that date's midnight as equal, and the TypeScript does not.
 - **A value the caller may not see is blocked, not replaced.** If Q2 revenue was restated from
   a licensed feed, an unlicensed reader gets "blocked: requires a vendor-b licence" for Q2 —
   not the older public figure, which would be a superseded number shown as current.
+- **Reading is not writing.** `POST /v1/facts` takes only users marked `write` in the users
+  file, rejects unknown fields rather than ignoring them, and refuses an unclassified fact.
 - **A read needs a knowledge time.** `/v1/asof` refuses one without it: a point-in-time API
   that defaults to now is how leakage gets in.
 - **An unknown symbol is refused, not guessed**, and counted.
@@ -83,7 +98,7 @@ half a second of 200-a-second ticks arrives as two to four updates.
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.
 - **One consumer.** `apps/canvas-demo/live.html` reads `/v1/stream` through the demo server's
   proxy, with canvas-data's `LiveTiles`, and `live-shots.mjs` checks it against this binary in
-  Chromium. No canvas node reads `/v1/asof` yet; the time scrub still reads canvas-data's
-  in-memory store.
+  Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof` and `/v1/history`, and the remote morning
+  check uses it; no canvas node is yet switched from the in-memory store to it.
 - **Throughput is not measured.** The PRD's 1.5M messages a second through Redpanda is a
   cluster figure; nothing here claims it.
