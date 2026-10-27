@@ -98,7 +98,8 @@ half a second of 200-a-second ticks arrives as two to four updates.
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.
 - **One consumer.** `apps/canvas-demo/live.html` reads `/v1/stream` through the demo server's
   proxy, with canvas-data's `LiveTiles`, and `live-shots.mjs` checks it against this binary in
-  Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof` and `/v1/history`, and the remote morning
-  check uses it; no canvas node is yet switched from the in-memory store to it.
+  Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof` and `/v1/history`, and its fact tile
+  evaluates through it; the remote morning check holds that tile, on a canvas scrubbed to the
+  morning, to the same answer as the in-process store. Other node kinds still read in-process.
 - **Throughput is not measured.** The PRD's 1.5M messages a second through Redpanda is a
   cluster figure; nothing here claims it.

@@ -24,7 +24,9 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const { BitemporalStore, RemotePointInTime, DataPlaneError } = await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
+const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource } =
+  await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
+const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
 
 const PG = process.env.DATAPLANE_PG_URL;
 if (!PG) {
@@ -105,6 +107,24 @@ try {
   check('live, the unlicensed reader gets Q2 blocked — not the superseded 30.04 — and Q3',
     todayAnalyst.blocked.length === 1 && todayAnalyst.blocked[0].validTime === '2024-06-30' && plain(todayAnalyst).length === 1 && plain(todayAnalyst)[0].value === 35.08,
     todayAnalyst.blocked[0]?.decision.message);
+
+  // A tile on a canvas scrubbed to the morning, evaluated through the service
+  // and through the in-process store: the same answer, value and provenance.
+  const tileAt = async (source, time) => {
+    const doc = createDocument('morning');
+    const tile = addNode(doc, createFactTile({ id: 'rev', key: 'NVDA.revenue' }));
+    if (time.mode === 'pinned') setCanvasAsOf(doc, time.asof, new SnapshotCatalog());
+    const shown = await evaluateFactTile(tile, source, time, now);
+    return { ...shown, source: undefined, status: tile.state.status, asofStamped: tile.provenance.asof };
+  };
+  const tileRemote = await tileAt(remoteSource(as('pm')), pinned);
+  const tileLocal = await tileAt(localSource(local), pinned);
+  check('a fact tile scrubbed to the morning shows the same thing through the service as in-process',
+    JSON.stringify(tileRemote) === JSON.stringify(tileLocal) && tileRemote.value === 30.04 && tileRemote.status === 'ready' && tileRemote.asofStamped === THE_MORNING,
+    `${tileRemote.value} known ${tileRemote.knownAt}`);
+  const tileAnalyst = await tileAt(remoteSource(as('analyst')), live);
+  check('live, the unlicensed reader\'s tile shows Q3: a blocked older quarter does not hide a newer visible one',
+    tileAnalyst.kind === 'value' && tileAnalyst.validTime === '2024-09-30' && tileAnalyst.value === 35.08);
 
   const before = JSON.stringify(morningPm);
   await as('loader').append([{ key: 'NVDA.revenue', validTime: '2024-06-30', knowledgeTime: '2026-09-01', value: 29.4, restatement: true, dataClass: 'licensed', vendor: 'vendor-b' }]);

@@ -20,6 +20,7 @@ npm test --workspace @picasso/canvas-data
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 | `remote.ts` | 2.3, 3.8 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live |
+| `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale or recovering |
 
 ## Scope: what this is and is not
@@ -366,9 +367,10 @@ these rules here is a change to that contract, and `UPDATE_CONFORMANCE=1` is how
   DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
   those implement; everything here runs against in-memory stores. `services/dataplane` is
   the Go side, on Postgres, and `live.ts` reads its stream.
-- **No node reads remotely yet.** `RemotePointInTime` is the client and
-  `scripts/historical-morning-remote.mjs` drives it against Postgres; the canvas's nodes still
-  read `BitemporalStore`, and switching one is a wiring change, not a new rule.
+- **One node kind reads remotely.** The fact tile (`factTile.ts`) evaluates through either
+  source, and `scripts/historical-morning-remote.mjs` holds the two to the same answer on a
+  canvas scrubbed to the morning. Charts, screeners and the backtester still read
+  `BitemporalStore` in-process.
 - **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
   reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor

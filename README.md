@@ -94,7 +94,7 @@ name.
 npm install
 npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,771 TypeScript tests across 16 packages
+npm test             # 1,775 TypeScript tests across 16 packages
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
