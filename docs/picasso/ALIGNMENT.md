@@ -118,7 +118,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | 5.8 Sobol + Brownian bridge, antithetic, control variates | Built | Single-asset; the portfolio is pseudorandom by design (dimension) |
 | 5.8 calibration: user-set, history window, surface | Built | `gbmFromHistory`, Heston surface fit |
 | 5.8 Ray / S3 for 100k × 252 × 40 | Infra | One core does it in 30s |
-| 5.8 backtest: event-driven, point-in-time, survivorship, costs, detectors, attribution, deflated Sharpe | Built | `canvas-sim`, `canvas-equity` attribution |
+| 5.8 backtest: event-driven, point-in-time, survivorship, costs, detectors, attribution, deflated Sharpe | Built | `canvas-sim`, `canvas-equity` attribution; history loads from the Go data plane on Postgres (`loadHistory`, `/v1/versions`), refused when any version is withheld, and matches the in-process run exactly (`scripts/historical-morning-remote.mjs`) |
 | 5.8 Iceberg snapshot pinning | Infra | `AsOfView` is the guard; no Iceberg |
 | 5.8 scenarios: typed composable shocks, replay, grid, trees | Built | `canvas-pricing` scenario |
 | 5.8 causal map: LP with Newey-West, regime split, VAR for drawn cycles, citations, propagation with divergence | Built | `canvas-causal` |

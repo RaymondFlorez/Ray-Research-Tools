@@ -107,7 +107,7 @@ jobs:
           cache: npm
       - run: npm ci
         working-directory: .
-      - run: npm run build --workspace @picasso/canvas-core --workspace @picasso/canvas-data
+      - run: npm run build --workspace @picasso/canvas-core --workspace @picasso/canvas-data --workspace @picasso/canvas-sim
         working-directory: .
       - run: node scripts/historical-morning-remote.mjs
         working-directory: .

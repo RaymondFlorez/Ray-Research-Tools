@@ -63,6 +63,7 @@ func (s *Server) Handler() http.Handler {
 	}))
 	mux.HandleFunc("POST /v1/facts", s.withUser(s.appendFacts))
 	mux.HandleFunc("GET /v1/history", s.withUser(s.history))
+	mux.HandleFunc("GET /v1/versions", s.withUser(s.versions))
 	mux.HandleFunc("GET /v1/counts", s.withUser(func(w http.ResponseWriter, _ *http.Request, _ entitle.Entitlements) {
 		writeJSON(w, http.StatusOK, s.Hub.Counts())
 	}))
@@ -180,6 +181,59 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request, e entitle.Entit
 		out = append(out, entry)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"versions": out})
+}
+
+// Version is one version of one fact, as a backtest loads it.
+type Version struct {
+	ValidTime     string  `json:"validTime"`
+	KnowledgeTime string  `json:"knowledgeTime"`
+	Value         float64 `json:"value"`
+	Restatement   bool    `json:"restatement,omitempty"`
+	Source        string  `json:"source,omitempty"`
+}
+
+// WithheldVersion is a version the caller may not see: when it was, and why.
+type WithheldVersion struct {
+	ValidTime     string           `json:"validTime"`
+	KnowledgeTime string           `json:"knowledgeTime"`
+	Decision      entitle.Decision `json:"decision"`
+}
+
+// versions returns every version in a valid-time range. The ones the caller
+// may not see are listed separately, never dropped: a backtest that loaded the
+// rest and carried on would use a superseded value on every bar after the
+// withheld one, and look correct doing it.
+func (s *Server) versions(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {
+	q := r.URL.Query()
+	key := q.Get("key")
+	if key == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key is required"})
+		return
+	}
+	var from, to *string
+	if v := q.Get("from"); v != "" {
+		from = &v
+	}
+	if v := q.Get("to"); v != "" {
+		to = &v
+	}
+	facts, err := s.Reader.Store.Versions(r.Context(), key, from, to)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	out := struct {
+		Versions []Version         `json:"versions"`
+		Withheld []WithheldVersion `json:"withheld"`
+	}{Versions: []Version{}, Withheld: []WithheldVersion{}}
+	for _, f := range facts {
+		if d := entitle.Check(f.Class, f.Vendor, e); d.Allowed {
+			out.Versions = append(out.Versions, Version{f.ValidTime, f.KnowledgeTime, f.Value, f.Restatement, f.Source})
+		} else {
+			out.Withheld = append(out.Withheld, WithheldVersion{f.ValidTime, f.KnowledgeTime, d})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) stream(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {

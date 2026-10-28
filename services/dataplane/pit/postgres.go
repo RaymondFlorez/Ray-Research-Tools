@@ -123,10 +123,17 @@ ORDER BY valid_time, knowledge_time DESC, seq DESC`, p.schema), q.Key, q.Knowled
 	return out, rows.Err()
 }
 
-func (p *Postgres) History(ctx context.Context, key, validTime string) ([]Fact, error) {
-	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+func (p *Postgres) Versions(ctx context.Context, key string, from, to *string) ([]Fact, error) {
+	return p.facts(ctx, fmt.Sprintf(`
 SELECT key, valid_time, knowledge_time, value, coalesce(source, ''), restatement, data_class, coalesce(vendor, '')
-FROM %s.facts WHERE key = $1 AND valid_time = $2 ORDER BY knowledge_time, seq`, p.schema), key, validTime)
+FROM %s.facts WHERE key = $1
+  AND ($2::text IS NULL OR valid_time >= $2)
+  AND ($3::text IS NULL OR valid_time <= $3)
+ORDER BY valid_time, knowledge_time, seq`, p.schema), key, from, to)
+}
+
+func (p *Postgres) facts(ctx context.Context, query string, args ...any) ([]Fact, error) {
+	rows, err := p.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -142,6 +149,12 @@ FROM %s.facts WHERE key = $1 AND valid_time = $2 ORDER BY knowledge_time, seq`, 
 		out = append(out, f)
 	}
 	return out, rows.Err()
+}
+
+func (p *Postgres) History(ctx context.Context, key, validTime string) ([]Fact, error) {
+	return p.facts(ctx, fmt.Sprintf(`
+SELECT key, valid_time, knowledge_time, value, coalesce(source, ''), restatement, data_class, coalesce(vendor, '')
+FROM %s.facts WHERE key = $1 AND valid_time = $2 ORDER BY knowledge_time, seq`, p.schema), key, validTime)
 }
 
 func nullable(s string) any {

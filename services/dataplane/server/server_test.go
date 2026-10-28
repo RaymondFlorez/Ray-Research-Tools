@@ -211,3 +211,19 @@ func TestOnlyAWriterAppendsAndOnlyClassifiedFacts(t *testing.T) {
 		t.Fatalf("analyst history: %v", analyst)
 	}
 }
+
+func TestVersionsListWhatIsWithheldRatherThanDroppingIt(t *testing.T) {
+	ts, _ := fixture(t)
+	_, pm := get(t, ts.URL+"/v1/versions?key=NVDA.revenue", "pm")
+	if len(pm["versions"].([]any)) != 2 || len(pm["withheld"].([]any)) != 0 {
+		t.Fatalf("pm: %v", pm)
+	}
+	_, analyst := get(t, ts.URL+"/v1/versions?key=NVDA.revenue&from=2024-01-01&to=2024-12-31", "analyst")
+	w := analyst["withheld"].([]any)
+	if len(analyst["versions"].([]any)) != 1 || len(w) != 1 || w[0].(map[string]any)["knowledgeTime"] != "2025-02-26" {
+		t.Fatalf("analyst: %v", analyst)
+	}
+	if res, _ := get(t, ts.URL+"/v1/versions", "pm"); res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("no key: %d", res.StatusCode)
+	}
+}

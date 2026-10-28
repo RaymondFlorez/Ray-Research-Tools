@@ -37,6 +37,16 @@ export class LookAheadError extends Error {
 }
 
 /**
+ * Whether `later`, added after `held` for the same valid time, replaces it:
+ * known later, or known at the same instant — an intra-instant correction is
+ * still a correction. canvas-data's `BitemporalStore` and the Go data plane
+ * break the tie the same way, and `loadHistory` adds versions in their order.
+ */
+function supersedes(later: Record<number>, held: Record<number>): boolean {
+  return later.knowledgeTime >= held.knowledgeTime;
+}
+
+/**
  * A read-only view of history, frozen at one instant.
  *
  * Handed to the strategy in place of the data itself. It has no method that
@@ -57,7 +67,7 @@ export class AsOfView {
       if (record.validTime > this.asOf) continue;
       if (record.knowledgeTime > this.asOf) continue;
       if (!best || record.validTime > best.validTime ||
-        (record.validTime === best.validTime && record.knowledgeTime > best.knowledgeTime)) {
+        (record.validTime === best.validTime && supersedes(record, best))) {
         best = record;
       }
     }
@@ -68,14 +78,17 @@ export class AsOfView {
   window(key: string, count: number): number[] {
     const history = this.series.get(key);
     if (!history) return [];
-    const visible = history
-      .filter((r) => r.validTime <= this.asOf && r.knowledgeTime <= this.asOf)
-      .sort((a, b) => (a.validTime < b.validTime ? -1 : a.validTime > b.validTime ? 1 : 0));
-
     // One value per valid time — the newest knowable revision of each.
-    const byDate = new Map<string, number>();
-    for (const record of visible) byDate.set(record.validTime, record.value);
-    return [...byDate.values()].slice(-count);
+    const byDate = new Map<string, Record<number>>();
+    for (const record of history) {
+      if (record.validTime > this.asOf || record.knowledgeTime > this.asOf) continue;
+      const held = byDate.get(record.validTime);
+      if (!held || supersedes(record, held)) byDate.set(record.validTime, record);
+    }
+    return [...byDate.values()]
+      .sort((a, b) => (a.validTime < b.validTime ? -1 : a.validTime > b.validTime ? 1 : 0))
+      .slice(-count)
+      .map((r) => r.value);
   }
 
   /**
@@ -156,8 +169,64 @@ export class History {
     let best: Record<number> | undefined;
     for (const record of history) {
       if (record.validTime !== date) continue;
-      if (!best || record.knowledgeTime > best.knowledgeTime) best = record;
+      if (!best || supersedes(record, best)) best = record;
     }
     return best?.value;
   }
+}
+
+/**
+ * Where a backtest's history can come from: anything that returns every
+ * version in a valid-time range, with the versions the caller may not see
+ * listed rather than dropped. canvas-data's `RemotePointInTime` — the Go data
+ * plane on Postgres — is one.
+ */
+export interface VersionSource {
+  versions(
+    key: string,
+    range: { from?: string; to?: string },
+  ): Promise<{
+    versions: ReadonlyArray<{ validTime: string; knowledgeTime: string; value: number }>;
+    withheld: ReadonlyArray<{ validTime: string; knowledgeTime: string; decision: { message: string } }>;
+  }>;
+}
+
+export class IncompleteHistory extends Error {
+  constructor(
+    readonly key: string,
+    readonly withheld: ReadonlyArray<{ validTime: string; knowledgeTime: string; decision: { message: string } }>,
+  ) {
+    const first = withheld[0];
+    super(
+      `"${key}" has ${withheld.length} version(s) this user may not see` +
+        (first ? `, the first for ${first.validTime} known ${first.knowledgeTime}: ${first.decision.message.replace(/\.$/, '')}` : '') +
+        '. A backtest without them would use a superseded value on every bar after each one.',
+    );
+    this.name = 'IncompleteHistory';
+  }
+}
+
+/**
+ * Loads every version of `keys` into a History, or refuses.
+ *
+ * All versions, because the guard is the backtest's own `AsOfView`: each bar
+ * must see what was known on that bar, and that needs the versions known
+ * later too, to leave them out. And refuses outright when any version in range
+ * is withheld from this user: a backtest run on the rest would read the last
+ * version it was allowed as current long after it was replaced, and nothing
+ * in the result would say so. The entitlement is the user's; the refusal is
+ * this function's.
+ */
+export async function loadHistory(
+  source: VersionSource,
+  keys: readonly string[],
+  range: { from?: string; to?: string } = {},
+): Promise<History> {
+  const history = new History();
+  for (const key of keys) {
+    const { versions, withheld } = await source.versions(key, range);
+    if (withheld.length > 0) throw new IncompleteHistory(key, withheld);
+    for (const v of versions) history.add(key, { validTime: v.validTime, knowledgeTime: v.knowledgeTime, value: v.value });
+  }
+  return history;
 }

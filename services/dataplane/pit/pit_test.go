@@ -93,6 +93,21 @@ func TestBothStoresAnswerAsTheTypeScriptDoes(t *testing.T) {
 		if nonEmpty < 20 {
 			t.Fatalf("%s: only %d non-empty reads; the contract is not exercising much", name, nonEmpty)
 		}
+		for _, c := range f.PointInTime.Versions {
+			got, err := store.Versions(ctx, c.Key, c.From, c.To)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != len(c.Expected) {
+				t.Fatalf("%s versions %s: %d, want %d", name, c.Key, len(got), len(c.Expected))
+			}
+			for i, w := range c.Expected {
+				g := got[i]
+				if g.ValidTime != w.ValidTime || g.KnowledgeTime != w.KnowledgeTime || g.Value != w.Value || g.Restatement != w.Restatement || g.Source != w.Source {
+					t.Fatalf("%s versions %s [%d]: got %+v, want %+v", name, c.Key, i, g, w)
+				}
+			}
+		}
 		for _, c := range f.PointInTime.History {
 			got, err := store.History(ctx, c.Key, c.ValidTime)
 			if err != nil {

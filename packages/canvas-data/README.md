@@ -361,16 +361,25 @@ fixed set of cases to `services/dataplane/testdata/conformance.json` and fails i
 changes; the Go tests read the same file and must match it, bit for bit. Changing one of
 these rules here is a change to that contract, and `UPDATE_CONFORMANCE=1` is how it is made.
 
+`BitemporalStore.versions(key, range)` lists every version in a valid-time range, ordered by
+valid time, then knowledge time, then append order — what a backtest loads — and the contract
+holds the Go data plane's `GET /v1/versions` to the same order on ten ranges.
+`RemotePointInTime.versions` is the client, and it returns what the caller may not see in
+`withheld` rather than dropping it. The contract's random cases once came from the low bits of a
+power-of-two LCG, whose period is tiny; they put every fact on two of four keys and most range
+reads on a third, so most of the reads written down were empty. They now come from the high bits:
+52 of 66 as-of reads return something.
+
 ## What is not covered
 
 - **The production data plane.** No ClickHouse, Iceberg, Redpanda, vendor feed or
   DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
   those implement; everything here runs against in-memory stores. `services/dataplane` is
   the Go side, on Postgres, and `live.ts` reads its stream.
-- **One node kind reads remotely.** The fact tile (`factTile.ts`) evaluates through either
-  source, and `scripts/historical-morning-remote.mjs` holds the two to the same answer on a
-  canvas scrubbed to the morning. Charts, screeners and the backtester still read
-  `BitemporalStore` in-process.
+- **Two readers go through the data plane.** The fact tile (`factTile.ts`) evaluates through
+  either source, and canvas-sim's `loadHistory` loads a backtest's history through
+  `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs` holds each to the
+  in-process answer. Charts and screeners still read `BitemporalStore` in-process.
 - **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
   reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor

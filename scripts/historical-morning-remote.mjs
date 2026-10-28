@@ -10,9 +10,14 @@
  *   - the morning reads exactly what the in-memory store reads;
  *   - today reads the restatements, and an unlicensed reader gets the
  *     restated quarter as blocked, not the superseded public figure;
- *   - a restatement that arrives later leaves the morning byte-identical.
+ *   - a restatement that arrives later leaves the morning byte-identical;
+ *   - a backtest whose history is loaded from the service produces exactly
+ *     what the same backtest produces on the same facts held in-process, and
+ *     a reader missing some of the versions is refused rather than given a
+ *     backtest on the rest.
  *
- * Needs DATAPLANE_PG_URL, Go, and canvas-data built (npm run build).
+ * Needs DATAPLANE_PG_URL, Go, and canvas-core, canvas-data and canvas-sim
+ * built (npm run build).
  *
  *   DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs
  */
@@ -27,6 +32,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource } =
   await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
 const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
+const { backtest, History, IncompleteHistory, loadHistory } = await import(join(ROOT, 'packages/canvas-sim/dist/index.js'));
 
 const PG = process.env.DATAPLANE_PG_URL;
 if (!PG) {
@@ -137,6 +143,66 @@ try {
   check('the history shows every version, withholding the licensed ones without hiding them',
     history.length === 4 && history[0].value === 30.04 && history.slice(1).every((v) => v.blocked && v.value === undefined),
     history.map((v) => (v.blocked ? `blocked@${v.knowledgeTime}` : `${v.value}@${v.knowledgeTime}`)).join(', '));
+
+  // A backtest on the data plane. The prices are SYNTHETIC — a seeded random
+  // walk, labelled as such in the facts' source — because no market data host
+  // is reachable from here; what is under test is the loading, not the market.
+  // The strategy holds shares in proportion to the revenue of every quarter
+  // known on the bar — not just the latest quarter, whose restatements are of
+  // Q2 after Q3 has been reported — so each restatement moves the book the bar
+  // after it became known.
+  const PRICES = [];
+  let seed = 20240701;
+  let px = 120;
+  for (let t = Date.UTC(2024, 6, 1); t <= Date.UTC(2026, 8, 30); t += 86_400_000) {
+    const weekday = new Date(t).getUTCDay();
+    if (weekday === 0 || weekday === 6) continue;
+    seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+    px = Math.round(px * (1 + ((seed >>> 16) % 601 - 300) / 10_000) * 100) / 100;
+    const date = new Date(t).toISOString().slice(0, 10);
+    PRICES.push({ key: 'price:NVDA', validTime: date, knowledgeTime: date, value: px, source: 'synthetic random walk', dataClass: 'public' });
+  }
+  check('the loader can load the synthetic prices', (await as('loader').append(PRICES)) === PRICES.length, `${PRICES.length} bars`);
+
+  const strategy = (view) => {
+    const revenue = view.window('NVDA.revenue', 4).reduce((a, b) => a + b, 0);
+    return [{ symbol: 'NVDA', targetShares: Math.round(revenue * 100) }];
+  };
+  const run = (h) => backtest(h, strategy, { symbols: ['NVDA'] });
+  const KEYS = ['price:NVDA', 'NVDA.revenue'];
+  const RESTATED = { key: 'NVDA.revenue', validTime: '2024-06-30', knowledgeTime: '2026-09-01', value: 29.4 };
+  const inProcess = new History();
+  for (const f of [...PRICES, ...FACTS, RESTATED]) inProcess.add(f.key, { validTime: f.validTime, knowledgeTime: f.knowledgeTime, value: f.value });
+
+  const onPlane = run(await loadHistory(as('pm'), KEYS));
+  const offPlane = run(inProcess);
+  check('a backtest loaded from Postgres is exactly the backtest run in-process',
+    JSON.stringify(onPlane) === JSON.stringify(offPlane), `${onPlane.trades.length} trades, final equity ${onPlane.equity.at(-1)}`);
+  check('and it trades on each restatement the day it became known, not before',
+    ['2025-02-26', '2025-11-19', '2026-09-01'].every((d) => onPlane.trades.some((t) => t.date > d && t.date <= `${d.slice(0, 8)}31`)) &&
+      !onPlane.trades.some((t) => t.date > '2024-11-21' && t.date <= '2025-02-26'));
+
+  // The same backtest on today's numbers — each quarter's latest restatement,
+  // stamped as if it had been known from the first report — is the lookahead
+  // the point-in-time load exists to prevent, and it shows in the result.
+  const todays = new History();
+  for (const f of PRICES) todays.add(f.key, { validTime: f.validTime, knowledgeTime: f.knowledgeTime, value: f.value });
+  todays.add('NVDA.revenue', { validTime: '2024-06-30', knowledgeTime: '2024-07-24', value: 29.4 });
+  todays.add('NVDA.revenue', { validTime: '2024-09-30', knowledgeTime: '2024-11-20', value: 35.08 });
+  const leaked = run(todays);
+  check('a backtest on today\'s restated numbers differs from the point-in-time one',
+    leaked.equity.at(-1) !== onPlane.equity.at(-1), `${leaked.equity.at(-1)} against ${onPlane.equity.at(-1)}`);
+
+  let incomplete;
+  try {
+    await loadHistory(as('analyst'), KEYS);
+  } catch (e) {
+    incomplete = e;
+  }
+  check('an unlicensed reader is refused the backtest, not given one on the versions it may see',
+    incomplete instanceof IncompleteHistory && incomplete.key === 'NVDA.revenue' && incomplete.withheld.length === 3,
+    incomplete?.message);
+  check('though it may load the public prices', (await loadHistory(as('analyst'), ['price:NVDA'])).dates().length === PRICES.length);
 } finally {
   dataplane.kill();
   try {

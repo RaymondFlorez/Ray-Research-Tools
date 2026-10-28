@@ -154,6 +154,26 @@ export class BitemporalStore<T = number> {
       .sort((a, b) => compare(a.knowledgeTime, b.knowledgeTime));
   }
 
+  /**
+   * Every version of every fact for `key` whose valid time is in range (both
+   * bounds inclusive), ordered by valid time, then knowledge time, then the
+   * order they were appended.
+   *
+   * What a backtest loads: it needs all versions, not one read, because each
+   * bar must see only what was known on that bar, and the guard that enforces
+   * it sits in the backtest's own view.
+   */
+  versions(key: string, range: { from?: Instant; to?: Instant } = {}): Fact<T>[] {
+    return (this.facts.get(key) ?? [])
+      .map((fact, order) => ({ fact, order }))
+      .filter(({ fact }) =>
+        (range.from === undefined || compare(fact.validTime, range.from) >= 0) &&
+        (range.to === undefined || compare(fact.validTime, range.to) <= 0))
+      .sort((a, b) =>
+        compare(a.fact.validTime, b.fact.validTime) || compare(a.fact.knowledgeTime, b.fact.knowledgeTime) || a.order - b.order)
+      .map(({ fact }) => fact);
+  }
+
   /** Valid times whose value was changed after first being reported. */
   restatements(key: string): Array<{ validTime: Instant; versions: number }> {
     const byValid = new Map<Instant, number>();

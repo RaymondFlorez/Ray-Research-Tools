@@ -81,6 +81,12 @@ type File struct {
 			ValidTime string `json:"validTime"`
 			Expected  []Fact `json:"expected"`
 		} `json:"history"`
+		Versions []struct {
+			Key      string  `json:"key"`
+			From     *string `json:"from,omitempty"`
+			To       *string `json:"to,omitempty"`
+			Expected []Fact  `json:"expected"`
+		} `json:"versions"`
 	} `json:"pointInTime"`
 	Conflation struct {
 		WindowMs      float64                      `json:"windowMs"`

@@ -23,12 +23,17 @@ import { checkEntitlement, type ClassifiedRecord, type DataClass, type Entitleme
 
 const FILE = fileURLToPath(new URL('../../../services/dataplane/testdata/conformance.json', import.meta.url));
 
-/** Integer-only, so the cases are the same on every machine. */
+/**
+ * Integer-only, so the cases are the same on every machine. From the high
+ * bits: a power-of-two LCG's low bits cycle with a tiny period, and the first
+ * version, taking `state % n`, put every fact on two of four keys and every
+ * range query on a third, so most of the reads it wrote down were empty.
+ */
 function lcg(seed: number) {
   let state = seed >>> 0;
   return (n: number) => {
     state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
-    return state % n;
+    return (state >>> 16) % n;
   };
 }
 
@@ -79,10 +84,21 @@ function pitCases() {
     { key: 'NVDA.revenue', validTime: '2024-06-30' },
     ...Array.from({ length: 10 }, () => ({ key: `S${next(4)}`, validTime: day(next(60)) })),
   ];
+  const ranges = [
+    { key: 'NVDA.revenue' },
+    { key: 'TIE', from: '2024-03-31', to: '2024-03-31' },
+    ...Array.from({ length: 8 }, () => {
+      const r: { key: string; from?: string; to?: string } = { key: `S${next(4)}` };
+      if (next(2) === 0) r.from = day(next(30));
+      if (next(2) === 0) r.to = day(30 + next(30));
+      return r;
+    }),
+  ];
   return {
     facts,
     asOf: queries.map((query) => ({ query, expected: store.asOf(query) })),
     history: histories.map(({ key, validTime }) => ({ key, validTime, expected: store.history(key, validTime) })),
+    versions: ranges.map(({ key, ...range }) => ({ key, ...range, expected: store.versions(key, range) })),
   };
 }
 

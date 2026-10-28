@@ -89,8 +89,8 @@ invent a formula for any of them.
 
 Unit suites test one package against its own fixtures. `canvas-integration`
 has no `src` — it tests the **seams**, and it is where the bugs that survive
-unit tests were found (two bugs and two cross-package disagreements so far, all
-documented in its README). When a
+unit tests were found (two bugs and five cross-package disagreements so far,
+all documented in its README). When a
 change crosses a package boundary, add the assertion there.
 
 Numerical routines with a published definition are checked against that

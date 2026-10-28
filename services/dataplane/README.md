@@ -6,7 +6,7 @@ point-in-time store on Postgres, entitlement-filtered reads, and a live stream c
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 17 tests
+go test -race ./...                                    # 19 tests
 DATAPLANE_PG_URL=postgres://... go test ./pit/         # the Postgres store too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -22,18 +22,18 @@ go run ./cmd/dataplane -users config/users.json -symbology config/symbology.json
 | `ingest` | 2.3 | Adapter interface, the canonical wire format, symbology, sequence gaps, series health, subjects, partitions |
 | `conflate` | 7.3 | 4Hz per series, field by field |
 | `stream` | 2.3, 7.3 | The hub: decode, sequence, health, one conflator per subscriber; replay of a recording |
-| `server` | 2.3 | `/v1/asof`, `/v1/history`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
+| `server` | 2.3 | `/v1/asof`, `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
 
 `canvas-data` holds the point-in-time, conflation and entitlement rules in TypeScript, for the
 browser and for every test that came before this service. Two implementations of one rule
 drift unless something holds them together, so `canvas-data/test/conformance.test.ts` writes
-down what the TypeScript does on a fixed set of cases — 406 facts and 66 as-of reads with
+down what the TypeScript does on a fixed set of cases — 406 facts, 66 as-of reads, 11 histories and 10 version ranges with
 restatements, intra-instant ties and valid-time bounds; 600 ticks through a conflator drained
 on a timer, late ticks included; 18 entitlement decisions — into
 `testdata/conformance.json`, and fails if the TypeScript stops producing it. The Go tests
-read the same file. The conflator's 274 updates match drain for drain and bit for bit; both
+read the same file. The conflator's 370 updates match drain for drain and bit for bit; both
 stores, memory and Postgres, match every read.
 
 Instants are ISO strings compared byte for byte, as the TypeScript compares them, so the
@@ -51,7 +51,11 @@ it back with `canvas-data`'s `RemotePointInTime`, the way a scrubbed canvas read
 licensed reader gets the restatements and the unlicensed one gets Q2 *blocked*, not the
 superseded 30.04; a restatement that lands afterwards leaves the morning byte-identical; and
 the history shows every version, withholding the licensed ones without hiding that they
-exist. CI runs it in the `dataplane` job, against the job's Postgres.
+exist. Then a backtest: `/v1/versions` hands canvas-sim's `loadHistory` every version of the
+revenue and of 588 bars of synthetic prices, and the backtest run on it is exactly the one run
+on the same facts in-process. The unlicensed reader is refused it, because three of the versions
+are withheld, and `/v1/versions` lists them rather than leaving them out. CI runs it in the
+`dataplane` job, against the job's Postgres.
 
 ## Rules enforced where they cannot be skipped
 
@@ -98,8 +102,9 @@ half a second of 200-a-second ticks arrives as two to four updates.
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.
 - **One consumer.** `apps/canvas-demo/live.html` reads `/v1/stream` through the demo server's
   proxy, with canvas-data's `LiveTiles`, and `live-shots.mjs` checks it against this binary in
-  Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof` and `/v1/history`, and its fact tile
-  evaluates through it; the remote morning check holds that tile, on a canvas scrubbed to the
-  morning, to the same answer as the in-process store. Other node kinds still read in-process.
+  Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof`, `/v1/history` and
+  `/v1/versions`; its fact tile and canvas-sim's backtest history load through it, and the
+  remote morning check holds both to the in-process answer. Charts and screeners still read
+  in-process.
 - **Throughput is not measured.** The PRD's 1.5M messages a second through Redpanda is a
   cluster figure; nothing here claims it.

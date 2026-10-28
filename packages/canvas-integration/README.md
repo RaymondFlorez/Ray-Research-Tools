@@ -57,6 +57,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `attribution.test.ts` | `canvas-sim` → `canvas-equity`: a backtest's returns explained by factors, joined on the date each return ends. |
 | `surface.test.ts` | `canvas-pricing` → `canvas-render`: a StrategyNode wired into a SurfaceNode; every heatmap cell and every visible 3D point reads back the engine's P&L, and break-even lies between cells of opposite sign. |
 | `hypothesis-ledger.test.ts` | `canvas-hypothesis` → `canvas-agents`: the HypothesisNode shows the status the ledger scores, and the Critic's "three times, right once" is read off the ledger, filtered to the analyst. |
+| `backtest-history.test.ts` | `canvas-data` → `canvas-sim`: a backtest's history loaded from the point-in-time store, and every read its strategy can make held to the store's answer for that instant. |
 
 ## The second bug, found the same way
 
@@ -158,6 +159,19 @@ observations. Both suites were green. The PRD settled it — its own example, da
 intraday, is an upsample with a resample fix — so the transform moved: it now goes finer by
 carrying the last known value forward onto the target grid, which is the `latest()` adapter
 per point, and still refuses to interpolate.
+
+## A fifth disagreement, found by a failing test
+
+`backtest-history.test.ts` loads a `BitemporalStore` into canvas-sim through `loadHistory`, the way
+a backtest loads the Go data plane, and compares every read a strategy can make on 130 bars with
+the store's answer at the same instant. It failed on the first bar. When two versions of a fact
+were known at the same instant, the store kept the later one, as the Go data plane does under the
+conformance contract: a correction at the same instant is still a correction. `AsOfView.latest`
+and `History.actualAt` kept the first. On the suite's 602 facts that was 221 of 390 `latest`
+reads wrong and 58 of 390 settlement prices. `window` agreed, but only because the load adds
+versions in knowledge order. Its own rule was to keep whichever version was added last, and a unit
+test that adds them the other way round now holds it. All three go through one rule in
+`pointInTime.ts`.
 
 ## Phase 5's third exit number
 

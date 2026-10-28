@@ -62,6 +62,10 @@ type Store interface {
 	Append(ctx context.Context, facts ...Fact) error
 	AsOf(ctx context.Context, q Query) ([]Observation, error)
 	History(ctx context.Context, key, validTime string) ([]Fact, error)
+	// Versions is every version of every fact for key with a valid time in
+	// [from, to] (nil is unbounded), by valid time, knowledge time, then
+	// append order: what a backtest loads.
+	Versions(ctx context.Context, key string, from, to *string) ([]Fact, error)
 }
 
 // ErrUnclassified is returned for a fact with no valid class, or a licensed
@@ -125,6 +129,25 @@ func (m *Memory) AsOf(_ context.Context, q Query) ([]Observation, error) {
 		out = append(out, Observation{ValidTime: f.ValidTime, Value: f.Value, KnownAt: f.KnowledgeTime, Source: f.Source, Class: f.Class, Vendor: f.Vendor})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ValidTime < out[j].ValidTime })
+	return out, nil
+}
+
+func (m *Memory) Versions(_ context.Context, key string, from, to *string) ([]Fact, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var out []Fact
+	for _, f := range m.facts[key] {
+		if (from != nil && f.ValidTime < *from) || (to != nil && f.ValidTime > *to) {
+			continue
+		}
+		out = append(out, f)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].ValidTime != out[j].ValidTime {
+			return out[i].ValidTime < out[j].ValidTime
+		}
+		return out[i].KnowledgeTime < out[j].KnowledgeTime
+	})
 	return out, nil
 }
 

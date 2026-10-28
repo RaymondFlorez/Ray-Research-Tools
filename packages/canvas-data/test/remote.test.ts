@@ -44,4 +44,20 @@ describe('RemotePointInTime', () => {
     const refused = recorder(403, { error: 'this user may read, not append' });
     await expect(new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', fetch: refused.fetcher }).append(facts)).rejects.toThrow('403');
   });
+
+  it('asks for every version in a valid-time range, under the caller', async () => {
+    const body = {
+      versions: [{ validTime: '2024-06-30', knowledgeTime: '2024-07-24', value: 30.04 }],
+      withheld: [{ validTime: '2024-06-30', knowledgeTime: '2025-02-26', decision: { allowed: false, reason: 'vendor', message: 'Requires a vendor-b licence.' } }],
+    };
+    const { calls, fetcher } = recorder(200, body);
+    const remote = new RemotePointInTime({ baseUrl: 'http://dp', user: 'analyst', fetch: fetcher });
+    expect(await remote.versions('NVDA.revenue', { from: '2024-01-01', to: '2024-12-31' })).toEqual(body);
+    await remote.versions('NVDA.revenue');
+    expect(calls.map((c) => c.url)).toEqual([
+      'http://dp/v1/versions?key=NVDA.revenue&from=2024-01-01&to=2024-12-31',
+      'http://dp/v1/versions?key=NVDA.revenue',
+    ]);
+    expect(new Headers(calls[0]!.init!.headers).get('X-Picasso-User')).toBe('analyst');
+  });
 });

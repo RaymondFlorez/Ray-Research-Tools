@@ -5,12 +5,12 @@ that run on every one of them, and the statistics that account for how many stra
 analyst tried before this one.
 
 ```bash
-npm test --workspace @picasso/canvas-sim    # 53 tests
+npm test --workspace @picasso/canvas-sim    # 57 tests
 ```
 
 | Module | PRD | What it does |
 |---|---|---|
-| `pointInTime.ts` | 5.8 | A view of history frozen at one bar, with no method that takes a date |
+| `pointInTime.ts` | 5.8 | A view of history frozen at one bar, with no method that takes a date; `loadHistory` from the data plane |
 | `costs.ts` | 5.8 | Commission, spread, square-root impact, borrow, financing |
 | `engine.ts` | 5.8 | The bar-by-bar loop; orders fill on the *next* bar |
 | `detectors.ts` | 5.8 | Shuffle test and negative-lag correlation, run automatically |
@@ -136,11 +136,45 @@ with no print and no delisting is marked at its last print; every such bar is
 listed in `staleMarks`, and a name still held that way at the end gets a
 warning saying its delisting return is probably missing.
 
+## History from the data plane
+
+`loadHistory(source, keys)` fills a `History` from anything that lists every version in a
+valid-time range — canvas-data's `RemotePointInTime`, which reads `GET /v1/versions` from
+the Go data plane on Postgres, is the one that matters. Every version, not one read: the
+guard is the backtest's own `AsOfView`, and leaving out a later version needs that version
+in hand. If the user may not see some of the versions, the load is **refused** with
+`IncompleteHistory`, naming the first one and why. A backtest on the rest would read the last
+version it was allowed as current on every bar after it was replaced, and nothing in the
+result would say so.
+
+`scripts/historical-morning-remote.mjs` runs a backtest on history loaded that way — 588
+bars of synthetic prices and the morning's revenue with its restatements — and gets exactly
+the result the same facts give in-process, five trades and the same equity to the last bit.
+It trades on each restatement the bar after it became known; the same strategy on today's
+restated numbers ends at a different equity; an unlicensed reader is refused.
+
+Holding the view to the store found that the two disagreed. `canvas-integration`'s
+`backtest-history.test.ts` compares every read a strategy can make with
+`BitemporalStore`'s answer for the same instant. On its 602 facts, `AsOfView.latest` was wrong on
+221 of 390 reads and `History.actualAt` on 58: when two versions were known at the same
+instant, both kept the first, where the store — and the Go data plane, through the
+conformance contract — keeps the later one, since a correction at the same instant is still a
+correction. `window` agreed only because `loadHistory` adds versions in knowledge order;
+added the other way round, it returned the older version, because it kept whichever was
+added last. All three now go through one `supersedes` rule.
+
 ## What is not here
 
 - **No snapshot pinning.** PRD 5.8 enforces point-in-time "by Iceberg snapshot
   pinning, not by convention". Here `History` is in memory and the guard is
-  the `AsOfView` reader; there is no Iceberg and no snapshot id.
+  the `AsOfView` reader; `loadHistory` reads it from the data plane on
+  Postgres, append-only, but there is no Iceberg and no snapshot id, so two
+  loads at different times can differ by whatever was appended in between.
+- **The whole history is loaded.** One request per key, held in memory; there
+  is no paging and no bound on its size.
+- **A withheld version refuses the whole load.** There is no way to run a
+  backtest on a declared subset, such as only the public versions, with the
+  restriction recorded in the result.
 - **No spread model and no execution data.** A missing quote is an
   assumption, not an estimate (see above for why Roll was rejected); the
   impact coefficient is calibrated only from fills the analyst supplies.

@@ -38,6 +38,11 @@ export interface RemoteVersion {
   blocked?: { reason: string; message: string };
 }
 
+export interface RemoteVersions {
+  versions: Array<{ validTime: Instant; knowledgeTime: Instant; value: number; restatement?: boolean; source?: string }>;
+  withheld: Array<{ validTime: Instant; knowledgeTime: Instant; decision: { allowed: false; reason: string; message: string } }>;
+}
+
 /** A fact as the data plane stores it: classified, always. */
 export interface RemoteFact {
   key: string;
@@ -97,6 +102,17 @@ export class RemotePointInTime {
   async history(key: string, validTime: Instant): Promise<RemoteVersion[]> {
     const params = new URLSearchParams({ key, valid: validTime });
     return (await this.get<{ versions: RemoteVersion[] }>(`/v1/history?${params}`)).versions;
+  }
+
+  /**
+   * Every version in a valid-time range, as a backtest loads it, with the
+   * versions this caller may not see listed in `withheld` rather than dropped.
+   */
+  async versions(key: string, range: { from?: Instant; to?: Instant } = {}): Promise<RemoteVersions> {
+    const params = new URLSearchParams({ key });
+    if (range.from !== undefined) params.set('from', range.from);
+    if (range.to !== undefined) params.set('to', range.to);
+    return this.get<RemoteVersions>(`/v1/versions?${params}`);
   }
 
   /** Appends facts. The data plane refuses this unless the caller is a writer. */
