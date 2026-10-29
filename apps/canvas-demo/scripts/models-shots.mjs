@@ -153,9 +153,11 @@ try {
     (await page.evaluate(() => window.__models.providers().map((p) => `${p.id}:${p.connected}`).join(' '))) === 'signin:false keyed:false local:true');
 
   // 1. Sign in: the browser goes to the provider and comes back connected.
+  // The page is already models.html, so waiting for that URL would return at
+  // once, before the round trip. Mark this document and wait for a new one.
+  await page.evaluate(() => { window.__beforeSignIn = true; });
   await page.click('.card[data-provider="signin"] button[data-action="sign-in"]');
-  await page.waitForURL(/models\.html/, { timeout: 10_000 });
-  await ready();
+  await page.waitForFunction(() => !window.__beforeSignIn && window.__models?.ready(), null, { timeout: 10_000 });
   check('after the round trip the page says the provider is connected', (await page.locator('#banner').textContent()).includes('signin is connected'));
   check('the card says signed in, with the key\'s last four characters and nothing more', (await state('signin')) === 'signed in · …4321');
   check('the address bar no longer carries the sign-in result', !page.url().includes('connected='));
