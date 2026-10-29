@@ -75,7 +75,11 @@ try {
 
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__collab !== undefined, null, { timeout: 10_000 });
-  await page.waitForTimeout(200);
+  // Wait for what each check expects, not a fixed time: a slower runner takes
+  // longer to sync, and a sleep sized on a fast one fails there. A wait that
+  // times out falls through, so the check below still reports what it saw.
+  const settle = (fn) => page.waitForFunction(fn, null, { timeout: 5_000 }).catch(() => {});
+  await settle(() => window.__collab.converged() && window.__collab.counts().a === 5);
 
   const seeded = await page.evaluate(() => ({
     counts: window.__collab.counts(),
@@ -91,7 +95,7 @@ try {
   const paneA = await page.locator('#canvas-a').boundingBox();
   await page.mouse.move(paneA.x + 200, paneA.y + 160);
   await page.mouse.move(paneA.x + 260, paneA.y + 220);
-  await page.waitForTimeout(120);
+  await settle(() => window.__collab.cursors().b?.cursor !== undefined);
   const cursors = await page.evaluate(() => window.__collab.cursors());
   check('the peer cursor reaches the other client', cursors.b?.cursor !== undefined);
 
@@ -117,7 +121,7 @@ try {
 
   // Reconnect: no queue, no replay log, just a state-vector exchange.
   await page.evaluate(() => window.__collab.setOnline('b', true));
-  await page.waitForTimeout(200);
+  await settle(() => window.__collab.converged() && window.__collab.counts().a === 8);
 
   const merged = await page.evaluate(() => ({
     counts: window.__collab.counts(),
