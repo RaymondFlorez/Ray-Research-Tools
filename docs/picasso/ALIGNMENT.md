@@ -65,10 +65,12 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.7 hypothesis builder | Built | `canvas-hypothesis`; `HypothesisLedger` keeps the record and re-resolves on each observation (`hypothesis-ledger.test.ts`); the durable store is Infra (3.9) |
 | 3.8 interaction model (pan momentum, palette, frame, search, time scrub) | Built | `canvas-core` viewport/search/frame, `canvas-data` timescrub |
 | 3.9 named versions, templates | Built | `canvas-sync` snapshot, `canvas-core` template |
-| 3.9 Postgres snapshots every 30s | Infra | No Postgres |
+| 3.9 Postgres snapshots every 30s | Infra | No collaboration server writes canvas snapshots; the only Postgres here is the data plane's, which holds facts |
 
-**Node kinds (3.3).** Built: DataTile and ChartNode (`canvas-render` scene, chart);
-HeatmapNode (`canvas-data` cross-sectional wash); CurveNode; UniverseNode (`screener`);
+**Node kinds (3.3).** Built: DataTile and ChartNode (`canvas-render` scene, chart; the fact
+tile and the series chart evaluate at the canvas's time through the Go data plane);
+HeatmapNode (`canvas-data` cross-sectional wash); CurveNode; UniverseNode (`screener`, and
+`universeSource` reading its fields point-in-time through the data plane);
 TransformNode ops (`canvas-data` transform); MonteCarloNode; BacktestNode; OptimizerNode
 (`canvas-pricing` optimizer — objective decided below); FactorNode (`canvas-equity`
 factors); ScenarioNode including trees; CausalNode/edge; StrategyNode; SurfaceNode; ChainMetricNode;

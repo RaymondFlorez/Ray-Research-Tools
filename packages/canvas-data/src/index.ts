@@ -19,3 +19,5 @@ export * from './transform.js';
 export * from './live.js';
 export * from './remote.js';
 export * from './factTile.js';
+export * from './universeSource.js';
+export * from './seriesChart.js';

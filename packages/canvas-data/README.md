@@ -21,6 +21,8 @@ npm test --workspace @picasso/canvas-data
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 | `remote.ts` | 2.3, 3.8 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live |
 | `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
+| `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane, a withheld field counted apart from missing data |
+| `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale or recovering |
 
 ## Scope: what this is and is not
@@ -246,6 +248,21 @@ never: a 2019 screen includes the names trading then and since delisted, and
 excludes those listed later. The field values themselves must already be
 point-in-time for that date, which is the bitemporal store's job.
 
+**On a canvas, the screen reads at the canvas's time.** `evaluateUniverseNode` reads each
+numeric field the expression names as the fact `INSTRUMENT.field`, from the in-process store
+or the data plane, at the knowledge time the canvas's time names — only for the names trading
+then, and only the fields the expression uses. The data plane holds numbers, so listing dates
+and categorical fields such as sector come from the instrument reference passed in. A field
+outside the source's catalog is refused before anything is read; a catalogued field with no
+value on the date is missing data for every name, because a field can postdate the date. A
+field whose latest period the reader may not see is *withheld*: never the older period in its
+place, the same rule as the fact tile (`latestKnown`), and a name left undecided by it is
+counted under `withheld`, apart from the names left undecided for want of data.
+
+`seriesChart.ts` is the chart counterpart: every period in range at the value known at the
+canvas's time, and a withheld period as an entry with its reason, at its place in the order, so a
+line drawn through the points breaks there.
+
 ## Skew has a history, and the history is restated
 
 PRD 5.4 asks for "skew and its history". `canvas-pricing` reads one day's risk
@@ -376,10 +393,20 @@ reads on a third, so most of the reads written down were empty. They now come fr
   DuckDB-WASM (see *Scope* above). `SnapshotCatalog` and `BitemporalStore` are the seams
   those implement; everything here runs against in-memory stores. `services/dataplane` is
   the Go side, on Postgres, and `live.ts` reads its stream.
-- **Two readers go through the data plane.** The fact tile (`factTile.ts`) evaluates through
-  either source, and canvas-sim's `loadHistory` loads a backtest's history through
-  `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs` holds each to the
-  in-process answer. Charts and screeners still read `BitemporalStore` in-process.
+- **Four readers go through the data plane, one request per key.** The fact tile, the series
+  chart and the screen evaluate through either source, and canvas-sim's `loadHistory` loads a
+  backtest's history through `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs`
+  holds each to the in-process answer. A screen makes one read per name per field: there is no
+  batched or cross-sectional read, so a large universe is that many requests.
+- **A screen does not know how old a value is.** It screens each name on the latest period
+  known at the date, however long ago that period was; a market cap last reported two years
+  earlier passes or fails like one from yesterday. The fact tile shows when its value became
+  known; the screen's rows do not carry it.
+- **Categorical fields and listing dates are not point-in-time.** They come from the
+  instrument reference as it stands, so a sector reclassification applies to every date.
+- **The series chart draws nothing.** It produces the points; there is no rendering of a line,
+  and the demo pages do not yet show one. canvas-equity's estimate-revision chart is a
+  separate node with no evaluator.
 - **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
   reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor

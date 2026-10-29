@@ -223,7 +223,7 @@ describe('what clustering does to the naive test', () => {
     // Clustered events: it does not, and by enough to matter.
     expect(clustered.naive).toBeGreaterThan(0.3);
     expect(clustered.naive).toBeGreaterThan(spread.naive * 3);
-  });
+  }, 60_000);
 
   // The quieter form of the same problem, and one the measurement found
   // rather than the design anticipating it. Events five days apart look

@@ -45,6 +45,12 @@ export interface ScreenRow {
   delisted?: string;
   /** Point-in-time field values as of the screen's date. Absent is unknown. */
   fields: Readonly<Record<string, FieldValue>>;
+  /**
+   * Fields this reader may not see for this name, with the reason. Their value
+   * is unknown, as a missing one is, but a name left out for want of an
+   * entitlement is reported apart from one left out for want of data.
+   */
+  withheld?: Readonly<Record<string, string>>;
 }
 
 type Op = '==' | '!=' | '<' | '<=' | '>' | '>=';
@@ -237,7 +243,7 @@ export function parseScreen(source: string): Expr {
 // Checking and evaluation
 // ---------------------------------------------------------------------------
 
-function fieldsOf(expr: Expr, out: Set<string> = new Set()): Set<string> {
+export function fieldsOf(expr: Expr, out: Set<string> = new Set()): Set<string> {
   switch (expr.kind) {
     case 'and':
     case 'or':
@@ -338,8 +344,13 @@ export interface Universe {
   asof: string;
   expression: string;
   members: string[];
-  /** Names listed on the date for which the expression could not be decided. */
+  /** Names listed on the date for which the expression could not be decided for want of data. */
   undecided: { count: number; byField: Record<string, number> };
+  /**
+   * Names that could not be decided because a field they needed is withheld
+   * from this reader. Not counted in `undecided`.
+   */
+  withheld: { count: number; byField: Record<string, number> };
   /** Names eligible on the date at all, before the expression. */
   eligible: number;
 }
@@ -354,7 +365,48 @@ export interface Universe {
 export function resolveUniverse(expression: string, rows: readonly ScreenRow[], asof: string): Universe {
   const expr = parseScreen(expression);
   const known = new Set<string>();
-  for (const row of rows) for (const field of Object.keys(row.fields)) known.add(field);
+  for (const row of rows) for (const field of [...Object.keys(row.fields), ...Object.keys(row.withheld ?? {})]) known.add(field);
+  refuseUnknownFields(expr, known);
+
+  const members: string[] = [];
+  const byField: Record<string, number> = {};
+  const withheldByField: Record<string, number> = {};
+  let undecided = 0;
+  let withheld = 0;
+  let eligible = 0;
+  for (const row of rows) {
+    if (row.listed > asof) continue;
+    if (row.delisted !== undefined && row.delisted <= asof) continue;
+    eligible += 1;
+    const unknownFields = new Set<string>();
+    const truth = evaluate(expr, row, unknownFields);
+    if (truth === true) members.push(row.instrument);
+    else if (truth === undefined) {
+      const blocked = [...unknownFields].filter((field) => row.withheld?.[field] !== undefined);
+      if (blocked.length > 0) {
+        withheld += 1;
+        for (const field of blocked) withheldByField[field] = (withheldByField[field] ?? 0) + 1;
+      } else {
+        undecided += 1;
+        for (const field of unknownFields) byField[field] = (byField[field] ?? 0) + 1;
+      }
+    }
+  }
+  return {
+    asof,
+    expression,
+    members: members.sort(),
+    undecided: { count: undecided, byField },
+    withheld: { count: withheld, byField: withheldByField },
+    eligible,
+  };
+}
+
+/**
+ * Refuses an expression naming a field outside `known`, suggesting the nearest
+ * known field, before anything is evaluated or read.
+ */
+export function refuseUnknownFields(expr: Expr, known: ReadonlySet<string>): void {
   for (const field of fieldsOf(expr)) {
     if (known.has(field)) continue;
     let best: string | undefined;
@@ -368,24 +420,6 @@ export function resolveUniverse(expression: string, rows: readonly ScreenRow[], 
     }
     throw new UnknownField(field, best);
   }
-
-  const members: string[] = [];
-  const byField: Record<string, number> = {};
-  let undecided = 0;
-  let eligible = 0;
-  for (const row of rows) {
-    if (row.listed > asof) continue;
-    if (row.delisted !== undefined && row.delisted <= asof) continue;
-    eligible += 1;
-    const unknownFields = new Set<string>();
-    const truth = evaluate(expr, row, unknownFields);
-    if (truth === true) members.push(row.instrument);
-    else if (truth === undefined) {
-      undecided += 1;
-      for (const field of unknownFields) byField[field] = (byField[field] ?? 0) + 1;
-    }
-  }
-  return { asof, expression, members: members.sort(), undecided: { count: undecided, byField }, eligible };
 }
 
 /**

@@ -51,7 +51,10 @@ it back with `canvas-data`'s `RemotePointInTime`, the way a scrubbed canvas read
 licensed reader gets the restatements and the unlicensed one gets Q2 *blocked*, not the
 superseded 30.04; a restatement that lands afterwards leaves the morning byte-identical; and
 the history shows every version, withholding the licensed ones without hiding that they
-exist. Then a backtest: `/v1/versions` hands canvas-sim's `loadHistory` every version of the
+exist. A series chart draws the same line through the service as in-process and shows the
+unlicensed reader Q2 as a gap where it falls; a screen on synthetic market caps reads the same
+universe at the morning and today, and leaves NVDA out of the unlicensed reader's universe as
+withheld rather than screening it on the older public figure. Then a backtest: `/v1/versions` hands canvas-sim's `loadHistory` every version of the
 revenue and of 588 bars of synthetic prices, and the backtest run on it is exactly the one run
 on the same facts in-process. The unlicensed reader is refused it, because three of the versions
 are withheld, and `/v1/versions` lists them rather than leaving them out. CI runs it in the
@@ -103,8 +106,8 @@ half a second of 200-a-second ticks arrives as two to four updates.
 - **One consumer.** `apps/canvas-demo/live.html` reads `/v1/stream` through the demo server's
   proxy, with canvas-data's `LiveTiles`, and `live-shots.mjs` checks it against this binary in
   Chromium. `canvas-data`'s `RemotePointInTime` reads `/v1/asof`, `/v1/history` and
-  `/v1/versions`; its fact tile and canvas-sim's backtest history load through it, and the
-  remote morning check holds both to the in-process answer. Charts and screeners still read
-  in-process.
+  `/v1/versions`; its fact tile, series chart and screen evaluate through it, canvas-sim's
+  backtest history loads through it, and the remote morning check holds each to the
+  in-process answer.
 - **Throughput is not measured.** The PRD's 1.5M messages a second through Redpanda is a
   cluster figure; nothing here claims it.

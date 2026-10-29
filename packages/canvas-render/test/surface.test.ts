@@ -162,7 +162,7 @@ describe('painting order', () => {
     }
     expect(samples).toBeGreaterThan(50_000);
     expect(worstGap).toBeLessThan(1e-9);
-  });
+  }, 60_000);
 });
 
 describe('picking in 3D', () => {

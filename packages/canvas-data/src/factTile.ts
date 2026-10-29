@@ -74,6 +74,31 @@ export function remoteSource(remote: RemotePointInTime, name = 'data plane'): Po
   };
 }
 
+export type LatestKnown =
+  | { kind: 'value'; observation: SourceRead['observations'][number] }
+  | { kind: 'blocked'; validTime: Instant; message: string }
+  | { kind: 'empty' };
+
+/**
+ * The latest period in a read, or that it is withheld.
+ *
+ * If the latest period the source has is one the reader may not see, the
+ * answer is *blocked* — not the newest period they may see, which would be an
+ * older number standing in for a newer one with nothing to say so. The fact
+ * tile and the screener both read a key this way.
+ */
+export function latestKnown(read: SourceRead): LatestKnown {
+  const shown = read.observations[read.observations.length - 1];
+  const blocked = read.blocked.reduce<SourceRead['blocked'][number] | undefined>(
+    (best, b) => (best === undefined || b.validTime > best.validTime ? b : best),
+    undefined,
+  );
+  if (blocked && (!shown || blocked.validTime >= shown.validTime)) {
+    return { kind: 'blocked', validTime: blocked.validTime, message: blocked.message };
+  }
+  return shown ? { kind: 'value', observation: shown } : { kind: 'empty' };
+}
+
 export function createFactTile(input: { id: NodeID; key: string; position?: Vec2 }): PicassoNode {
   return createNode({
     id: input.id,
@@ -126,17 +151,12 @@ export async function evaluateFactTile(
   const read = await source.read({ key, knowledgeTime: asof });
   if (node.provenance.asof !== asof) return { kind: 'superseded', key, asof };
 
-  const latestShown = read.observations[read.observations.length - 1];
-  const latestBlocked = read.blocked.reduce<SourceRead['blocked'][number] | undefined>(
-    (best, b) => (best === undefined || b.validTime > best.validTime ? b : best),
-    undefined,
-  );
+  const latest = latestKnown(read);
   node.state = { status: 'ready', lastComputedAt: Date.now() };
 
-  if (latestBlocked && (!latestShown || latestBlocked.validTime >= latestShown.validTime)) {
-    return { kind: 'blocked', key, validTime: latestBlocked.validTime, message: latestBlocked.message, asof };
-  }
-  if (!latestShown) return { kind: 'empty', key, asof };
+  if (latest.kind === 'blocked') return { kind: 'blocked', key, validTime: latest.validTime, message: latest.message, asof };
+  if (latest.kind === 'empty') return { kind: 'empty', key, asof };
+  const latestShown = latest.observation;
   return {
     kind: 'value',
     key,

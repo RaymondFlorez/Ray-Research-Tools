@@ -11,6 +11,10 @@
  *   - today reads the restatements, and an unlicensed reader gets the
  *     restated quarter as blocked, not the superseded public figure;
  *   - a restatement that arrives later leaves the morning byte-identical;
+ *   - a chart draws the same line through the service as in-process, with a
+ *     withheld period as a gap where it falls;
+ *   - a screen on the canvas reads the same universe through the service as
+ *     in-process, and a withheld field leaves the name out as withheld;
  *   - a backtest whose history is loaded from the service produces exactly
  *     what the same backtest produces on the same facts held in-process, and
  *     a reader missing some of the versions is refused rather than given a
@@ -29,7 +33,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource } =
+const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart } =
   await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
 const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
 const { backtest, History, IncompleteHistory, loadHistory } = await import(join(ROOT, 'packages/canvas-sim/dist/index.js'));
@@ -131,6 +135,58 @@ try {
   const tileAnalyst = await tileAt(remoteSource(as('analyst')), live);
   check('live, the unlicensed reader\'s tile shows Q3: a blocked older quarter does not hide a newer visible one',
     tileAnalyst.kind === 'value' && tileAnalyst.validTime === '2024-09-30' && tileAnalyst.value === 35.08);
+
+  // A ChartNode of the same series.
+  const chartAt = async (source, time) => {
+    const v = await evaluateSeriesChart(createSeriesChart({ id: 'c', key: 'NVDA.revenue' }), source, time, now);
+    return { ...v, source: undefined };
+  };
+  for (const [label, time] of [['the morning', pinned], ['today', live]]) {
+    const remote = await chartAt(remoteSource(as('pm')), time);
+    check(`a chart at ${label} draws the same line through the service as in-process`,
+      JSON.stringify(remote) === JSON.stringify(await chartAt(localSource(local), time)), remote.points.map((p) => p.value).join(', '));
+  }
+  const chartAnalyst = await chartAt(remoteSource(as('analyst')), live);
+  check('live, the unlicensed reader\'s chart has Q2 as a gap where it falls, then Q3',
+    JSON.stringify(chartAnalyst.points) === JSON.stringify([
+      { validTime: '2024-06-30', withheld: 'Requires a vendor-b licence.' },
+      { validTime: '2024-09-30', value: 35.08, knownAt: '2024-11-20' },
+    ]), JSON.stringify(chartAnalyst.points));
+
+  // A UniverseNode on the same canvas. Market caps are SYNTHETIC figures; the
+  // latest NVDA one comes from the licensed feed.
+  const CAPS = [
+    { key: 'NVDA.market_cap', validTime: '2024-08-02', knowledgeTime: '2024-08-02', value: 2.6e12, dataClass: 'public' },
+    { key: 'NVDA.market_cap', validTime: '2026-09-09', knowledgeTime: '2026-09-09', value: 4.1e12, dataClass: 'licensed', vendor: 'vendor-b' },
+    { key: 'AMD.market_cap', validTime: '2024-08-02', knowledgeTime: '2024-08-02', value: 2.2e11, dataClass: 'public' },
+    { key: 'AMD.market_cap', validTime: '2026-09-09', knowledgeTime: '2026-09-09', value: 9.0e10, dataClass: 'public' },
+    { key: 'WOLF.market_cap', validTime: '2024-08-02', knowledgeTime: '2024-08-02', value: 1.1e9, dataClass: 'public' },
+    { key: 'NEWCO.market_cap', validTime: '2026-09-09', knowledgeTime: '2026-09-09', value: 5.0e11, dataClass: 'public' },
+  ];
+  check('the loader can load the market caps', (await as('loader').append(CAPS)) === CAPS.length);
+  const REFERENCE = [
+    { instrument: 'NVDA', listed: '1999-01-22', fields: { sector: 'semis' } },
+    { instrument: 'AMD', listed: '1979-03-17', fields: { sector: 'semis' } },
+    { instrument: 'WOLF', listed: '1993-02-01', delisted: '2025-07-01', fields: { sector: 'semis' } },
+    { instrument: 'NEWCO', listed: '2025-05-01', fields: { sector: 'semis' } },
+  ];
+  const capsLocal = new BitemporalStore();
+  capsLocal.appendAll(CAPS);
+  const screen = async (source, time) => {
+    const node = createUniverseNode('u', 'sector == "semis" and market_cap > 100b');
+    const v = await evaluateUniverseNode(node, source, REFERENCE, ['market_cap'], time, now);
+    return v.universe;
+  };
+  for (const [label, time] of [['the morning', pinned], ['today', live]]) {
+    const remote = await screen(remoteSource(as('pm')), time);
+    const inProcess = await screen(localSource(capsLocal), time);
+    check(`a screen at ${label} reads the same universe through the service as in-process`,
+      JSON.stringify(remote) === JSON.stringify(inProcess), remote.members.join(', '));
+  }
+  const screenAnalyst = await screen(remoteSource(as('analyst')), live);
+  check('live, the unlicensed reader\'s screen leaves NVDA out as withheld, not screened on its older public figure',
+    !screenAnalyst.members.includes('NVDA') && screenAnalyst.withheld.count === 1 && screenAnalyst.withheld.byField.market_cap === 1,
+    `members ${screenAnalyst.members.join(', ')}; withheld ${screenAnalyst.withheld.count}`);
 
   const before = JSON.stringify(morningPm);
   await as('loader').append([{ key: 'NVDA.revenue', validTime: '2024-06-30', knowledgeTime: '2026-09-01', value: 29.4, restatement: true, dataClass: 'licensed', vendor: 'vendor-b' }]);

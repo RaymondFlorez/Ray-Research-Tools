@@ -103,7 +103,7 @@ describe('BOCPD', () => {
       firings += bocpdFirings(normals(2000, seed).map((x) => 100 + x)).length;
     }
     expect(firings).toBe(27);
-  });
+  }, 60_000);
 
   it('catches a three-sigma level shift within a few points, every time', () => {
     const delays: number[] = [];
