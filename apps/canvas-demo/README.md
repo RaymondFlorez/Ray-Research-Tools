@@ -84,10 +84,10 @@ and every figure measured on it are unchanged.
 
 Every page is served with a strict CSP, `COOP: same-origin` and
 `COEP: require-corp` (`scripts/security-headers.mjs`), and
-`scripts/csp-check.mjs` loads all ten in Chromium and checks, per page, that
+`scripts/csp-check.mjs` loads all eleven in Chromium and checks, per page, that
 nothing the page needs was refused, that `eval` and `new Function` are, that an
 injected inline script does not run, and that the page is cross-origin isolated.
-61 checks, all passing.
+67 checks, all passing.
 
 Two details the PRD's sentence does not settle and the browser does. The
 pricing core is WebAssembly, whose compilation CSP gates: `'wasm-unsafe-eval'`
@@ -194,6 +194,29 @@ Making it run turned up two bugs. canvas-guard built its red-team corpus with No
 when the module loaded, so canvas-guard could not be imported in a browser at all. And the
 first version of the proxy tore down every upstream request at once: a Node request emits
 `close` when its body has been read, which for a GET is immediately.
+
+## Shared
+
+`shared.html` is one user in one tab on a canvas synced through the collaboration server
+(`services/collab`). The demo server proxies its HTTP API and WebSocket under `/collab/` when
+`COLLAB_URL` is set, so the page keeps `connect-src 'self'`. The Hocuspocus provider loads
+through the import map like everything else, with no bundler.
+
+`scripts/shared-shots.mjs` starts the server against Postgres (`COLLAB_PG_URL`) and opens two
+browser contexts as two users. It checks ten things:
+- edits in either browser reach the other;
+- a reload brings the canvas back from the server;
+- offline edits on both sides stay apart, then merge with nothing lost;
+- after the server process is restarted, a new browser gets the whole canvas from Postgres;
+- a named version records the dataset snapshot its nodes cite, and cannot be saved twice;
+- a user cannot open another tenant's canvas;
+- no console errors.
+
+The last check found a fault in the page. It asked for the canvas's versions as soon as it
+loaded, so a refused user's tab made a request the server rightly answered 403. Versions are
+now listed once the server has let the user in. The first screenshot also showed six nodes
+drawn as five: offline, and after a reload, two nodes took the same slot. Each user now has
+their own band, and the slot comes from the document, not a counter a reload resets.
 
 ## Models
 

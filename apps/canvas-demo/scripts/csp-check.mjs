@@ -31,7 +31,7 @@ async function resolveChromium() {
 
 const ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const PORT = Number(process.env.PORT ?? 8341);
-const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates', 'tools', 'live', 'models'];
+const PAGES = ['index', 'ink', 'gl', 'inkgl', 'collab', 'payoff', 'rates', 'tools', 'live', 'models', 'shared'];
 
 const server = spawn(process.execPath, ['scripts/serve.mjs'], {
   cwd: ROOT,
@@ -70,11 +70,14 @@ try {
     page.on('console', (msg) => {
       const text = msg.text();
       if (/Content Security Policy|Refused to/i.test(text)) refused.push(text);
-      // The live page's data comes from the Go data plane, and the models
-      // page's from the model gateway, neither of which this check starts, so
-      // their requests answer 502 here — and only those, on only those pages.
-      // live-shots.mjs and models-shots.mjs run them against the real services.
+      // The live page's data comes from the Go data plane, the models page's
+      // from the model gateway and the shared page's from the collaboration
+      // server, none of which this check starts, so their requests fail here:
+      // 502 over HTTP, a refused WebSocket for the shared canvas — and only
+      // those, on only those pages. live-shots, models-shots and shared-shots
+      // run them against the real services.
       else if ((name === 'live' || name === 'models') && /status of 502/.test(text)) return;
+      else if (name === 'shared' && /WebSocket connection to 'ws:\/\/localhost:\d+\/collab' failed/.test(text)) return;
       else if (msg.type() === 'error') errors.push(text);
     });
     page.on('pageerror', (error) => errors.push(String(error)));

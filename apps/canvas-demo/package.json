@@ -21,7 +21,8 @@
     "@picasso/canvas-pricing": "*",
     "@picasso/canvas-data": "*",
     "@picasso/canvas-guard": "*",
-    "@picasso/canvas-router": "*"
+    "@picasso/canvas-router": "*",
+    "@hocuspocus/provider": "4.7.1"
   },
   "devDependencies": {
     "typescript": "^5.6.3"

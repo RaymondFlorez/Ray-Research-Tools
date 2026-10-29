@@ -43,6 +43,17 @@ jobs:
 
   browser:
     runs-on: ubuntu-latest
+    # shared-shots keeps its canvas in Postgres through services/collab.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      COLLAB_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -65,7 +76,7 @@ jobs:
         working-directory: crates/pricing-core
       - name: Demo surfaces in headless Chromium
         run: |
-          for check in screenshot ink-shots inkgl-shots gl-shots collab-shots payoff-shots rates-shots tools-shots live-shots models-shots csp-check; do
+          for check in screenshot ink-shots inkgl-shots gl-shots collab-shots payoff-shots rates-shots tools-shots live-shots models-shots shared-shots csp-check; do
             echo "::group::$check"
             node "apps/canvas-demo/scripts/$check.mjs"
             echo "::endgroup::"

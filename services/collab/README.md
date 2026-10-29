@@ -68,10 +68,9 @@ says what was measured.
 
 ## What is not covered
 
-- **No browser goes through it yet.** The tests are real Hocuspocus clients in Node, the same
-  provider library a browser would load. `collab.html` still syncs its two panes in-page, and
-  serving the provider to the browser needs its module graph (yjs, y-protocols, lib0) mapped or
-  bundled.
+- **One page goes through it.** `apps/canvas-demo/shared.html` syncs through this server, and
+  `shared-shots.mjs` drives two browsers through it, a reload and a server restart included.
+  The main canvas demo (`index.html`) and `collab.html`'s two panes do not use it.
 - **No offline store on the client.** PRD 2.2's y-indexeddb is not wired. A provider that
   disconnects keeps its edits in memory and merges them on reconnect, which the test checks;
   a closed tab loses them.

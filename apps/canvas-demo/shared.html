@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso shared canvas</title>
+    <style>
+      html, body { margin: 0; height: 100%; background: #f6f5f2; color: #1c1a17; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      body { display: flex; flex-direction: column; }
+      #bar { display: flex; gap: 8px; align-items: center; padding: 10px 14px; flex-wrap: wrap; border-bottom: 1px solid #dedad2; }
+      #status[data-state="synced"] { color: #2f5d33; }
+      #status[data-state="offline"], #status[data-state="refused"] { color: #b5532a; }
+      #stage { flex: 1; position: relative; min-height: 360px; }
+      canvas { display: block; }
+      #versions { padding: 8px 14px; border-top: 1px solid #dedad2; min-height: 2em; }
+      #error:empty { display: none; }
+      #error { color: #b5532a; }
+      input, button { font: inherit; }
+    </style>
+<script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-render": "/packages/canvas-render/dist/index.js",
+          "@picasso/canvas-ink": "/packages/canvas-ink/dist/index.js",
+          "@picasso/canvas-sync": "/packages/canvas-sync/dist/index.js",
+          "@hocuspocus/provider": "/node_modules/@hocuspocus/provider/dist/hocuspocus-provider.esm.js",
+          "@hocuspocus/common": "/node_modules/@hocuspocus/common/dist/hocuspocus-common.esm.js",
+          "@lifeomic/attempt": "/node_modules/@lifeomic/attempt/dist/es6/src/index.js",
+          "y-protocols/awareness": "/node_modules/y-protocols/awareness.js",
+          "y-protocols/sync": "/node_modules/y-protocols/sync.js",
+          "yjs": "/node_modules/yjs/dist/yjs.mjs",
+          "lib0/array": "/node_modules/lib0/array.js",
+          "lib0/binary": "/node_modules/lib0/binary.js",
+          "lib0/decoding": "/node_modules/lib0/decoding.js",
+          "lib0/encoding": "/node_modules/lib0/encoding.js",
+          "lib0/error": "/node_modules/lib0/error.js",
+          "lib0/function": "/node_modules/lib0/function.js",
+          "lib0/iterator": "/node_modules/lib0/iterator.js",
+          "lib0/logging": "/node_modules/lib0/logging.js",
+          "lib0/map": "/node_modules/lib0/map.js",
+          "lib0/math": "/node_modules/lib0/math.js",
+          "lib0/object": "/node_modules/lib0/object.js",
+          "lib0/observable": "/node_modules/lib0/observable.js",
+          "lib0/promise": "/node_modules/lib0/promise.js",
+          "lib0/random": "/node_modules/lib0/random.js",
+          "lib0/set": "/node_modules/lib0/set.js",
+          "lib0/string": "/node_modules/lib0/string.js",
+          "lib0/time": "/node_modules/lib0/time.js",
+          "lib0/environment": "/node_modules/lib0/environment.js",
+          "lib0/buffer": "/node_modules/lib0/buffer.js",
+          "lib0/conditions": "/node_modules/lib0/conditions.js",
+          "lib0/storage": "/node_modules/lib0/storage.js",
+          "lib0/symbol": "/node_modules/lib0/symbol.js",
+          "lib0/number": "/node_modules/lib0/number.js",
+          "lib0/webcrypto": "/node_modules/lib0/webcrypto.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="bar">
+      <span id="who"></span>
+      <button id="add">add a node</button>
+      <button id="link">go offline</button>
+      <input id="version-name" placeholder="version name" />
+      <button id="save">save version</button>
+      <span id="status" data-state="connecting">connecting</span>
+      <span id="error"></span>
+    </div>
+    <div id="stage"><canvas id="canvas"></canvas></div>
+    <div id="versions"></div>
+    <script type="module" src="/apps/canvas-demo/dist/shared.js"></script>
+  </body>
+</html>

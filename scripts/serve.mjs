@@ -30,10 +30,12 @@ const TYPES = {
  */
 const DATAPLANE = process.env.DATAPLANE_URL;
 const GATEWAY = process.env.GATEWAY_URL;
+/** `/collab/`: the collaboration server (services/collab), its HTTP API and its WebSocket. */
+const COLLAB = process.env.COLLAB_URL;
 
 function proxy(req, res, base, name, path) {
   if (!base) {
-    res.writeHead(502, { 'content-type': 'text/plain' }).end(`no ${name}: set ${name === 'data plane' ? 'DATAPLANE_URL' : 'GATEWAY_URL'}\n`);
+    res.writeHead(502, { 'content-type': 'text/plain' }).end(`no ${name} configured\n`);
     return;
   }
   const target = new URL(path, base);
@@ -66,6 +68,10 @@ const server = createServer(async (req, res) => {
     proxy(req, res, GATEWAY, 'model gateway', (req.url ?? '/').slice('/gw'.length));
     return;
   }
+  if (url.pathname.startsWith('/collab/')) {
+    proxy(req, res, COLLAB, 'collaboration server', (req.url ?? '/').slice('/collab'.length));
+    return;
+  }
   let path = decodeURIComponent(url.pathname);
   if (path === '/') path = '/apps/canvas-demo/index.html';
   const resolved = join(ROOT, normalize(path).replace(/^(\.\.[/\\])+/, ''));
@@ -90,6 +96,39 @@ const server = createServer(async (req, res) => {
   } catch {
     res.writeHead(404).end('not found');
   }
+});
+
+// The collaboration server's WebSocket, passed through byte for byte once the
+// upstream has accepted the upgrade.
+server.on('upgrade', (req, socket, head) => {
+  if (!COLLAB || !(req.url ?? '').startsWith('/collab')) {
+    socket.destroy();
+    return;
+  }
+  const target = new URL((req.url ?? '/').slice('/collab'.length) || '/', COLLAB);
+  const upstream = request(target, { method: 'GET', headers: { ...req.headers, host: target.host } });
+  upstream.on('upgrade', (res, upSocket, upHead) => {
+    const lines = [`HTTP/1.1 ${res.statusCode} ${res.statusMessage}`];
+    for (let i = 0; i < res.rawHeaders.length; i += 2) lines.push(`${res.rawHeaders[i]}: ${res.rawHeaders[i + 1]}`);
+    socket.write(`${lines.join('\r\n')}\r\n\r\n`);
+    if (upHead.length > 0) socket.write(upHead);
+    if (head.length > 0) upSocket.write(head);
+    upSocket.pipe(socket);
+    socket.pipe(upSocket);
+    const close = () => {
+      upSocket.destroy();
+      socket.destroy();
+    };
+    upSocket.on('error', close);
+    socket.on('error', close);
+    upSocket.on('close', close);
+    socket.on('close', close);
+  });
+  upstream.on('response', (res) => {
+    socket.end(`HTTP/1.1 ${res.statusCode} ${res.statusMessage}\r\n\r\n`);
+  });
+  upstream.on('error', () => socket.destroy());
+  upstream.end();
 });
 
 server.listen(PORT, () => console.log(`serving ${ROOT} at http://localhost:${PORT}/`));
