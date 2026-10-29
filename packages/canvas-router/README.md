@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 109 tests
+npm test --workspace @picasso/canvas-router    # 113 tests
 ```
 
 ## Phase 3's exit criterion
@@ -240,9 +240,13 @@ recovering fleet can now serve and keeps the rest.
 - **No preemption of running work.** 7.3 says batch work "is preempted". The queue orders
   waiting work; nothing here knows what is running, so nothing is stopped mid-flight.
 
-- **No dispatch.** Every model in this package is a description and a function
-  the caller supplies. What is tested is the routing, the cascade's control
-  flow, the budgets and the gates — not any model's output.
+- **Dispatch is the gateway's.** This package calls no model itself. `gateway.ts`
+  supplies a `Dispatch` that sends each routed model to `services/gateway` under
+  its provider's name, and refuses one whose manifest placement differs from the
+  gateway provider's. Its tests run against a stand-in gateway in-process, and
+  `apps/canvas-demo/scripts/models-shots.mjs` drives the client against the real
+  one. The cascade's measured figures above are still over a simulated fleet:
+  no model's output has been through it.
 - **The canary does not route traffic.** `inShadow` says whether a request is
   in the sample and `shadow()` runs both dispatches, but nothing here sits in
   a request path: the caller decides where to call it from, and a caller that

@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso models</title>
+    <style>
+      html, body { margin: 0; background: #f6f5f2; color: #1c1a17; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { padding: 24px; display: flex; flex-direction: column; gap: 18px; max-width: 980px; }
+      h2 { font-size: 13px; margin: 0 0 8px; letter-spacing: 0.04em; text-transform: uppercase; color: #6f6a61; }
+      #providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+      .card { background: #fff; border: 1px solid #c9c6bf; border-radius: 6px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+      .card.connected { border-color: #4f7a52; }
+      .name { font-weight: 600; }
+      .meta, .note { color: #6f6a61; font-size: 12px; }
+      .state { font-size: 12px; }
+      .card.connected .state { color: #2f5d33; }
+      .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+      input, select, textarea, button { font: inherit; }
+      input[type=password] { flex: 1; min-width: 140px; }
+      textarea { width: 100%; box-sizing: border-box; min-height: 70px; }
+      #banner:empty, #error:empty { display: none; }
+      #banner { background: #e9f2ea; border: 1px solid #4f7a52; padding: 8px 12px; border-radius: 6px; }
+      #error { background: #fbefe9; border: 1px solid #b5532a; padding: 8px 12px; border-radius: 6px; }
+      #answer { white-space: pre-wrap; background: #fff; border: 1px solid #c9c6bf; border-radius: 6px; padding: 10px 12px; min-height: 2em; }
+      table { border-collapse: collapse; font-size: 12px; }
+      td, th { border-bottom: 1px solid #dedad2; padding: 4px 10px 4px 0; text-align: left; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-router": "/packages/canvas-router/dist/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <div class="row">
+        <label for="user">signed in to Picasso as</label>
+        <select id="user"><option value="pm">pm</option><option value="analyst">analyst</option></select>
+      </div>
+      <div id="banner"></div>
+      <section>
+        <h2>Model providers</h2>
+        <div id="providers"></div>
+        <p class="note">Each provider is reached on your own account with it. A key goes to the gateway once and does not come back: only its last four characters are shown.</p>
+      </section>
+      <section>
+        <h2>Try a model</h2>
+        <div class="row">
+          <select id="provider"></select>
+          <input id="model" placeholder="model" />
+          <label for="class">data</label>
+          <select id="class">
+            <option value="public">public</option>
+            <option value="licensed">licensed</option>
+            <option value="positions">positions</option>
+            <option value="mnpi_risk">mnpi_risk</option>
+          </select>
+          <button id="send">Send</button>
+        </div>
+        <textarea id="prompt">In one sentence: what does a point-in-time read guarantee?</textarea>
+        <div id="error"></div>
+        <div id="answer"></div>
+      </section>
+      <section>
+        <h2>Your calls</h2>
+        <table id="audit"><thead><tr><th>when</th><th>provider</th><th>model</th><th>data</th><th>outcome</th><th>tokens</th></tr></thead><tbody></tbody></table>
+        <p class="note">The gateway records who called which model with what class of data, and never the content.</p>
+      </section>
+    </main>
+    <script type="module" src="/apps/canvas-demo/dist/models.js"></script>
+  </body>
+</html>

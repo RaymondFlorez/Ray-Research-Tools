@@ -23,18 +23,20 @@ const TYPES = {
 
 /**
  * Where `/v1/` goes: the Go data plane (services/dataplane), when one is
- * running. Proxied rather than called cross-origin so the pages keep
+ * running; and `/gw/`, the model gateway (services/gateway), with the prefix
+ * removed. Proxied rather than called cross-origin so the pages keep
  * `connect-src 'self'`, and streamed through unbuffered so a Server-Sent Event
  * reaches the page when it is sent, not when a buffer fills.
  */
 const DATAPLANE = process.env.DATAPLANE_URL;
+const GATEWAY = process.env.GATEWAY_URL;
 
-function proxy(req, res) {
-  if (!DATAPLANE) {
-    res.writeHead(502, { 'content-type': 'text/plain' }).end('no data plane: set DATAPLANE_URL\n');
+function proxy(req, res, base, name, path) {
+  if (!base) {
+    res.writeHead(502, { 'content-type': 'text/plain' }).end(`no ${name}: set ${name === 'data plane' ? 'DATAPLANE_URL' : 'GATEWAY_URL'}\n`);
     return;
   }
-  const target = new URL(req.url ?? '/', DATAPLANE);
+  const target = new URL(path, base);
   const upstream = request(
     target,
     { method: req.method, headers: { ...req.headers, host: target.host } },
@@ -45,7 +47,7 @@ function proxy(req, res) {
   );
   upstream.on('error', (err) => {
     if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
-    res.end(`data plane unreachable: ${err.message}\n`);
+    res.end(`${name} unreachable: ${err.message}\n`);
   });
   // The response's close, not the request's: a request emits `close` as soon
   // as its body is read, which for a GET is at once, and tearing the upstream
@@ -57,7 +59,11 @@ function proxy(req, res) {
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
   if (url.pathname.startsWith('/v1/')) {
-    proxy(req, res);
+    proxy(req, res, DATAPLANE, 'data plane', req.url ?? '/');
+    return;
+  }
+  if (url.pathname.startsWith('/gw/')) {
+    proxy(req, res, GATEWAY, 'model gateway', (req.url ?? '/').slice('/gw'.length));
     return;
   }
   let path = decodeURIComponent(url.pathname);

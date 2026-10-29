@@ -84,10 +84,10 @@ and every figure measured on it are unchanged.
 
 Every page is served with a strict CSP, `COOP: same-origin` and
 `COEP: require-corp` (`scripts/security-headers.mjs`), and
-`scripts/csp-check.mjs` loads all seven in Chromium and checks, per page, that
+`scripts/csp-check.mjs` loads all ten in Chromium and checks, per page, that
 nothing the page needs was refused, that `eval` and `new Function` are, that an
 injected inline script does not run, and that the page is cross-origin isolated.
-43 checks, all passing.
+61 checks, all passing.
 
 Two details the PRD's sentence does not settle and the browser does. The
 pricing core is WebAssembly, whose compilation CSP gates: `'wasm-unsafe-eval'`
@@ -194,6 +194,28 @@ Making it run turned up two bugs. canvas-guard built its red-team corpus with No
 when the module loaded, so canvas-guard could not be imported in a browser at all. And the
 first version of the proxy tore down every upstream request at once: a Node request emits
 `close` when its body has been read, which for a GET is immediately.
+
+## Models
+
+`models.html` is where a user connects model providers and tries one, through the model
+gateway (`services/gateway`), which the demo server proxies under `/gw/` when `GATEWAY_URL` is
+set. A provider that offers sign-in has a button that takes the browser there and back. One
+that takes an API key has a password field, emptied as it is sent. A shared self-hosted server
+needs nothing. Each card shows where the provider runs and which data classes it may receive.
+
+`scripts/models-shots.mjs` builds the gateway and points it at local stand-ins. One is a Chat
+Completions server that answers every prompt with "stand-in answer to: …". The other is an
+OAuth provider whose authorize page approves at once and whose key exchange checks the PKCE
+verifier. No real provider is reached. It checks eighteen things in Chromium:
+- signing in goes to the provider and back, and the card shows "signed in · …4321";
+- a call on that account goes out under the key the sign-in produced;
+- a pasted key connects and shows its last four characters;
+- no key appears in the page, or in any of the gateway's responses;
+- positions sent to a vendor are refused with the reason, and the vendor receives nothing;
+- the same positions go to the self-hosted model;
+- the audit lists the refusal and the calls without any prompt text;
+- the analyst sees neither the pm's accounts nor the pm's calls;
+- disconnecting says the key must still be revoked with the provider.
 
 ## Rates
 
