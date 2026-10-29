@@ -1,8 +1,8 @@
 # Working in this repository
 
 Picasso, built against `docs/picasso/PRD.md`. Sixteen npm workspace packages
-under `packages/`, one Rust crate under `crates/pricing-core`, one Go module
-under `services/dataplane`, demo surfaces under `apps/canvas-demo`.
+under `packages/`, one Rust crate under `crates/pricing-core`, two Go modules
+(`services/dataplane`, `services/gateway`), demo surfaces under `apps/canvas-demo`.
 
 ## Commands
 
@@ -23,6 +23,9 @@ cd services/dataplane && go test -race ./...
 # DATAPLANE_PG_URL=postgres://... adds the Postgres store; CI also sets
 # DATAPLANE_REQUIRE_PG=1 so those tests fail rather than skip without one.
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs
+
+cd services/gateway && go test -race ./...   # GATEWAY_LIVE=1 adds a real
+                                             # call to api.anthropic.com
 ```
 
 The Go data plane and `canvas-data` implement the same point-in-time,

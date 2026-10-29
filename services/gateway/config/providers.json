@@ -1,0 +1,15 @@
+[
+  { "id": "openrouter", "name": "OpenRouter — open and closed models on one account", "kind": "openai",
+    "baseUrl": "https://openrouter.ai/api/v1", "placement": "vendor", "auth": "oauth",
+    "oauth": { "authorizeUrl": "https://openrouter.ai/auth", "exchangeUrl": "https://openrouter.ai/api/v1/auth/keys" },
+    "headers": { "X-Title": "Picasso" } },
+  { "id": "anthropic", "name": "Anthropic (Claude)", "kind": "anthropic", "placement": "vendor", "auth": "api_key",
+    "suggested": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"] },
+  { "id": "openai", "name": "OpenAI", "kind": "openai", "baseUrl": "https://api.openai.com/v1",
+    "maxTokensField": "max_completion_tokens", "placement": "vendor", "auth": "api_key" },
+  { "id": "gemini", "name": "Google Gemini", "kind": "gemini", "placement": "vendor", "auth": "api_key" },
+  { "id": "ollama", "name": "Ollama on the gateway's machine", "kind": "openai",
+    "baseUrl": "http://127.0.0.1:11434/v1", "placement": "self_hosted", "auth": "none" },
+  { "id": "vllm", "name": "vLLM, self-hosted open weights", "kind": "openai",
+    "baseUrl": "http://127.0.0.1:8000/v1", "placement": "self_hosted", "auth": "none" }
+]

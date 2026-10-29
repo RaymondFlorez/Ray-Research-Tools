@@ -88,7 +88,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 |---|---|---|
 | 4.2 routing table, 4.3 hard rules then expected utility | Built | `canvas-router` policy, router |
 | 4.3 cascade with verification | Built | `canvas-router` cascade |
-| 4.4 fleet as manifests | Built | `canvas-router` manifest; models themselves are Infra |
+| 4.4 fleet as manifests | Built | `canvas-router` manifest; `services/gateway` reaches any provider (Anthropic SDK, Chat Completions, Gemini) on each user's own account; no successful call yet, for want of a key |
 | 4.5 blackboard, Coordinator, Critic, Reconciler | Built | `canvas-agents` |
 | 4.6 context assembly with priorities and floors | Built | `canvas-agents` context |
 | 4.7 trace store, eval harness, canary, determinism | Built | `canvas-router` trace/evals/canary; `fingerprintOf` → `canvas-core` `explainKeyChange` |
@@ -166,6 +166,7 @@ Everything left is integration with real systems, in roughly this order of lever
 market data plane — the service and the free sources' loaders are built
 (`services/dataplane`); what remains is to allow those sources' hosts in the network policy and
 run the first real loads, which are the first test of the decoders against real responses
-(unblocks CodeNode's SQL, real backtests); model fleet behind the router's manifests (unblocks the semantic and text ink
-passes, QueryNode end to end); collaboration server and Postgres snapshots; the code
+(unblocks CodeNode's SQL, real backtests); model fleet — the gateway is built (`services/gateway`: any provider, each user on their own
+account, positions never to a vendor); what remains is a user's first sign-in or key, and the
+router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); collaboration server and Postgres snapshots; the code
 sandbox; GPU verification of Phase 0's frame budget on real hardware.

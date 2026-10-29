@@ -54,6 +54,7 @@ README carries the figure it was measured at and the gaps it does not close.
 | Service | Description |
 |---|---|
 | [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter, none yet run against the real source. |
+| [`gateway`](services/gateway) | Go: the model gateway. Any model, open or closed, through three adapters (Anthropic's official SDK, Chat Completions for OpenAI, OpenRouter and every open-weight server, and Gemini). Each user calls on their own account, by OpenRouter sign-in or by an API key sealed per user. Positions and MNPI-risk data never reach a vendor's API. |
 
 ## Apps
 
@@ -110,6 +111,7 @@ node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 
 # the Go data plane
 cd services/dataplane && go test -race ./...     # 32 tests; DATAPLANE_PG_URL adds the Postgres store
+cd services/gateway && go test -race ./...       # 15 tests
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs   # Phase 1's exit criterion on Postgres
 ```
 
