@@ -16,6 +16,7 @@ npm test --workspace @picasso/canvas-sync
 | `snapshot.ts` | 3.9 | Snapshots, immutable named versions, and templates |
 | `tiering.ts` | 7.3 | Cold canvases' artifacts evicted after seven days unopened, rehydrated one at a time on read, and checked on the way back |
 | `encryptedStore.ts` | 7.2 | The offline store, encrypted under a key derived from the session and dropped on logout |
+| `offline.ts` | 2.2, 7.4 | A canvas kept on the device through that store: every update sealed as it happens, replayed on open, compacted without a gap; and the IndexedDB backing |
 
 ## The rule that shapes all of it
 
@@ -124,11 +125,33 @@ Three limits, stated because they are easy to imply away:
   object store implements; the tests run against `MemoryBacking`. Session
   secret issuance is the server's, and is not in this repository.
 
+## A canvas on the device
+
+PRD 2.2 names y-indexeddb, and PRD 7.2 rules out what it does: writing Yjs updates to IndexedDB
+in the clear. `OfflineCanvas` keeps the canvas the same way, through `EncryptedStore`. Every
+update is sealed and written as its own record the moment it happens, local edits and updates
+from the server alike, and opening the canvas replays the records in order. Past a threshold,
+the merged state is written as a new record before the old ones are deleted, so a crash
+between the two leaves both, and replaying both is harmless.
+
+The key comes from the session secret, which the collaboration server issues and ends at
+logout (`services/collab`, `/v1/session`). So a tab reopened while still offline has the
+records and cannot read them until the session is reachable. Nothing caches the secret,
+because a key on the disk beside the ciphertext would make the encryption decorative.
+
+The first version of the check that the disk holds nothing readable passed for the wrong
+reason. A record is JSON holding base64, so a node id would not appear in the raw bytes even
+unsealed. Both checks now read each record the way an unsealed one would be read. A control,
+an unsealed record of the same update, shows that this reading does find the id.
+
 ## What is not covered
 
 - **A network.** `Link` and `Room` carry Yjs updates in process; there is no WebSocket
   provider, no relay server and no authentication on a room. The convergence tests are
   about the CRDT, not the wire.
-- **IndexedDB and S3.** `CipherBacking` and `ColdStore` are seams, run against memory.
+- **S3.** `ColdStore` is a seam, run against memory. `IndexedDbBacking` is real and runs in
+  Chromium in `apps/canvas-demo/scripts/shared-shots.mjs`; the unit tests use `MemoryBacking`.
+- **Opening offline.** The sealed copy cannot be read without the session secret, which comes
+  from the server, so a canvas cannot be opened from a cold start with no network.
 - **Roles inside a document.** Anyone in a room can change any node. There are no
   per-node permissions and no read-only participants.

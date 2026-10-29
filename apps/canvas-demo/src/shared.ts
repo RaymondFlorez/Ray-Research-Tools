@@ -13,7 +13,7 @@
 
 import { CanvasIndex, createNode, type NodeKind, type Viewport } from '@picasso/canvas-core';
 import { buildScene, lightTheme } from '@picasso/canvas-render';
-import { SyncedCanvas } from '@picasso/canvas-sync';
+import { EncryptedStore, IndexedDbBacking, OfflineCanvas, RecordUnreadable, SyncedCanvas } from '@picasso/canvas-sync';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { drawScene } from './draw.js';
 
@@ -35,6 +35,33 @@ const index = new CanvasIndex(canvas.snapshot());
 let viewport: Viewport = { x: -20, y: -20, scale: 0.6, width: 0, height: 0 };
 let refused: string | undefined;
 let online = true;
+
+// The device's copy first: everything this session left here, edits made
+// offline included, replayed before the server is asked for anything. The key
+// comes from the session secret the server holds, so a tab opened offline has
+// the records and cannot read them until the session is reachable.
+let offline: OfflineCanvas | undefined;
+let offlineStore: EncryptedStore | undefined;
+let offlineNote = 'no offline copy';
+let signedOut = false;
+try {
+  const res = await fetch('/collab/v1/session', { method: 'POST', headers: { 'X-Picasso-User': user } });
+  if (!res.ok) throw new Error(`no session (${res.status})`);
+  const { secret } = (await res.json()) as { secret: string };
+  const backing = await IndexedDbBacking.open(`picasso-offline-${user}`);
+  offlineStore = await EncryptedStore.open(backing, Uint8Array.from(atob(secret), (c) => c.charCodeAt(0)), 'canvas');
+  try {
+    offline = await OfflineCanvas.attach(canvas.doc, offlineStore, backing, docName);
+  } catch (err) {
+    if (!(err instanceof RecordUnreadable)) throw err;
+    // Written under a session that has ended: unreadable for good, so cleared.
+    for (const key of (await backing.keys()).filter((k) => k.startsWith(`${docName}#`))) await backing.delete(key);
+    offline = await OfflineCanvas.attach(canvas.doc, offlineStore, backing, docName);
+  }
+  offlineNote = `offline copy · ${offline.replayed} records replayed`;
+} catch (err) {
+  offlineNote = `offline copy unavailable: ${(err as Error).message}`;
+}
 
 const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/collab`;
 const provider = new HocuspocusProvider({
@@ -114,7 +141,18 @@ $('save').addEventListener('click', async () => {
   await listVersions();
 });
 
-function state(): 'refused' | 'offline' | 'synced' | 'connecting' {
+$('logout').addEventListener('click', async () => {
+  // The session ends at the server, the key is dropped here, and the sealed
+  // copy is erased: nothing of this session stays readable or on the disk.
+  await fetch('/collab/v1/logout', { method: 'POST', headers: { 'X-Picasso-User': user } });
+  offline?.detach();
+  await offlineStore?.lock({ erase: true });
+  provider.destroy();
+  signedOut = true;
+});
+
+function state(): 'signed-out' | 'refused' | 'offline' | 'synced' | 'connecting' {
+  if (signedOut) return 'signed-out';
   if (refused !== undefined) return 'refused';
   if (!online) return 'offline';
   return provider.isSynced ? 'synced' : 'connecting';
@@ -125,7 +163,7 @@ function frame(now: number): void {
   drawScene(ctx, buildScene({ doc: canvas.snapshot(), index, viewport, theme: lightTheme, now }), { theme: lightTheme, now, dpr: 1 });
   const s = state();
   status.dataset.state = s;
-  status.textContent = s === 'refused' ? `refused: ${refused}` : `${s} · ${canvas.nodeCount} nodes`;
+  status.textContent = s === 'refused' ? `refused: ${refused}` : `${s} · ${canvas.nodeCount} nodes · ${offlineNote}`;
   requestAnimationFrame(frame);
 }
 
@@ -134,7 +172,7 @@ requestAnimationFrame(frame);
 
 declare global {
   interface Window {
-    __shared: { state(): string; nodes(): string[]; add(): void; versions(): Promise<void> };
+    __shared: { state(): string; nodes(): string[]; add(): void; versions(): Promise<void>; offline(): { note: string; records: number; flushed(): Promise<void> } };
   }
 }
 window.__shared = {
@@ -142,4 +180,5 @@ window.__shared = {
   nodes: () => [...canvas.snapshot().nodes.keys()].sort(),
   add: addNode,
   versions: listVersions,
+  offline: () => ({ note: offlineNote, records: offline?.recordCount ?? 0, flushed: () => offline?.flushed() ?? Promise.resolve() }),
 };

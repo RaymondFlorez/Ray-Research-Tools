@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 7 tests; they skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 8 tests; they skip without a database
 node services/collab/dist/main.js --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -58,6 +58,14 @@ snapshots and no idle one while editing, then one idle snapshot after, in five o
   than one id for a source means nodes pinned to different times, and is recorded, not
   resolved. Reopened, the version is the canvas as it was, nodes deleted since included.
 
+## Sessions
+
+`POST /v1/session` hands a user their session secret: the open session's, or a new one. This
+is what canvas-sync's offline store derives its key from, so every tab of one session reads
+what another wrote. `POST /v1/logout` ends the session, and its secret is never handed out
+again: anything sealed under it is unreadable for good. A unique index allows one open session
+per user, so two tabs racing to start the first session get the same secret.
+
 ## Measured, and corrected
 
 The server tags the state it applies on load, and does not log a tagged update; the first
@@ -71,9 +79,9 @@ says what was measured.
 - **One page goes through it.** `apps/canvas-demo/shared.html` syncs through this server, and
   `shared-shots.mjs` drives two browsers through it, a reload and a server restart included.
   The main canvas demo (`index.html`) and `collab.html`'s two panes do not use it.
-- **No offline store on the client.** PRD 2.2's y-indexeddb is not wired. A provider that
-  disconnects keeps its edits in memory and merges them on reconnect, which the test checks;
-  a closed tab loses them.
+- **Session secrets are stored in Postgres as they are.** They are what a session's offline
+  data is keyed from. Anyone who can read the `sessions` table, and a device's IndexedDB, can
+  read that device's canvases. There is no KMS wrapping.
 - **No identity.** The token is the user's name, checked against the users file, as at the
   data plane and the gateway. OIDC is not built, so it listens on loopback.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of

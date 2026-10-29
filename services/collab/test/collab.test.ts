@@ -198,4 +198,23 @@ suite('picasso-collab', () => {
     const removed = await pool.query(`DELETE FROM ${schema}.updates WHERE doc = 'acme/old'`);
     expect(removed.rowCount).toBe(1);
   });
+
+  it('hands every tab of a session the same secret, and never an ended session\'s', async () => {
+    const c = await start();
+    const session = async (user: string) => {
+      const res = await fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { 'X-Picasso-User': user } });
+      return res.ok ? ((await res.json()) as { secret: string }).secret : res.status;
+    };
+    const first = await session('pm');
+    expect(typeof first === 'string' && Buffer.from(first, 'base64').length === 32).toBe(true);
+    expect(await session('pm')).toBe(first);
+    expect(await session('analyst')).not.toBe(first);
+    expect(await session('mallory')).toBe(403);
+    const out = await fetch(`${c.server.httpURL}/v1/logout`, { method: 'POST', headers: { 'X-Picasso-User': 'pm' } });
+    expect(await out.json()).toEqual({ ended: true });
+    const next = await session('pm');
+    expect(next).not.toBe(first);
+    const reuse = await pool.query(`SELECT count(*) AS n FROM ${schema}.sessions WHERE "user" = 'pm' AND ended IS NULL`);
+    expect(Number(reuse.rows[0].n)).toBe(1);
+  });
 });

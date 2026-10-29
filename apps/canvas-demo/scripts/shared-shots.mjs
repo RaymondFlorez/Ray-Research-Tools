@@ -71,6 +71,41 @@ const startCollab = async (migrate) => {
   return child;
 };
 
+/** Reads one IndexedDB store of the page's origin: keys and raw values, as latin-1 text. */
+const readDevice = (p, database) => p.evaluate((name) => new Promise((resolve, reject) => {
+  const req = indexedDB.open(name);
+  window.__probe = req;
+  req.onerror = () => reject(new Error(String(req.error)));
+  req.onsuccess = () => {
+    const db = req.result;
+    if (!db.objectStoreNames.contains('records')) {
+      db.close();
+      resolve({ keys: 0, text: '' });
+      return;
+    }
+    const tx = db.transaction('records');
+    const store = tx.objectStore('records');
+    const values = store.getAll();
+    const keys = store.getAllKeys();
+    window.__probeTx = tx;
+    tx.oncomplete = () => {
+      db.close();
+      // Each record read raw, and read the way an unsealed one would be — JSON
+      // holding base64 — since ids would not show in the raw bytes either way.
+      const asIfUnsealed = (bytes) => {
+        try {
+          return atob(JSON.parse(new TextDecoder().decode(bytes)));
+        } catch {
+          return '';
+        }
+      };
+      const raw = values.result.map((v) => new Uint8Array(v));
+      resolve({ keys: keys.result.length, text: raw.map((b) => String.fromCharCode(...b) + asIfUnsealed(b)).join('') });
+    };
+    tx.onerror = () => reject(new Error(String(tx.error)));
+  };
+}), database);
+
 let collab = await startCollab(true);
 const server = spawn(process.execPath, ['scripts/serve.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), COLLAB_URL: `http://127.0.0.1:${COLLAB_PORT}` }, stdio: 'ignore' });
 const page = (user, doc = 'dev/semis') => `http://localhost:${PORT}/apps/canvas-demo/shared.html?user=${user}&doc=${encodeURIComponent(doc)}`;
@@ -129,14 +164,40 @@ try {
   const merged = await nodes(pm);
   check('reconnecting merges both sides with nothing lost', merged.length === 6 && JSON.stringify(merged) === JSON.stringify(await nodes(analyst)), `${merged.length} nodes`);
 
+  // 3b. A tab closed while offline keeps its edits on the device, sealed, and
+  // the next tab of the session sends them.
+  await analyst.click('#link');
+  await settle(analyst, () => window.__shared.state() === 'offline');
+  await analyst.click('#add');
+  await analyst.click('#add');
+  await analyst.evaluate(() => window.__shared.offline().flushed());
+  const madeOffline = (await nodes(analyst)).filter((n) => !merged.includes(n));
+  const context = analyst.context();
+  await analyst.close();
+  await pm.waitForTimeout(300);
+  check('a tab closed offline: its two edits never reached the server', madeOffline.length === 2 && !(await nodes(pm)).some((n) => madeOffline.includes(n)));
+  const probe = await context.newPage();
+  await probe.goto(`http://localhost:${PORT}/apps/canvas-demo/index.html`);
+  const raw = (await readDevice(probe, 'picasso-offline-analyst')).text;
+  await probe.close();
+  check('what the device holds is ciphertext: no node id, kind or ticker in it', raw.length > 0 && !/analyst-|pm-|ChartNode|NVDA/.test(raw), `${raw.length} bytes`);
+  const back = await context.newPage();
+  back.on('pageerror', (e) => errors.push(`analyst: ${e}`));
+  await back.goto(page('analyst'));
+  await synced(back);
+  await settle(pm, (ids) => ids.every((id) => window.__shared.nodes().includes(id)), madeOffline);
+  const note = await back.evaluate(() => window.__shared.offline().note);
+  check('the next tab replays the sealed copy and the server receives the edits', (await nodes(pm)).filter((n) => madeOffline.includes(n)).length === 2 && /records replayed/.test(note) && !/ 0 records/.test(note), note);
+  const before8 = await nodes(pm);
+
   // 4. The server restarts; the canvas is in Postgres.
   collab.kill();
   await new Promise((r) => collab.once('exit', r));
   collab = await startCollab(false);
   const fresh = await tab('analyst');
   await synced(fresh);
-  await settle(fresh, () => window.__shared.nodes().length === 6);
-  check('after the server restarts, a new browser gets the whole canvas from Postgres', JSON.stringify(await nodes(fresh)) === JSON.stringify(merged));
+  await settle(fresh, (n) => window.__shared.nodes().length === n, before8.length);
+  check('after the server restarts, a new browser gets the whole canvas from Postgres', JSON.stringify(await nodes(fresh)) === JSON.stringify(before8), `${before8.length} nodes`);
 
   // 5. A named version: taken by the server, from the canvas, once.
   await fresh.fill('#version-name', 'pre-CPI');
@@ -148,6 +209,14 @@ try {
   await settle(fresh, () => document.getElementById('error').textContent.length > 0);
   check('the same name cannot be saved twice', (await fresh.locator('#error').textContent()).includes('a version is never replaced'));
   await fresh.screenshot({ path: `${OUT}/shared-version.png` });
+
+  // 5b. Logout ends the session, drops the key and erases the sealed copy.
+  const secretBefore = await (await fetch(`http://127.0.0.1:${COLLAB_PORT}/v1/session`, { method: 'POST', headers: { 'X-Picasso-User': 'analyst' } })).json();
+  await back.click('#logout');
+  await settle(back, () => window.__shared.state() === 'signed-out');
+  const left = (await readDevice(back, 'picasso-offline-analyst')).keys;
+  const secretAfter = await (await fetch(`http://127.0.0.1:${COLLAB_PORT}/v1/session`, { method: 'POST', headers: { 'X-Picasso-User': 'analyst' } })).json();
+  check('logout erases the sealed copy, and the next session has a new secret', left === 0 && secretBefore.secret !== secretAfter.secret, `${left} records left`);
 
   // 6. Another tenant's canvas is refused.
   const outsider = await tab('pm', 'globex/plans');

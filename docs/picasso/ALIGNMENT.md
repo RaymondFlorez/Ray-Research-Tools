@@ -130,7 +130,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | Requirement | Status | Where |
 |---|---|---|
 | 7.1 latency budgets | Built | `canvas-guard` latency, `canvas-router` SLO kinds |
-| 7.2 tenant isolation, classification, two egress controls, injection defences, audit, entitlements, CSP/COOP/COEP, encrypted offline store | Built | `canvas-guard`, `canvas-data` entitlements, `canvas-sync` encryptedStore, `csp-check.mjs` |
+| 7.2 tenant isolation, classification, two egress controls, injection defences, audit, entitlements, CSP/COOP/COEP, encrypted offline store | Built | `canvas-guard`, `canvas-data` entitlements, `canvas-sync` encryptedStore and offline (IndexedDB in Chromium, keyed from `services/collab` sessions, `shared-shots.mjs`), `csp-check.mjs` |
 | 7.2 Firecracker sandbox, OIDC/MFA provider | Infra | Session and capability rules built; the providers are not |
 | 7.3 scale targets: culling, concurrency cap, conflation, presence throttle, cold eviction, tenant budgets | Built | `canvas-core`, `canvas-data` conflate, `canvas-sync` presence/tiering, `canvas-router` tenantBudget |
 | 7.4 degradation ladder, rungs 1–5 | Built | `canvas-guard` degradation; rung 2's queue in `canvas-router` queue (`degradation.test.ts`) |
@@ -168,5 +168,5 @@ market data plane — the service and the free sources' loaders are built
 run the first real loads, which are the first test of the decoders against real responses
 (unblocks CodeNode's SQL, real backtests); model fleet — the gateway is built (`services/gateway`: any provider, each user on their own
 account, positions never to a vendor); what remains is a user's first sign-in or key, and the
-router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); the collaboration server is built (`services/collab`) and two browsers sync through it; what remains is y-indexeddb and an identity provider; the code
+router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); the collaboration server is built (`services/collab`): two browsers sync through it, and each keeps a sealed copy on the device; what remains is an identity provider; the code
 sandbox; GPU verification of Phase 0's frame budget on real hardware.

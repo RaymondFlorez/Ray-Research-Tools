@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS ${schema}.versions (
   PRIMARY KEY (doc, name)
 );
 
+CREATE TABLE IF NOT EXISTS ${schema}.sessions (
+  id bigserial PRIMARY KEY,
+  "user" text NOT NULL,
+  secret bytea NOT NULL CHECK (length(secret) = 32),
+  created timestamptz NOT NULL DEFAULT now(),
+  ended timestamptz
+);
+CREATE UNIQUE INDEX IF NOT EXISTS sessions_one_open ON ${schema}.sessions ("user") WHERE ended IS NULL;
+
 CREATE OR REPLACE FUNCTION ${schema}.refuse() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION '% on %.% is refused: it is append-only', TG_OP, TG_TABLE_SCHEMA, TG_TABLE_NAME;
@@ -193,6 +202,29 @@ export class CanvasStore {
     );
     const row = r.rows[0];
     return row && { name: row.name, author: row.author, at: row.at.toISOString(), datasetSnapshots: row.dataset_snapshots, asof: row.asof, state: new Uint8Array(row.state) };
+  }
+
+  /**
+   * The user's session secret: the open session's, or a new one. The offline
+   * store's key is derived from it on the client, so every tab of one session
+   * reads what another wrote, and nothing written under an ended session can
+   * be read under the next.
+   */
+  async sessionSecret(user: string): Promise<Uint8Array> {
+    const open = await this.pool.query<{ secret: Buffer }>(`SELECT secret FROM ${this.schema}.sessions WHERE "user" = $1 AND ended IS NULL`, [user]);
+    if (open.rows[0]) return new Uint8Array(open.rows[0].secret);
+    const secret = new Uint8Array(32);
+    crypto.getRandomValues(secret);
+    // Two tabs racing to open the first session: the unique index lets one in.
+    await this.pool.query(`INSERT INTO ${this.schema}.sessions ("user", secret) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [user, Buffer.from(secret)]);
+    const now = await this.pool.query<{ secret: Buffer }>(`SELECT secret FROM ${this.schema}.sessions WHERE "user" = $1 AND ended IS NULL`, [user]);
+    return new Uint8Array(now.rows[0]!.secret);
+  }
+
+  /** Ends the user's session: its secret is never handed out again. */
+  async endSession(user: string): Promise<boolean> {
+    const r = await this.pool.query(`UPDATE ${this.schema}.sessions SET ended = now() WHERE "user" = $1 AND ended IS NULL`, [user]);
+    return (r.rowCount ?? 0) > 0;
   }
 
   /** Counts, for health and for tests. */

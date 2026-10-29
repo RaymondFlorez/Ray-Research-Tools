@@ -15,3 +15,4 @@ export * from './presence.js';
 export * from './snapshot.js';
 export * from './encryptedStore.js';
 export * from './tiering.js';
+export * from './offline.js';

@@ -140,6 +140,18 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
           send(200, { ok: true });
           throw null;
         }
+        // The session secret the client's offline store is keyed from, and
+        // logout, which ends it. Not per canvas: one session, every canvas.
+        if (url.pathname === '/v1/session' || url.pathname === '/v1/logout') {
+          const user = String(request.headers['x-picasso-user'] ?? '');
+          if (request.method !== 'POST' || !o.users[user]) {
+            send(request.method !== 'POST' ? 405 : 403, { error: request.method !== 'POST' ? 'POST only' : 'unknown user' });
+            throw null;
+          }
+          if (url.pathname === '/v1/session') send(200, { secret: Buffer.from(await store.sessionSecret(user)).toString('base64') });
+          else send(200, { ended: await store.endSession(user) });
+          throw null;
+        }
         const doc = url.searchParams.get('doc') ?? '';
         let ctx: Context;
         try {

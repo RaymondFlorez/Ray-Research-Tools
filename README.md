@@ -96,7 +96,7 @@ name.
 npm install
 npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,797 TypeScript tests across 16 packages
+npm test             # 1,801 TypeScript tests across 16 packages
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
@@ -113,7 +113,7 @@ node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 # the Go data plane
 cd services/dataplane && go test -race ./...     # 32 tests; DATAPLANE_PG_URL adds the Postgres store
 cd services/gateway && go test -race ./...       # 15 tests
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab   # 7 tests
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab   # 8 tests
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs   # Phase 1's exit criterion on Postgres
 ```
 

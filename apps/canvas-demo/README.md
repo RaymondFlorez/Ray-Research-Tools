@@ -202,13 +202,22 @@ first version of the proxy tore down every upstream request at once: a Node requ
 `COLLAB_URL` is set, so the page keeps `connect-src 'self'`. The Hocuspocus provider loads
 through the import map like everything else, with no bundler.
 
+Each tab also keeps the canvas on the device, sealed under its session (canvas-sync's
+`OfflineCanvas` over IndexedDB). A tab closed while offline loses nothing, and the next tab of
+the session replays the sealed copy and sends the edits. **log out** ends the session at the
+server and erases the copy.
+
 `scripts/shared-shots.mjs` starts the server against Postgres (`COLLAB_PG_URL`) and opens two
-browser contexts as two users. It checks ten things:
+browser contexts as two users. It checks fourteen things:
 - edits in either browser reach the other;
 - a reload brings the canvas back from the server;
 - offline edits on both sides stay apart, then merge with nothing lost;
 - after the server process is restarted, a new browser gets the whole canvas from Postgres;
 - a named version records the dataset snapshot its nodes cite, and cannot be saved twice;
+- a tab closed while offline keeps its two edits, sealed: IndexedDB holds no node id, kind or
+  ticker, read raw or as an unsealed record would be;
+- the next tab of the session replays the copy, and the server receives the edits;
+- logout erases the copy, and the next session gets a new secret;
 - a user cannot open another tenant's canvas;
 - no console errors.
 
