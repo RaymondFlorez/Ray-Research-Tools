@@ -22,11 +22,13 @@ import (
 
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/access"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/entitle"
+	"github.com/raymondflorez/ray-research-tools/services/dataplane/identity"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/pit"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/stream"
 )
 
-// UserHeader names the caller. Development only; see the package comment.
+// UserHeader names the caller when DevIdentity is set: a development
+// stand-in for a session token, refused otherwise.
 const UserHeader = "X-Picasso-User"
 
 // Users resolves a caller to entitlements.
@@ -47,6 +49,12 @@ type Server struct {
 	// Drain and health cadence for streams; zero means 50ms and 1s.
 	DrainEvery, HealthEvery time.Duration
 	Now                     func() time.Time
+	// Identity verifies picasso-auth's session tokens. A token, when one is
+	// sent, decides who is asking.
+	Identity *identity.Verifier
+	// DevIdentity accepts UserHeader as the caller's name when no token is
+	// sent. Off unless asked for: a name a client types is not an identity.
+	DevIdentity bool
 }
 
 func (s *Server) Handler() http.Handler {
@@ -79,14 +87,42 @@ func (s *Server) now() time.Time {
 
 func (s *Server) withUser(h func(http.ResponseWriter, *http.Request, entitle.Entitlements)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		e, ok := s.Users[r.Header.Get(UserHeader)]
-		if !ok {
+		e, status, msg := s.caller(r)
+		if status != 0 {
 			// Not an empty result: an unknown caller is refused outright.
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unknown user"})
+			writeJSON(w, status, map[string]string{"error": msg})
 			return
 		}
 		h(w, r, e)
 	}
+}
+
+// caller resolves who is asking: a verified session token, or, only when
+// DevIdentity is on and no token was sent, the name in UserHeader. A token's
+// tenant must be the user's own; entitlements always come from this
+// service's users file, never from the token.
+func (s *Server) caller(r *http.Request) (entitle.Entitlements, int, string) {
+	if token := identity.Token(r); token != "" && s.Identity != nil {
+		session, refusal := s.Identity.Verify(r.Context(), token)
+		if refusal != nil {
+			return entitle.Entitlements{}, http.StatusUnauthorized, "session: " + refusal.Error()
+		}
+		e, ok := s.Users[session.User]
+		if !ok {
+			return entitle.Entitlements{}, http.StatusUnauthorized, "unknown user"
+		}
+		if e.TenantID != "" && e.TenantID != session.Tenant {
+			return entitle.Entitlements{}, http.StatusForbidden, "the session is for another tenant"
+		}
+		return e, 0, ""
+	}
+	if s.DevIdentity {
+		if e, ok := s.Users[r.Header.Get(UserHeader)]; ok {
+			return e, 0, ""
+		}
+		return entitle.Entitlements{}, http.StatusUnauthorized, "unknown user"
+	}
+	return entitle.Entitlements{}, http.StatusUnauthorized, "sign in: no session token"
 }
 
 func (s *Server) asOf(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {

@@ -28,6 +28,7 @@ import (
 
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/access"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/entitle"
+	"github.com/raymondflorez/ray-research-tools/services/dataplane/identity"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/ingest"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/pit"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/server"
@@ -71,11 +72,16 @@ func main() {
 	speed := flag.Float64("speed", 1, "replay speed; 0 is as fast as possible")
 	coinbase := flag.String("coinbase", "", "Coinbase Exchange products to stream live, comma-separated (each must be in the symbology under feed \"coinbase\")")
 	coinbaseURL := flag.String("coinbase-url", "", "the Coinbase feed's websocket URL; the public feed when empty")
+	authURL := flag.String("auth-url", "", "picasso-auth's URL: session tokens are verified against the keys it publishes")
+	devIdentity := flag.Bool("dev-identity", false, "also accept X-Picasso-User as the caller's name, for development; never on a network")
 	staleAfter := flag.Duration("stale-after", 5*time.Second, "a series with no update for this long is stale")
 	flag.Parse()
 
 	if *usersPath == "" || *symPath == "" {
 		log.Fatal("-users and -symbology are required")
+	}
+	if *authURL == "" && !*devIdentity {
+		log.Fatal("-auth-url is required: callers are identified by picasso-auth's session tokens (or pass -dev-identity, for development)")
 	}
 	var uf userFile
 	if err := readJSON(*usersPath, &uf); err != nil {
@@ -159,7 +165,11 @@ func main() {
 		}()
 	}
 
-	srv := &http.Server{Addr: *addr, Handler: (&server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Writers: writers, Feed: feed}).Handler(), ReadHeaderTimeout: 5 * time.Second}
+	api := &server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Writers: writers, Feed: feed, DevIdentity: *devIdentity}
+	if *authURL != "" {
+		api.Identity = identity.Remote(*authURL)
+	}
+	srv := &http.Server{Addr: *addr, Handler: api.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()
 		shutdown, cancel := context.WithTimeout(context.Background(), 5*time.Second)

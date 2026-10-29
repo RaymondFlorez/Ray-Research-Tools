@@ -19,7 +19,9 @@
     "pg": "8.23.1",
     "yjs": "^13.6.32",
     "@picasso/canvas-sync": "*",
-    "@picasso/canvas-core": "*"
+    "@picasso/canvas-core": "*",
+    "@picasso/auth": "*",
+    "jose": "6.2.12"
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.7.1",

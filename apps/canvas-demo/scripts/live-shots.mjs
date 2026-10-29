@@ -91,7 +91,7 @@ try {
   await waitFor(`http://localhost:${PORT}/apps/canvas-demo/live.html`);
 
   // Start the feed, then open the page straight away: the recording runs eight seconds.
-  const dataplane = spawn(binary, ['-addr', `127.0.0.1:${DP_PORT}`, '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-replay', recording, '-speed', '1', '-stale-after', '1s'], { stdio: 'ignore' });
+  const dataplane = spawn(binary, ['-addr', `127.0.0.1:${DP_PORT}`, '-dev-identity', '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-replay', recording, '-speed', '1', '-stale-after', '1s'], { stdio: 'ignore' });
   children.push(dataplane);
   await waitFor(`http://127.0.0.1:${DP_PORT}/healthz`);
   const started = Date.now();

@@ -18,8 +18,28 @@ import { HocuspocusProvider } from '@hocuspocus/provider';
 import { drawScene } from './draw.js';
 
 const params = new URLSearchParams(window.location.search);
-const user = params.get('user') ?? 'pm';
 const docName = params.get('doc') ?? 'dev/semis';
+// Who is asking: picasso-auth's session, carried by an HttpOnly cookie this
+// page cannot read — or, for development against servers started with
+// --dev-identity, a name in ?user=.
+const devUser = params.get('user');
+let user = devUser ?? '';
+let sessionExpires = 0;
+let authUnavailable = '';
+if (!devUser) {
+  try {
+    const res = await fetch('/auth/me');
+    if (!res.ok) throw new Error(`the sign-in service answered ${res.status}`);
+    const me = (await res.json()) as { signedIn: boolean; user?: string; expires?: number };
+    if (me.signedIn && me.user) {
+      user = me.user;
+      sessionExpires = me.expires ?? 0;
+    }
+  } catch (err) {
+    authUnavailable = (err as Error).message;
+  }
+}
+const identityHeaders = (): Record<string, string> => (devUser ? { 'X-Picasso-User': devUser } : {});
 const KINDS: NodeKind[] = ['ChartNode', 'DataTile', 'TableNode', 'CurveNode', 'ScenarioNode'];
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -28,7 +48,22 @@ const ctx = element.getContext('2d') as CanvasRenderingContext2D;
 const status = $('status');
 const errorBox = $('error');
 const versionsBox = $('versions');
-$('who').textContent = `${user} · ${docName}`;
+$('who').textContent = `${user || 'signed out'} · ${docName}`;
+if (params.get('auth_error')) errorBox.textContent = `sign-in refused: ${params.get('auth_error')}`;
+if (authUnavailable) errorBox.textContent = `cannot sign in: ${authUnavailable}`;
+if (!user) {
+  // Nobody is signed in: offer the provider, and stop here.
+  $('signin').hidden = false;
+  $('signin-go').addEventListener('click', () => {
+    const hint = $<HTMLInputElement>('hint').value.trim();
+    const back = `${window.location.pathname}?doc=${encodeURIComponent(docName)}`;
+    window.location.assign(`/auth/login?return=${encodeURIComponent(back)}${hint ? `&login_hint=${encodeURIComponent(hint)}` : ''}`);
+  });
+  status.dataset.state = 'signed-out';
+  status.textContent = 'signed out';
+  window.__shared = { state: () => 'signed-out', nodes: () => [], add: () => {}, versions: async () => {}, offline: () => ({ note: '', records: 0, flushed: async () => {} }) };
+  await new Promise(() => {});
+}
 
 const canvas = new SyncedCanvas();
 const index = new CanvasIndex(canvas.snapshot());
@@ -45,7 +80,7 @@ let offlineStore: EncryptedStore | undefined;
 let offlineNote = 'no offline copy';
 let signedOut = false;
 try {
-  const res = await fetch('/collab/v1/session', { method: 'POST', headers: { 'X-Picasso-User': user } });
+  const res = await fetch('/collab/v1/session', { method: 'POST', headers: identityHeaders() });
   if (!res.ok) throw new Error(`no session (${res.status})`);
   const { secret } = (await res.json()) as { secret: string };
   const backing = await IndexedDbBacking.open(`picasso-offline-${user}`);
@@ -68,7 +103,9 @@ const provider = new HocuspocusProvider({
   url: wsUrl,
   name: docName,
   document: canvas.doc,
-  token: user,
+  // A development name, or a placeholder that sends the server to the session
+  // cookie the browser attaches to this WebSocket.
+  token: devUser ?? 'session-cookie',
   onAuthenticationFailed: ({ reason }) => {
     refused = reason;
   },
@@ -114,7 +151,7 @@ function addNode(): void {
 }
 
 async function collab(path: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(`/collab${path}`, { ...init, headers: { 'X-Picasso-User': user } });
+  return fetch(`/collab${path}`, { ...init, headers: identityHeaders() });
 }
 
 async function listVersions(): Promise<void> {
@@ -144,7 +181,8 @@ $('save').addEventListener('click', async () => {
 $('logout').addEventListener('click', async () => {
   // The session ends at the server, the key is dropped here, and the sealed
   // copy is erased: nothing of this session stays readable or on the disk.
-  await fetch('/collab/v1/logout', { method: 'POST', headers: { 'X-Picasso-User': user } });
+  await fetch('/collab/v1/logout', { method: 'POST', headers: identityHeaders() });
+  if (!devUser) await fetch('/auth/logout', { method: 'POST' });
   offline?.detach();
   await offlineStore?.lock({ erase: true });
   provider.destroy();
@@ -166,6 +204,23 @@ function frame(now: number): void {
   status.textContent = s === 'refused' ? `refused: ${refused}` : `${s} · ${canvas.nodeCount} nodes · ${offlineNote}`;
   requestAnimationFrame(frame);
 }
+
+// Silent refresh: a fresh token two minutes before this one runs out. A
+// refusal — the session ended, or twelve hours since the login — signs out.
+function scheduleRefresh(): void {
+  if (devUser || !sessionExpires) return;
+  setTimeout(async () => {
+    const res = await fetch('/auth/refresh', { method: 'POST' });
+    if (res.ok) {
+      sessionExpires = ((await res.json()) as { expires: number }).expires;
+      scheduleRefresh();
+    } else {
+      signedOut = true;
+      provider.destroy();
+    }
+  }, Math.max(0, sessionExpires - Date.now() - 120_000));
+}
+scheduleRefresh();
 
 resize();
 requestAnimationFrame(frame);

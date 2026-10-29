@@ -44,7 +44,7 @@ func gateway(t *testing.T, providers []Provider, extra ...func(*Server)) (*Serve
 	k := make([]byte, 32)
 	_, _ = rand.Read(k)
 	v, _ := accounts.Open(k, "")
-	s, err := New(Options{Providers: providers, Users: []string{"pm", "analyst"}, Vault: v, PublicURL: "http://gateway.test", ReturnURL: "http://app.test/models.html"})
+	s, err := New(Options{Providers: providers, Users: []string{"pm", "analyst"}, DevIdentity: true, Vault: v, PublicURL: "http://gateway.test", ReturnURL: "http://app.test/models.html"})
 	if err != nil {
 		t.Fatal(err)
 	}

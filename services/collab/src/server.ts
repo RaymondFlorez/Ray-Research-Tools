@@ -26,7 +26,10 @@
 
 import { Server, type Extension, type onRequestPayload } from '@hocuspocus/server';
 import type pg from 'pg';
+import type { IncomingHttpHeaders } from 'node:http';
+import { SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
+import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
 import { CanvasStore, VersionExists } from './store.js';
 
@@ -37,6 +40,13 @@ export interface CollabOptions {
   pool: pg.Pool;
   schema: string;
   users: Users;
+  /** picasso-auth's URL: session tokens are verified against the keys it publishes. */
+  authUrl?: string;
+  /**
+   * Accept a user's name as their identity — the provider's token, or
+   * X-Picasso-User over HTTP — for development. Off unless asked for.
+   */
+  devIdentity?: boolean;
   port?: number;
   address?: string;
   /** Longest gap between snapshots while a canvas is being edited. */
@@ -90,17 +100,43 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
   const pending = new Map<string, Promise<unknown>>();
   const counts = { interval: 0, idle: 0 };
 
-  const authenticate = (user: string | null | undefined, docName: string): Context => {
-    const entry = user ? o.users[user] : undefined;
-    if (!user || !entry) throw new Error('unknown user');
-    if (parseDocName(docName).tenant !== entry.tenant) throw new Error(`${user} may not open another tenant's canvas`);
-    return { user, tenant: entry.tenant };
+  if (!o.authUrl && !o.devIdentity) throw new Error('authUrl is required: callers are identified by picasso-auth\'s session tokens (or devIdentity, for development)');
+  const authBase = o.authUrl?.replace(/\/$/, '');
+  const keys = authBase ? createRemoteJWKSet(new URL(`${authBase}/.well-known/jwks.json`)) : undefined;
+
+  /**
+   * Who is asking: a verified session token — the provider's token, the
+   * bearer header, or the session cookie a browser sends with its WebSocket —
+   * or, only with devIdentity and no token, a user's name.
+   */
+  const identify = async (token: string | undefined, devName: string | undefined): Promise<{ user: string; tenant?: string }> => {
+    if (token && token.split('.').length === 3 && keys && authBase) {
+      const v = await verifySessionToken(token, keys, { issuer: authBase });
+      if (!v.ok) throw new Error(`session: ${v.reason}: ${v.message}`);
+      return { user: v.session.user, tenant: v.session.tenant };
+    }
+    if (o.devIdentity && devName) return { user: devName };
+    throw new Error('sign in: no session token');
+  };
+  const authenticate = (who: { user: string; tenant?: string }, docName: string): Context => {
+    const entry = o.users[who.user];
+    if (!entry) throw new Error('unknown user');
+    if (who.tenant !== undefined && who.tenant !== entry.tenant) throw new Error('the session is for another tenant');
+    if (parseDocName(docName).tenant !== entry.tenant) throw new Error(`${who.user} may not open another tenant's canvas`);
+    return { user: who.user, tenant: entry.tenant };
+  };
+  const cookieToken = (header: string | null | undefined) =>
+    (header ?? '').split(';').map((p) => p.trim()).find((p) => p.startsWith(`${SESSION_COOKIE}=`))?.slice(SESSION_COOKIE.length + 1);
+  const httpToken = (h: IncomingHttpHeaders) => {
+    const auth = String(h.authorization ?? '');
+    return auth.startsWith('Bearer ') ? auth.slice(7) : cookieToken(h.cookie);
   };
 
   const persistence: Extension<Context> = {
     extensionName: 'picasso-postgres',
-    async onAuthenticate({ token, documentName }) {
-      return authenticate(token, documentName);
+    async onAuthenticate({ token, documentName, requestHeaders }) {
+      const sessionToken = token && token.split('.').length === 3 ? token : cookieToken(requestHeaders.get('cookie'));
+      return authenticate(await identify(sessionToken, token), documentName);
     },
     async onLoadDocument({ document, documentName }) {
       const loaded = await store.load(documentName);
@@ -143,9 +179,17 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
         // The session secret the client's offline store is keyed from, and
         // logout, which ends it. Not per canvas: one session, every canvas.
         if (url.pathname === '/v1/session' || url.pathname === '/v1/logout') {
-          const user = String(request.headers['x-picasso-user'] ?? '');
-          if (request.method !== 'POST' || !o.users[user]) {
-            send(request.method !== 'POST' ? 405 : 403, { error: request.method !== 'POST' ? 'POST only' : 'unknown user' });
+          let user = '';
+          try {
+            const who = await identify(httpToken(request.headers), String(request.headers['x-picasso-user'] ?? ''));
+            if (!o.users[who.user] || (who.tenant !== undefined && who.tenant !== o.users[who.user]!.tenant)) throw new Error('unknown user');
+            user = who.user;
+          } catch (err) {
+            send(403, { error: (err as Error).message });
+            throw null;
+          }
+          if (request.method !== 'POST') {
+            send(405, { error: 'POST only' });
             throw null;
           }
           if (url.pathname === '/v1/session') send(200, { secret: Buffer.from(await store.sessionSecret(user)).toString('base64') });
@@ -155,7 +199,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
         const doc = url.searchParams.get('doc') ?? '';
         let ctx: Context;
         try {
-          ctx = authenticate(String(request.headers['x-picasso-user'] ?? ''), doc);
+          ctx = authenticate(await identify(httpToken(request.headers), String(request.headers['x-picasso-user'] ?? '')), doc);
         } catch (err) {
           send(403, { error: (err as Error).message });
           throw null;

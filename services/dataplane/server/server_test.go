@@ -38,6 +38,7 @@ func fixture(t *testing.T) (*httptest.Server, *stream.Hub) {
 			"loader":  {UserID: "loader", Vendors: map[string]bool{}},
 		},
 		Writers:     map[string]bool{"loader": true},
+		DevIdentity: true,
 		DrainEvery:  20 * time.Millisecond,
 		HealthEvery: 100 * time.Millisecond,
 	}

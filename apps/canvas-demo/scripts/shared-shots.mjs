@@ -63,7 +63,7 @@ async function waitFor(url, timeoutMs = 20_000) {
   throw new Error(`never came up: ${url}`);
 }
 
-const collabArgs = (migrate) => [join(ROOT, 'services/collab/dist/main.js'), '--pg', PG, '--users', join(ROOT, 'services/dataplane/config/users.json'),
+const collabArgs = (migrate) => [join(ROOT, 'services/collab/dist/main.js'), '--dev-identity', '--pg', PG, '--users', join(ROOT, 'services/dataplane/config/users.json'),
   '--schema', SCHEMA, '--port', String(COLLAB_PORT), ...(migrate ? ['--migrate'] : [])];
 const startCollab = async (migrate) => {
   const child = spawn(process.execPath, collabArgs(migrate), { stdio: ['ignore', 'ignore', 'inherit'] });

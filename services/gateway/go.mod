@@ -2,7 +2,10 @@ module github.com/raymondflorez/ray-research-tools/services/gateway
 
 go 1.25.0
 
-require github.com/anthropics/anthropic-sdk-go/v2 v2.4.0
+require (
+	github.com/anthropics/anthropic-sdk-go/v2 v2.4.0
+	github.com/go-jose/go-jose/v4 v4.1.6
+)
 
 require (
 	github.com/bahlo/generic-list-go v0.2.0 // indirect

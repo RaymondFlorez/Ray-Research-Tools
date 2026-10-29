@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"github.com/raymondflorez/ray-research-tools/services/gateway/accounts"
+	"github.com/raymondflorez/ray-research-tools/services/gateway/identity"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/provider"
 )
 
@@ -176,6 +177,9 @@ type Server struct {
 	// callback; ReturnURL is where a finished sign-in sends the browser.
 	publicURL, returnURL string
 	audit                *audit
+	tenants              map[string]string
+	identity             *identity.Verifier
+	devIdentity          bool
 	mu                   sync.Mutex
 	pending              map[string]pending
 	now                  func() time.Time
@@ -183,8 +187,16 @@ type Server struct {
 
 // Options configures a Server.
 type Options struct {
-	Providers            []Provider
-	Users                []string
+	Providers []Provider
+	Users     []string
+	// Tenants is each user's tenant, which a session token must match.
+	Tenants map[string]string
+	// Identity verifies picasso-auth's session tokens; a token, when sent,
+	// decides who is asking.
+	Identity *identity.Verifier
+	// DevIdentity accepts X-Picasso-User as the caller's name when no token is
+	// sent. Off unless asked for: a name a client types is not an identity.
+	DevIdentity          bool
 	Vault                *accounts.Vault
 	Client               *http.Client
 	PublicURL, ReturnURL string
@@ -195,6 +207,7 @@ func New(o Options) (*Server, error) {
 		providers: map[string]Provider{}, users: map[string]bool{}, vault: o.Vault, client: o.Client,
 		publicURL: strings.TrimRight(o.PublicURL, "/"), returnURL: o.ReturnURL,
 		audit: &audit{}, pending: map[string]pending{}, now: time.Now,
+		tenants: o.Tenants, identity: o.Identity, devIdentity: o.DevIdentity,
 	}
 	if s.client == nil {
 		s.client = &http.Client{Timeout: 5 * time.Minute}
@@ -236,13 +249,38 @@ func fail(w http.ResponseWriter, status int, format string, args ...any) {
 // for an identity provider that the data plane also uses.
 func (s *Server) withUser(h func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user := r.Header.Get("X-Picasso-User")
-		if !s.users[user] {
-			fail(w, http.StatusUnauthorized, "unknown user")
+		user, status, msg := s.caller(r)
+		if status != 0 {
+			fail(w, status, "%s", msg)
 			return
 		}
 		h(w, r, user)
 	}
+}
+
+// caller resolves who is asking: a verified session token, or, only when
+// DevIdentity is on and no token was sent, the name in X-Picasso-User.
+func (s *Server) caller(r *http.Request) (string, int, string) {
+	if token := identity.Token(r); token != "" && s.identity != nil {
+		session, refusal := s.identity.Verify(r.Context(), token)
+		if refusal != nil {
+			return "", http.StatusUnauthorized, "session: " + refusal.Error()
+		}
+		if !s.users[session.User] {
+			return "", http.StatusUnauthorized, "unknown user"
+		}
+		if t := s.tenants[session.User]; t != "" && t != session.Tenant {
+			return "", http.StatusForbidden, "the session is for another tenant"
+		}
+		return session.User, 0, ""
+	}
+	if s.devIdentity {
+		if user := r.Header.Get("X-Picasso-User"); s.users[user] {
+			return user, 0, ""
+		}
+		return "", http.StatusUnauthorized, "unknown user"
+	}
+	return "", http.StatusUnauthorized, "sign in: no session token"
 }
 
 func (s *Server) Handler() http.Handler {

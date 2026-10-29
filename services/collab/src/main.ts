@@ -24,6 +24,8 @@ const { values } = parseArgs({
     migrate: { type: 'boolean', default: false },
     port: { type: 'string', default: '8760' },
     address: { type: 'string', default: '127.0.0.1' },
+    'auth-url': { type: 'string' },
+    'dev-identity': { type: 'boolean', default: false },
   },
 });
 if (!values.pg || !values.users) {
@@ -33,7 +35,10 @@ if (!values.pg || !values.users) {
 const users = JSON.parse(readFileSync(values.users, 'utf8')) as Users;
 const pool = new pg.Pool({ connectionString: values.pg });
 if (values.migrate) await migrate(pool, values.schema);
-const collab = await startCollab({ pool, schema: values.schema, users, port: Number(values.port), address: values.address });
+const collab = await startCollab({
+  pool, schema: values.schema, users, port: Number(values.port), address: values.address,
+  ...(values['auth-url'] ? { authUrl: values['auth-url'] } : {}), devIdentity: values['dev-identity'],
+});
 console.error(`picasso-collab listening on ${collab.url}`);
 const stop = async () => {
   await collab.destroy();

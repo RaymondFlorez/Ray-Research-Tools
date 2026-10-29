@@ -68,7 +68,7 @@ const binary = join(work, 'dataplane');
 execFileSync('go', ['build', '-o', binary, './cmd/dataplane'], { cwd: join(ROOT, 'services/dataplane'), stdio: 'inherit' });
 const schema = `morning_${Date.now().toString(36)}`;
 const config = join(ROOT, 'services/dataplane/config');
-const dataplane = spawn(binary, ['-addr', `127.0.0.1:${PORT}`, '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-pg', PG, '-schema', schema, '-migrate'], { stdio: ['ignore', 'ignore', 'inherit'] });
+const dataplane = spawn(binary, ['-addr', `127.0.0.1:${PORT}`, '-dev-identity', '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-pg', PG, '-schema', schema, '-migrate'], { stdio: ['ignore', 'ignore', 'inherit'] });
 
 try {
   const deadline = Date.now() + 20_000;

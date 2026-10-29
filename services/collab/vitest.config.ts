@@ -9,6 +9,10 @@ export default defineConfig({
       '@picasso/canvas-core': pkg('canvas-core'),
       '@picasso/canvas-ink': pkg('canvas-ink'),
       '@picasso/canvas-sync': pkg('canvas-sync'),
+      '@picasso/auth': fileURLToPath(new URL('../auth/src/index.ts', import.meta.url)),
+      '@picasso/canvas-guard': pkg('canvas-guard'),
+      '@picasso/canvas-router': pkg('canvas-router'),
+      '@picasso/canvas-agents': pkg('canvas-agents'),
     },
   },
   test: {

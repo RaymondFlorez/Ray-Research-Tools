@@ -32,6 +32,12 @@ const DATAPLANE = process.env.DATAPLANE_URL;
 const GATEWAY = process.env.GATEWAY_URL;
 /** `/collab/`: the collaboration server (services/collab), its HTTP API and its WebSocket. */
 const COLLAB = process.env.COLLAB_URL;
+/**
+ * `/auth/` and the key set: picasso-auth (services/auth), passed through with
+ * its paths, so this site is the issuer it signs for and its cookie is this
+ * site's.
+ */
+const AUTH = process.env.AUTH_URL;
 
 function proxy(req, res, base, name, path) {
   if (!base) {
@@ -66,6 +72,10 @@ const server = createServer(async (req, res) => {
   }
   if (url.pathname.startsWith('/gw/')) {
     proxy(req, res, GATEWAY, 'model gateway', (req.url ?? '/').slice('/gw'.length));
+    return;
+  }
+  if (url.pathname.startsWith('/auth/') || url.pathname === '/.well-known/jwks.json') {
+    proxy(req, res, AUTH, 'auth service', req.url ?? '/');
     return;
   }
   if (url.pathname.startsWith('/collab/')) {

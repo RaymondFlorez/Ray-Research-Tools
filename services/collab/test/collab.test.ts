@@ -11,6 +11,8 @@ import { SyncedCanvas } from '@picasso/canvas-sync';
 import pg from 'pg';
 import * as Y from 'yjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import { SessionIssuer } from '@picasso/auth';
 import { migrate } from '../src/store.js';
 import { startCollab, type Collab } from '../src/server.js';
 
@@ -35,7 +37,7 @@ suite('picasso-collab', () => {
   const clients: HocuspocusProvider[] = [];
 
   const start = async (over: Partial<Parameters<typeof startCollab>[0]> = {}) => {
-    const c = await startCollab({ pool, schema, users, idleMs: 300, snapshotEveryMs: 1_000, ...over });
+    const c = await startCollab({ pool, schema, users, devIdentity: true, idleMs: 300, snapshotEveryMs: 1_000, ...over });
     servers.push(c);
     return c;
   };
@@ -216,5 +218,32 @@ suite('picasso-collab', () => {
     expect(next).not.toBe(first);
     const reuse = await pool.query(`SELECT count(*) AS n FROM ${schema}.sessions WHERE "user" = 'pm' AND ended IS NULL`);
     expect(Number(reuse.rows[0].n)).toBe(1);
+  });
+
+  it('without devIdentity, only picasso-auth\'s session token opens a canvas', async () => {
+    // picasso-auth's issuer, with its key set served where the collab server will look.
+    let jwks: unknown;
+    const keyServer = createServer((_req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(jwks)));
+    await new Promise<void>((r) => keyServer.listen(0, '127.0.0.1', () => r()));
+    const authUrl = `http://127.0.0.1:${(keyServer.address() as { port: number }).port}`;
+    const issuer = await SessionIssuer.create({ issuer: authUrl, tenants: { acme: { holdsPositions: true }, globex: { holdsPositions: false } } });
+    jwks = issuer.jwks();
+    const c = await startCollab({ pool, schema, users, authUrl, idleMs: 300, snapshotEveryMs: 1_000 });
+    servers.push(c);
+    const token = async (user: string, tenant: string) => (await issuer.mint(user, tenant, { authTime: Date.now(), amr: ['pwd', 'otp'] })).token;
+
+    const signedIn = await open(c, 'acme/tokens', await token('pm', 'acme'));
+    expect(signedIn.failed).toBeUndefined();
+    expect(signedIn.provider.isSynced).toBe(true);
+    const named = await open(c, 'acme/tokens', 'pm');
+    expect(named.failed).toBeDefined();
+    // A valid token whose tenant is not the user's own.
+    const elsewhere = await open(c, 'acme/tokens', await token('pm', 'globex'));
+    expect(elsewhere.failed).toBeDefined();
+    const res = await fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { 'X-Picasso-User': 'pm' } });
+    expect(res.status).toBe(403);
+    const ok = await fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { authorization: `Bearer ${await token('pm', 'acme')}` } });
+    expect(ok.status).toBe(200);
+    keyServer.close();
   });
 });

@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/raymondflorez/ray-research-tools/services/gateway/accounts"
+	"github.com/raymondflorez/ray-research-tools/services/gateway/identity"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/server"
 )
 
@@ -35,19 +36,32 @@ func main() {
 	ephemeral := flag.Bool("ephemeral", false, "seal under a random key, in memory: connections are lost on exit")
 	publicURL := flag.String("public-url", "", "where the browser reaches this gateway (for sign-in callbacks)")
 	returnURL := flag.String("return-url", "", "where a finished sign-in sends the browser")
+	authURL := flag.String("auth-url", "", "picasso-auth's URL: session tokens are verified against the keys it publishes")
+	devIdentity := flag.Bool("dev-identity", false, "also accept X-Picasso-User as the caller's name, for development; never on a network")
 	flag.Parse()
 
 	var providers []server.Provider
 	if err := readJSON(*providersPath, &providers); err != nil {
 		log.Fatalf("providers: %v", err)
 	}
-	var users map[string]json.RawMessage
+	var users map[string]struct {
+		Tenant string `json:"tenant"`
+	}
 	if err := readJSON(*usersPath, &users); err != nil {
 		log.Fatalf("users: %v", err)
 	}
 	ids := make([]string, 0, len(users))
-	for id := range users {
+	tenants := map[string]string{}
+	for id, u := range users {
 		ids = append(ids, id)
+		tenants[id] = u.Tenant
+	}
+	if *authURL == "" && !*devIdentity {
+		log.Fatal("-auth-url is required: callers are identified by picasso-auth's session tokens (or pass -dev-identity, for development)")
+	}
+	var verifier *identity.Verifier
+	if *authURL != "" {
+		verifier = identity.Remote(*authURL)
 	}
 
 	var key []byte
@@ -67,7 +81,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	gw, err := server.New(server.Options{Providers: providers, Users: ids, Vault: vault, PublicURL: *publicURL, ReturnURL: *returnURL})
+	gw, err := server.New(server.Options{Providers: providers, Users: ids, Tenants: tenants, Identity: verifier, DevIdentity: *devIdentity, Vault: vault, PublicURL: *publicURL, ReturnURL: *returnURL})
 	if err != nil {
 		log.Fatal(err)
 	}

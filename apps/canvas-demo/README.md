@@ -227,6 +227,20 @@ now listed once the server has let the user in. The first screenshot also showed
 drawn as five: offline, and after a reload, two nodes took the same slot. Each user now has
 their own band, and the slot comes from the document, not a counter a reload resets.
 
+## Sign-in
+
+`shared.html` with no `?user=` is signed out until picasso-auth (`services/auth`) says otherwise.
+The demo server proxies `/auth/` and the key set to it when `AUTH_URL` is set. The page
+offers sign-in, comes back with a session it cannot read, and refreshes it two minutes before
+it expires. `?user=` remains the development path, and works only against servers started
+with `--dev-identity`.
+
+`scripts/signin-shots.mjs` runs a stand-in OpenID provider, picasso-auth and the collaboration
+server, none with a development identity. It checks eight things: the sign-in, the HttpOnly
+cookie, two users on one canvas, the MFA refusal, a typed name refused, logout, and no
+console errors. If the sign-in service is unreachable, the page says so instead of throwing,
+which the CSP check, run with no services, depends on.
+
 ## Models
 
 `models.html` is where a user connects model providers and tries one, through the model

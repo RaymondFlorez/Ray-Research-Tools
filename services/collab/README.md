@@ -8,8 +8,8 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 8 tests; they skip without a database
-node services/collab/dist/main.js --pg postgres://... --users services/dataplane/config/users.json --migrate
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 9 tests; they skip without a database
+node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
 | Module | What it does |
@@ -82,8 +82,11 @@ says what was measured.
 - **Session secrets are stored in Postgres as they are.** They are what a session's offline
   data is keyed from. Anyone who can read the `sessions` table, and a device's IndexedDB, can
   read that device's canvases. There is no KMS wrapping.
-- **No identity.** The token is the user's name, checked against the users file, as at the
-  data plane and the gateway. OIDC is not built, so it listens on loopback.
+- **Identity is picasso-auth's session token.** It comes as the provider's token, a bearer
+  header, or the session cookie a browser sends with its WebSocket, and is verified with
+  `@picasso/auth`'s own verifier. A token whose tenant is not the user's is refused.
+  `--dev-identity` accepts a user's name instead, for development; it is off unless asked for.
+  A logged-out token works here until it expires.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
 - **No retention job.** The database permits deleting rows older than ninety days; nothing

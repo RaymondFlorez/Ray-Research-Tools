@@ -41,7 +41,7 @@ func TestLoadingTwiceAppendsOnlyWhatChangedAndNeverRewritesAMorning(t *testing.T
 	}
 	dp := httptest.NewServer((&server.Server{
 		Reader: access.Reader{Store: store}, Hub: stream.NewHub(ingest.NewSymbology(), time.Second),
-		Users: users, Writers: map[string]bool{"loader": true, "intern": true},
+		Users: users, Writers: map[string]bool{"loader": true, "intern": true}, DevIdentity: true,
 	}).Handler())
 	defer dp.Close()
 

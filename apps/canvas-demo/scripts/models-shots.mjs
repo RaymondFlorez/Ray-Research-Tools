@@ -127,7 +127,7 @@ try {
   await new Promise((r) => modelServer.listen(MODEL_PORT, '127.0.0.1', r));
   await new Promise((r) => oauthServer.listen(OAUTH_PORT, '127.0.0.1', r));
   const page_ = `http://localhost:${PORT}/apps/canvas-demo/models.html`;
-  children.push(spawn(binary, ['-addr', `127.0.0.1:${GW_PORT}`, '-ephemeral', '-providers', providersFile, '-users', join(ROOT, 'services/dataplane/config/users.json'),
+  children.push(spawn(binary, ['-addr', `127.0.0.1:${GW_PORT}`, '-ephemeral', '-dev-identity', '-providers', providersFile, '-users', join(ROOT, 'services/dataplane/config/users.json'),
     '-public-url', `http://localhost:${PORT}/gw`, '-return-url', page_], { stdio: ['ignore', 'ignore', 'inherit'] }));
   children.push(spawn(process.execPath, ['scripts/serve.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), GATEWAY_URL: `http://127.0.0.1:${GW_PORT}` }, stdio: 'ignore' }));
   await waitFor(`http://127.0.0.1:${GW_PORT}/healthz`);

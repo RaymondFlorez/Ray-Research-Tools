@@ -7,11 +7,11 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 32 tests
+go test -race ./...                                    # 34 tests
 DATAPLANE_PG_URL=postgres://... go test ./pit/         # the Postgres store too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
-go run ./cmd/dataplane -users config/users.json -symbology config/symbology.json \
+go run ./cmd/dataplane -auth-url https://picasso.example.com -users config/users.json -symbology config/symbology.json \
    [-pg postgres://... -schema pit -migrate] [-replay recording.ndjson -speed 1] [-coinbase BTC-USD,ETH-USD]
 
 go run ./cmd/load -to http://127.0.0.1:8740 -as loader edgar -ticker NVDA \
@@ -31,6 +31,7 @@ go run ./cmd/load ... stooq -symbol nvda.us -instrument NVDA      # licensed to 
 | `stream` | 2.3, 7.3 | The hub: decode, sequence, health, one conflator per subscriber; replay of a recording |
 | `sources` | 2.3, 5.1, 5.8 | Free sources into point-in-time facts: EDGAR company facts, Treasury par curve, ALFRED vintages, Stooq daily bars; the Coinbase live adapter; `Reconcile`, so a reload never rewrites the past |
 | `cmd/load` | 2.3 | Fetches a source, reconciles against what the data plane holds, appends over `POST /v1/facts` |
+| `identity` | 7.2 | Verifies picasso-auth's session tokens, held to its TypeScript verdicts by `services/auth/testdata/tokens.json` |
 | `server` | 2.3 | `/v1/asof`, `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
@@ -157,9 +158,12 @@ half a second of 200-a-second ticks arrives as two to four updates.
   (`ingest.Partition`) and NATS subject matching (`ingest.Match`) are written to their
   semantics; the hub fans out in-process. Postgres stands in for the point-in-time store,
   which PRD 2.3 puts on Iceberg.
-- **No identity.** The caller names itself in `X-Picasso-User` and its entitlements come from
-  a file. OIDC (PRD 7.2) is not built, so the binary listens on loopback by default and must
-  not face a network.
+- **Identity is picasso-auth's session token** (`services/auth`), verified against its
+  published key, from the `Authorization` header or the session cookie. The token says who,
+  and entitlements still come from the users file. `-dev-identity` also accepts a typed name
+  in `X-Picasso-User` when no token is sent. It is off unless asked for, and the binary refuses
+  to start with neither it nor `-auth-url`. A logged-out token keeps working here until it
+  expires, up to fifteen minutes, because nothing checks revocation.
 - **Server-Sent Events, JSON-encoded**, not WebTransport with a binary encoding (PRD 2.3).
 - **No snapshot recovery.** A gap is detected and reported; requesting a snapshot from the
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.

@@ -1,0 +1,26 @@
+{
+  "name": "@picasso/auth",
+  "version": "0.0.0",
+  "private": true,
+  "description": "picasso-bff's auth: OIDC sign-in against any provider, the MFA rule, and 15-minute session tokens the other services verify",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "picasso-auth": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jose": "6.2.12",
+    "@picasso/canvas-guard": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}

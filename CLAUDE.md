@@ -2,8 +2,9 @@
 
 Picasso, built against `docs/picasso/PRD.md`. Sixteen npm workspace packages
 under `packages/`, one Rust crate under `crates/pricing-core`, two Go modules
-(`services/dataplane`, `services/gateway`), the collaboration server
-(`services/collab`, an npm workspace), demo surfaces under `apps/canvas-demo`.
+(`services/dataplane`, `services/gateway`), the collaboration server and the
+auth service (`services/collab`, `services/auth`, npm workspaces), demo surfaces
+under `apps/canvas-demo`.
 
 ## Commands
 
@@ -30,6 +31,13 @@ cd services/gateway && go test -race ./...   # GATEWAY_LIVE=1 adds a real
 COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab
                      # skips without a database; CI sets COLLAB_REQUIRE_PG=1
 ```
+
+Every service identifies callers by picasso-auth's session token. A typed
+name in `X-Picasso-User` counts only when the service is started with
+`--dev-identity` (`-dev-identity` in Go), which the local scripts pass; the
+binaries refuse to start with neither that nor an auth URL.
+`services/auth/test/tokens.test.ts` writes `services/auth/testdata/tokens.json`
+and the Go `identity` tests must reach the same verdicts (`UPDATE_TOKENS=1`).
 
 The Go data plane and `canvas-data` implement the same point-in-time,
 conflation and entitlement rules. `canvas-data/test/conformance.test.ts`

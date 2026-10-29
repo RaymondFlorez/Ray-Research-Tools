@@ -56,6 +56,7 @@ README carries the figure it was measured at and the gaps it does not close.
 | [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter, none yet run against the real source. |
 | [`gateway`](services/gateway) | Go: the model gateway. Any model, open or closed, through three adapters (Anthropic's official SDK, Chat Completions for OpenAI, OpenRouter and every open-weight server, and Gemini). Each user calls on their own account, by OpenRouter sign-in or by an API key sealed per user. Positions and MNPI-risk data never reach a vendor's API. |
 | [`collab`](services/collab) | TypeScript: `picasso-collab`. The canvas's Yjs document synced over Hocuspocus. Every update is logged to Postgres, with 90-day retention held by the database. Snapshots are taken at most 30 s apart while editing and on idle. Named versions are immutable and record the dataset snapshot ids the canvas cites. Users open only their own tenant's canvases. |
+| [`auth`](services/auth) | TypeScript: `picasso-auth`. Sign-in against any OpenID provider, with PKCE, nonce and browser binding. Requires MFA in tenants that hold positions. Issues 15-minute Ed25519 session tokens with silent refresh, which the data plane, gateway and collab server verify. A shared token contract holds the Go and TypeScript verifiers to the same verdicts. Tested against a stand-in provider, not a real one. |
 
 ## Apps
 
@@ -96,7 +97,7 @@ name.
 npm install
 npm run build        # dependency order; typecheck resolves packages through dist
 npm run typecheck
-npm test             # 1,801 TypeScript tests across 16 packages
+npm test             # 1,814 TypeScript tests across 16 packages and the auth service
 
 # see it run
 node scripts/serve.mjs                          # http://localhost:8123/
@@ -111,9 +112,9 @@ cargo run --release --example grid_bench --manifest-path crates/pricing-core/Car
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 
 # the Go data plane
-cd services/dataplane && go test -race ./...     # 32 tests; DATAPLANE_PG_URL adds the Postgres store
-cd services/gateway && go test -race ./...       # 15 tests
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab   # 8 tests
+cd services/dataplane && go test -race ./...     # 34 tests; DATAPLANE_PG_URL adds the Postgres store
+cd services/gateway && go test -race ./...       # 17 tests, one live and skipped by default
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab   # 9 tests
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs   # Phase 1's exit criterion on Postgres
 ```
 

@@ -6,11 +6,11 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 15 tests, one live and skipped by default
+go test -race ./...                       # 17 tests, one live and skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
-   -providers config/providers.json -users ../dataplane/config/users.json -vault vault.json \
+   -auth-url https://picasso.example.com -providers config/providers.json -users ../dataplane/config/users.json -vault vault.json \
    -public-url http://127.0.0.1:8750 -return-url http://127.0.0.1:5173/models.html
 # or -ephemeral instead of the key and -vault, for development
 ```
@@ -20,6 +20,7 @@ GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
 | `provider` | One request and response shape; adapters for Anthropic (the official Go SDK), the Chat Completions API (OpenAI and every server that speaks it) and Gemini |
 | `accounts` | Each user's credential per provider, sealed with AES-256-GCM, bound to its user |
 | `server` | Providers, connecting by sign-in or API key, chat, and the audit log |
+| `identity` | Verifies picasso-auth's session tokens: the same package and contract test as the data plane's |
 
 ## Every model, three adapters
 
@@ -86,8 +87,8 @@ Anthropic's API is the one provider host this environment reaches. Measured:
   refuse connections here or answer only without a key.
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
   No sampling parameters are sent, since current Claude models reject them.
-- **No identity.** Users name themselves in `X-Picasso-User`, as at the data plane. OIDC is not
-  built, so the binary listens on loopback.
+- **Identity is picasso-auth's session token**, as at the data plane, with the same
+  `-dev-identity` escape for development. A logged-out token works here until it expires.
 - **No revocation upstream.** Disconnecting deletes the gateway's copy; the key stays valid with
   the provider until the user revokes it there.
 - **The vault key is one key.** No rotation, no KMS, and the audit log is in memory.
