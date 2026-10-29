@@ -1,4 +1,6 @@
 [
   { "feed": "feed-a", "symbol": "NVDA", "id": "NVDA", "assetClass": "equity", "class": "public" },
-  { "feed": "feed-a", "symbol": "AMD", "id": "AMD", "assetClass": "equity", "class": "licensed", "vendor": "vendor-b" }
+  { "feed": "feed-a", "symbol": "AMD", "id": "AMD", "assetClass": "equity", "class": "licensed", "vendor": "vendor-b" },
+  { "feed": "coinbase", "symbol": "BTC-USD", "id": "BTC-USD", "assetClass": "crypto", "class": "public" },
+  { "feed": "coinbase", "symbol": "ETH-USD", "id": "ETH-USD", "assetClass": "crypto", "class": "public" }
 ]

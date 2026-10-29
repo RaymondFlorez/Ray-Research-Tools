@@ -53,7 +53,7 @@ README carries the figure it was measured at and the gaps it does not close.
 
 | Service | Description |
 |---|---|
-| [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. No vendor adapter yet. |
+| [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter, none yet run against the real source. |
 
 ## Apps
 
@@ -109,7 +109,7 @@ cargo run --release --example grid_bench --manifest-path crates/pricing-core/Car
 node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 
 # the Go data plane
-cd services/dataplane && go test -race ./...     # 19 tests; DATAPLANE_PG_URL adds the Postgres store
+cd services/dataplane && go test -race ./...     # 32 tests; DATAPLANE_PG_URL adds the Postgres store
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs   # Phase 1's exit criterion on Postgres
 ```
 

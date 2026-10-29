@@ -1,12 +1,14 @@
 // Command dataplane runs stream-ingest and data-access in one process for
 // development: point-in-time reads over Postgres (or memory), and a live,
-// conflated, entitlement-filtered stream fed by a replayed recording.
+// conflated, entitlement-filtered stream fed by a replayed recording or by
+// Coinbase Exchange's public ticker feed.
 //
 //	dataplane -users config/users.json -symbology config/symbology.json \
-//	          [-pg postgres://... -schema pit -migrate] [-replay rec.ndjson -speed 1]
+//	          [-pg postgres://... -schema pit -migrate] [-replay rec.ndjson -speed 1] \
+//	          [-coinbase BTC-USD,ETH-USD]
 //
-// There is no vendor adapter: none has been chosen, and a recording is the
-// only feed this binary can take. See services/dataplane/README.md.
+// Point-in-time facts from the free sources are loaded by cmd/load. See
+// services/dataplane/README.md.
 package main
 
 import (
@@ -19,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -28,6 +31,7 @@ import (
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/ingest"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/pit"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/server"
+	"github.com/raymondflorez/ray-research-tools/services/dataplane/sources"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/stream"
 )
 
@@ -65,6 +69,8 @@ func main() {
 	migrate := flag.Bool("migrate", false, "create the schema first (as the owning role)")
 	replay := flag.String("replay", "", "a recording to replay as the feed (NDJSON)")
 	speed := flag.Float64("speed", 1, "replay speed; 0 is as fast as possible")
+	coinbase := flag.String("coinbase", "", "Coinbase Exchange products to stream live, comma-separated (each must be in the symbology under feed \"coinbase\")")
+	coinbaseURL := flag.String("coinbase-url", "", "the Coinbase feed's websocket URL; the public feed when empty")
 	staleAfter := flag.Duration("stale-after", 5*time.Second, "a series with no update for this long is stale")
 	flag.Parse()
 
@@ -130,6 +136,25 @@ func main() {
 		go func() {
 			if err := hub.Run(ctx, stream.Replay{Source: f, Speed: *speed}); err != nil && ctx.Err() == nil {
 				log.Printf("replay ended: %v", err)
+			}
+		}()
+	}
+
+	if *coinbase != "" {
+		products := strings.Split(*coinbase, ",")
+		for _, p := range products {
+			if _, ok := sym.Lookup("coinbase", p); !ok {
+				log.Fatalf("coinbase product %s is not in the symbology: an unmapped product would be refused on every tick", p)
+			}
+		}
+		if feed == "no feed connected" {
+			feed = "Coinbase Exchange ticker"
+		} else {
+			feed += " and Coinbase Exchange ticker"
+		}
+		go func() {
+			if err := hub.Run(ctx, sources.Coinbase{URL: *coinbaseURL, Products: products}); err != nil && ctx.Err() == nil {
+				log.Printf("coinbase feed ended: %v", err)
 			}
 		}()
 	}

@@ -1,5 +1,5 @@
 {
   "analyst": { "tenant": "dev", "vendors": [], "positions": false, "mnpi": false },
-  "pm": { "tenant": "dev", "vendors": ["vendor-b"], "positions": true, "mnpi": false },
-  "loader": { "tenant": "dev", "vendors": [], "write": true }
+  "pm": { "tenant": "dev", "vendors": ["vendor-b", "stooq"], "positions": true, "mnpi": false },
+  "loader": { "tenant": "dev", "vendors": ["vendor-b", "stooq"], "write": true }
 }
