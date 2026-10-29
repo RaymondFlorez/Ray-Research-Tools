@@ -65,7 +65,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.7 hypothesis builder | Built | `canvas-hypothesis`; `HypothesisLedger` keeps the record and re-resolves on each observation (`hypothesis-ledger.test.ts`); the durable store is Infra (3.9) |
 | 3.8 interaction model (pan momentum, palette, frame, search, time scrub) | Built | `canvas-core` viewport/search/frame, `canvas-data` timescrub |
 | 3.9 named versions, templates | Built | `canvas-sync` snapshot, `canvas-core` template |
-| 3.9 Postgres snapshots every 30s | Infra | No collaboration server writes canvas snapshots; the only Postgres here is the data plane's, which holds facts |
+| 3.9 Postgres snapshots every 30s | Built | `services/collab`: Hocuspocus, every update logged (90-day retention held by the database), snapshots at most 30s apart while editing and on idle, immutable named versions with the dataset snapshot ids read from the canvas; tested against Postgres with real clients, not yet from a browser |
 
 **Node kinds (3.3).** Built: DataTile and ChartNode (`canvas-render` scene, chart; the fact
 tile and the series chart evaluate at the canvas's time through the Go data plane);
@@ -168,5 +168,5 @@ market data plane — the service and the free sources' loaders are built
 run the first real loads, which are the first test of the decoders against real responses
 (unblocks CodeNode's SQL, real backtests); model fleet — the gateway is built (`services/gateway`: any provider, each user on their own
 account, positions never to a vendor); what remains is a user's first sign-in or key, and the
-router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); collaboration server and Postgres snapshots; the code
+router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); the collaboration server is built (`services/collab`), and what remains is the browser through it, y-indexeddb and an identity provider; the code
 sandbox; GPU verification of Phase 0's frame budget on real hardware.

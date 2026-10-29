@@ -1,0 +1,31 @@
+{
+  "name": "@picasso/collab",
+  "version": "0.0.0",
+  "private": true,
+  "description": "picasso-collab: Yjs sync over Hocuspocus, with snapshots and the update log in Postgres",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "picasso-collab": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "4.7.1",
+    "pg": "8.23.1",
+    "yjs": "^13.6.32",
+    "@picasso/canvas-sync": "*",
+    "@picasso/canvas-core": "*"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "4.7.1",
+    "@types/node": "^22.20.2",
+    "@types/pg": "8.23.1",
+    "typescript": "^5.6.3",
+    "vitest": "^5.0.0"
+  }
+}

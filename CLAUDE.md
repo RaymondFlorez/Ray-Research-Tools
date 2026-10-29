@@ -2,7 +2,8 @@
 
 Picasso, built against `docs/picasso/PRD.md`. Sixteen npm workspace packages
 under `packages/`, one Rust crate under `crates/pricing-core`, two Go modules
-(`services/dataplane`, `services/gateway`), demo surfaces under `apps/canvas-demo`.
+(`services/dataplane`, `services/gateway`), the collaboration server
+(`services/collab`, an npm workspace), demo surfaces under `apps/canvas-demo`.
 
 ## Commands
 
@@ -26,6 +27,8 @@ DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs
 
 cd services/gateway && go test -race ./...   # GATEWAY_LIVE=1 adds a real
                                              # call to api.anthropic.com
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab
+                     # skips without a database; CI sets COLLAB_REQUIRE_PG=1
 ```
 
 The Go data plane and `canvas-data` implement the same point-in-time,

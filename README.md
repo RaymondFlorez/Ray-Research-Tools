@@ -55,6 +55,7 @@ README carries the figure it was measured at and the gaps it does not close.
 |---|---|
 | [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter, none yet run against the real source. |
 | [`gateway`](services/gateway) | Go: the model gateway. Any model, open or closed, through three adapters (Anthropic's official SDK, Chat Completions for OpenAI, OpenRouter and every open-weight server, and Gemini). Each user calls on their own account, by OpenRouter sign-in or by an API key sealed per user. Positions and MNPI-risk data never reach a vendor's API. |
+| [`collab`](services/collab) | TypeScript: `picasso-collab`. The canvas's Yjs document synced over Hocuspocus. Every update is logged to Postgres, with 90-day retention held by the database. Snapshots are taken at most 30 s apart while editing and on idle. Named versions are immutable and record the dataset snapshot ids the canvas cites. Users open only their own tenant's canvases. |
 
 ## Apps
 
@@ -112,6 +113,7 @@ node scripts/verify-wasm-parity.mjs             # native vs WASM, bit for bit
 # the Go data plane
 cd services/dataplane && go test -race ./...     # 32 tests; DATAPLANE_PG_URL adds the Postgres store
 cd services/gateway && go test -race ./...       # 15 tests
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab   # 7 tests
 DATAPLANE_PG_URL=postgres://... node scripts/historical-morning-remote.mjs   # Phase 1's exit criterion on Postgres
 ```
 

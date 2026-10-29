@@ -113,6 +113,13 @@ jobs:
         working-directory: .
       - run: node scripts/historical-morning-remote.mjs
         working-directory: .
+      # picasso-collab against the same Postgres: its tests skip without one,
+      # and COLLAB_REQUIRE_PG makes that a failure here.
+      - run: npm test --workspace @picasso/collab
+        working-directory: .
+        env:
+          COLLAB_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+          COLLAB_REQUIRE_PG: '1'
 
   gateway:
     runs-on: ubuntu-latest
