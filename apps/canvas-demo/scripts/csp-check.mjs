@@ -73,10 +73,11 @@ try {
       // The live page's data comes from the Go data plane, the models page's
       // from the model gateway and the shared page's from the collaboration
       // server, none of which this check starts, so their requests fail here:
-      // 502 over HTTP, a refused WebSocket for the shared canvas — and only
-      // those, on only those pages. live-shots, models-shots and shared-shots
+      // 502 over HTTP (the shared page's session request included), and a
+      // refused WebSocket for the shared canvas — and only those, on only those
+      // pages. live-shots, models-shots and shared-shots
       // run them against the real services.
-      else if ((name === 'live' || name === 'models') && /status of 502/.test(text)) return;
+      else if ((name === 'live' || name === 'models' || name === 'shared') && /status of 502/.test(text)) return;
       else if (name === 'shared' && /WebSocket connection to 'ws:\/\/localhost:\d+\/collab' failed/.test(text)) return;
       else if (msg.type() === 'error') errors.push(text);
     });
