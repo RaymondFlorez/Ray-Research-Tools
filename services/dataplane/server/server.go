@@ -18,9 +18,11 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/access"
+	"github.com/raymondflorez/ray-research-tools/services/dataplane/audit"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/entitle"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/identity"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/pit"
@@ -55,6 +57,40 @@ type Server struct {
 	// DevIdentity accepts UserHeader as the caller's name when no token is
 	// sent. Off unless asked for: a name a client types is not an identity.
 	DevIdentity bool
+	// Audit receives a record for every read that returns positions or
+	// MNPI-risk data, before the data leaves. Nil refuses those reads.
+	Audit audit.Store
+}
+
+// audited is whether a class's reads must be on the audit trail: PRD 7.2's
+// position data, and MNPI-risk data alongside it.
+func audited(c entitle.Class) bool { return c == entitle.Positions || c == entitle.MNPIRisk }
+
+// auditRead writes the trail for a read about to return sensitive data, and
+// says whether the read may proceed. It fails closed: no stated purpose, or a
+// record that cannot be written, and the caller gets an error, not the data.
+func (s *Server) auditRead(w http.ResponseWriter, r *http.Request, e entitle.Entitlements, action, resource string) bool {
+	purpose := strings.TrimSpace(r.Header.Get(audit.PurposeHeader))
+	if purpose == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "this read returns positions data: state its purpose in " + audit.PurposeHeader})
+		return false
+	}
+	if err := audit.CheckPurpose(purpose); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return false
+	}
+	if s.Audit == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "no audit trail is configured, so positions data is not served"})
+		return false
+	}
+	trace := audit.TraceID(r)
+	rec := audit.Record{Actor: e.UserID, Tenant: e.TenantID, Action: action, Resource: resource, Purpose: purpose, TraceID: trace, Outcome: "served"}
+	if err := s.Audit.Append(r.Context(), rec); err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the audit trail could not be written, so the data is not served: " + err.Error()})
+		return false
+	}
+	w.Header().Set(audit.TraceHeader, trace)
+	return true
 }
 
 func (s *Server) Handler() http.Handler {
@@ -145,6 +181,14 @@ func (s *Server) asOf(w http.ResponseWriter, r *http.Request, e entitle.Entitlem
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
+	for _, o := range res.Observations {
+		if audited(o.Class) {
+			if !s.auditRead(w, r, e, "read:asof", query.Key) {
+				return
+			}
+			break
+		}
+	}
 	writeJSON(w, http.StatusOK, res)
 }
 
@@ -203,6 +247,7 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request, e entitle.Entit
 		return
 	}
 	out := make([]HistoryEntry, 0, len(facts))
+	sensitive := false
 	for _, f := range facts {
 		entry := HistoryEntry{KnowledgeTime: f.KnowledgeTime, Restatement: f.Restatement}
 		// The same rule as a read: a version the caller may not see is
@@ -211,10 +256,14 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request, e entitle.Entit
 			v := f.Value
 			entry.Value = &v
 			entry.Source = f.Source
+			sensitive = sensitive || audited(f.Class)
 		} else {
 			entry.Blocked = &d
 		}
 		out = append(out, entry)
+	}
+	if sensitive && !s.auditRead(w, r, e, "read:history", key+"@"+valid) {
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"versions": out})
 }
@@ -262,12 +311,17 @@ func (s *Server) versions(w http.ResponseWriter, r *http.Request, e entitle.Enti
 		Versions []Version         `json:"versions"`
 		Withheld []WithheldVersion `json:"withheld"`
 	}{Versions: []Version{}, Withheld: []WithheldVersion{}}
+	sensitive := false
 	for _, f := range facts {
 		if d := entitle.Check(f.Class, f.Vendor, e); d.Allowed {
 			out.Versions = append(out.Versions, Version{f.ValidTime, f.KnowledgeTime, f.Value, f.Restatement, f.Source})
+			sensitive = sensitive || audited(f.Class)
 		} else {
 			out.Withheld = append(out.Withheld, WithheldVersion{f.ValidTime, f.KnowledgeTime, d})
 		}
+	}
+	if sensitive && !s.auditRead(w, r, e, "read:versions", key) {
+		return
 	}
 	writeJSON(w, http.StatusOK, out)
 }

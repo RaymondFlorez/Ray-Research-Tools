@@ -36,7 +36,7 @@ const features: RoutingFeatures = {
   rigorFlag: false, dataSensitivity: 'public', costCeilingCents: 50, latencyBudgetMs: 800, determinismRequired: false, priorFailures: [],
 };
 
-const prompt = { messages: [{ role: 'user' as const, text: 'revenue by quarter for NVDA' }], maxTokens: 256, dataClass: 'public' as const };
+const prompt = { messages: [{ role: 'user' as const, text: 'revenue by quarter for NVDA' }], maxTokens: 256, dataClass: 'public' as const, purpose: 'sql.generate' };
 const verify = sqlVerifier(new Set(['fundamentals']), new Set(['symbol', 'revenue', 'quarter']));
 
 describe('GatewayClient', () => {
@@ -67,7 +67,7 @@ describe('a cascade dispatched through the gateway', () => {
     const result = await cascade(DEFAULT_POLICY, features, gatewayDispatch(client, routes, providers, prompt), (a, m) => verify(a.text, m));
     expect(result.terminatedAtCheapTier).toBe(true);
     expect(calls).toHaveLength(1);
-    expect(calls[0]!.body).toMatchObject({ provider: 'vllm', model: 'Qwen/Qwen2.5-Coder-32B-Instruct', dataClass: 'public' });
+    expect(calls[0]!.body).toMatchObject({ provider: 'vllm', model: 'Qwen/Qwen2.5-Coder-32B-Instruct', dataClass: 'public', purpose: 'sql.generate' });
   });
 
   it('refuses a model whose manifest placement is not the gateway provider\'s', async () => {

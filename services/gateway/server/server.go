@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -33,6 +34,7 @@ import (
 	"time"
 
 	"github.com/raymondflorez/ray-research-tools/services/gateway/accounts"
+	"github.com/raymondflorez/ray-research-tools/services/gateway/audit"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/identity"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/provider"
 )
@@ -136,20 +138,21 @@ type AuditEntry struct {
 	OutputTokens int64     `json:"outputTokens,omitempty"`
 }
 
-// audit is append-only: no method removes or rewrites an entry, and reads
-// hand out copies.
-type audit struct {
+// dispatchLog is each user's own view of their calls: append-only, no method
+// removes or rewrites an entry, and reads hand out copies. It is not PRD 7.2's
+// trail, which is Options.Audit.
+type dispatchLog struct {
 	mu      sync.Mutex
 	entries []AuditEntry
 }
 
-func (a *audit) add(e AuditEntry) {
+func (a *dispatchLog) add(e AuditEntry) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.entries = append(a.entries, e)
 }
 
-func (a *audit) of(user string) []AuditEntry {
+func (a *dispatchLog) of(user string) []AuditEntry {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	out := []AuditEntry{}
@@ -176,7 +179,8 @@ type Server struct {
 	// PublicURL is where the browser reaches this gateway, for the OAuth
 	// callback; ReturnURL is where a finished sign-in sends the browser.
 	publicURL, returnURL string
-	audit                *audit
+	log                  *dispatchLog
+	trail                audit.Store
 	tenants              map[string]string
 	identity             *identity.Verifier
 	devIdentity          bool
@@ -196,7 +200,10 @@ type Options struct {
 	Identity *identity.Verifier
 	// DevIdentity accepts X-Picasso-User as the caller's name when no token is
 	// sent. Off unless asked for: a name a client types is not an identity.
-	DevIdentity          bool
+	DevIdentity bool
+	// Audit receives PRD 7.2's record of every AI dispatch, written before
+	// the provider is called. Nil refuses every dispatch.
+	Audit                audit.Store
 	Vault                *accounts.Vault
 	Client               *http.Client
 	PublicURL, ReturnURL string
@@ -206,7 +213,7 @@ func New(o Options) (*Server, error) {
 	s := &Server{
 		providers: map[string]Provider{}, users: map[string]bool{}, vault: o.Vault, client: o.Client,
 		publicURL: strings.TrimRight(o.PublicURL, "/"), returnURL: o.ReturnURL,
-		audit: &audit{}, pending: map[string]pending{}, now: time.Now,
+		log: &dispatchLog{}, trail: o.Audit, pending: map[string]pending{}, now: time.Now,
 		tenants: o.Tenants, identity: o.Identity, devIdentity: o.DevIdentity,
 	}
 	if s.client == nil {
@@ -293,7 +300,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/oauth/callback", s.oauthCallback)
 	mux.HandleFunc("POST /v1/chat", s.withUser(s.chat))
 	mux.HandleFunc("GET /v1/audit", s.withUser(func(w http.ResponseWriter, _ *http.Request, user string) {
-		writeJSON(w, http.StatusOK, map[string]any{"entries": s.audit.of(user)})
+		writeJSON(w, http.StatusOK, map[string]any{"entries": s.log.of(user)})
 	}))
 	return mux
 }
@@ -485,6 +492,9 @@ type chatRequest struct {
 	Messages  []provider.Message `json:"messages"`
 	MaxTokens int                `json:"maxTokens"`
 	DataClass string             `json:"dataClass"`
+	// Purpose is why the call is made, for the audit trail: a task name such
+	// as "sql.generate", not free text about the content.
+	Purpose string `json:"purpose"`
 }
 
 func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
@@ -503,7 +513,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 	entry := AuditEntry{At: s.now().UTC(), User: user, Provider: p.ID, Model: req.Model, DataClass: req.DataClass}
 	refuse := func(status int, format string, args ...any) {
 		entry.Outcome = "refused: " + fmt.Sprintf(format, args...)
-		s.audit.add(entry)
+		s.log.add(entry)
 		fail(w, status, format, args...)
 	}
 	if _, known := allowed[OnDevice][req.DataClass]; !known {
@@ -534,7 +544,42 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 			return
 		}
 	}
+	if strings.TrimSpace(req.Purpose) == "" {
+		refuse(http.StatusBadRequest, "a dispatch states its purpose; it goes on the audit trail")
+		return
+	}
+	if err := audit.CheckPurpose(req.Purpose); err != nil {
+		refuse(http.StatusBadRequest, "%v", err)
+		return
+	}
+	if s.trail == nil {
+		refuse(http.StatusServiceUnavailable, "no audit trail is configured, so nothing is dispatched")
+		return
+	}
+	// PRD 7.2: the record is written before the provider is called, and a
+	// record that cannot be written means no call.
+	record := audit.Record{
+		At: s.now().UTC(), Actor: user, Tenant: s.tenants[user], Action: "ai_dispatch",
+		Resource: p.ID + "/" + req.Model, Purpose: req.Purpose, TraceID: audit.TraceID(r),
+		Outcome: "sent: " + req.DataClass,
+	}
+	if err := s.trail.Append(r.Context(), record); err != nil {
+		refuse(http.StatusServiceUnavailable, "the audit trail could not be written, so nothing was dispatched: %v", err)
+		return
+	}
+	w.Header().Set(audit.TraceHeader, record.TraceID)
 	res, err := p.adapter(s.client).Chat(r.Context(), credential, preq)
+	// The outcome is a second record. The call has happened by now, so a
+	// failure to write it is logged and the answer still returned.
+	record.At = s.now().UTC()
+	if err != nil {
+		record.Outcome = "failed"
+	} else {
+		record.Outcome = fmt.Sprintf("returned: %s, %d in, %d out", res.Stop, res.InputTokens, res.OutputTokens)
+	}
+	if aerr := s.trail.Append(context.WithoutCancel(r.Context()), record); aerr != nil {
+		log.Printf("audit: the outcome of trace %s was not recorded: %v", record.TraceID, aerr)
+	}
 	if err != nil {
 		var perr *provider.Error
 		if errors.As(err, &perr) {
@@ -542,12 +587,12 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 		} else {
 			entry.Outcome = "provider unreachable"
 		}
-		s.audit.add(entry)
+		s.log.add(entry)
 		fail(w, http.StatusBadGateway, "%v", err)
 		return
 	}
 	entry.Outcome, entry.InputTokens, entry.OutputTokens = string(res.Stop), res.InputTokens, res.OutputTokens
-	s.audit.add(entry)
+	s.log.add(entry)
 	writeJSON(w, http.StatusOK, map[string]any{"provider": p.ID, "response": res})
 }
 

@@ -243,7 +243,9 @@ recovering fleet can now serve and keeps the rest.
 - **Dispatch is the gateway's.** This package calls no model itself. `gateway.ts`
   supplies a `Dispatch` that sends each routed model to `services/gateway` under
   its provider's name, and refuses one whose manifest placement differs from the
-  gateway provider's. Its tests run against a stand-in gateway in-process, and
+  gateway provider's. Every call carries a `purpose`, a task name, which the
+  gateway writes to PRD 7.2's audit trail before dispatching and refuses to go
+  without. Its tests run against a stand-in gateway in-process, and
   `apps/canvas-demo/scripts/models-shots.mjs` drives the client against the real
   one. The cascade's measured figures above are still over a simulated fleet:
   no model's output has been through it.

@@ -70,6 +70,12 @@ export interface RemoteOptions {
   baseUrl: string;
   /** The caller, as the data plane knows it. A development stand-in for OIDC. */
   user: string;
+  /**
+   * Why this client reads, for PRD 7.2's audit trail, e.g. `canvas.render`.
+   * A read that returns position or MNPI-risk data is refused without one,
+   * and recorded with it before it is served.
+   */
+  purpose?: string;
   fetch?: typeof fetch;
 }
 
@@ -128,7 +134,9 @@ export class RemotePointInTime {
   }
 
   private async get<T>(path: string): Promise<T> {
-    const res = await this.fetcher(`${this.base}${path}`, { headers: { 'X-Picasso-User': this.options.user } });
+    const headers: Record<string, string> = { 'X-Picasso-User': this.options.user };
+    if (this.options.purpose) headers['X-Picasso-Purpose'] = this.options.purpose;
+    const res = await this.fetcher(`${this.base}${path}`, { headers });
     const body = (await res.json()) as T & { error?: string };
     if (!res.ok) throw new DataPlaneError(res.status, body.error ?? 'request refused');
     return body;

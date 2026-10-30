@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/access"
+	"github.com/raymondflorez/ray-research-tools/services/dataplane/audit"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/entitle"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/identity"
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/ingest"
@@ -68,6 +69,7 @@ func main() {
 	pgURL := flag.String("pg", "", "Postgres URL; memory when empty")
 	schema := flag.String("schema", "pit", "Postgres schema")
 	migrate := flag.Bool("migrate", false, "create the schema first (as the owning role)")
+	auditSchema := flag.String("audit-schema", "audit", "the audit trail's own schema, with -pg")
 	replay := flag.String("replay", "", "a recording to replay as the feed (NDJSON)")
 	speed := flag.Float64("speed", 1, "replay speed; 0 is as fast as possible")
 	coinbase := flag.String("coinbase", "", "Coinbase Exchange products to stream live, comma-separated (each must be in the symbology under feed \"coinbase\")")
@@ -112,6 +114,10 @@ func main() {
 	defer stop()
 
 	var store pit.Store = pit.NewMemory()
+	var trail audit.Store = &audit.Memory{}
+	if *pgURL == "" {
+		fmt.Fprintln(os.Stderr, "the audit trail is in memory: positions reads are recorded, and the record ends with the process (use -pg)")
+	}
 	if *pgURL != "" {
 		pool, err := pgxpool.New(ctx, *pgURL)
 		if err != nil {
@@ -128,6 +134,14 @@ func main() {
 			log.Fatal(err)
 		}
 		store = pg
+		if *migrate {
+			if err := audit.Migrate(ctx, pool, *auditSchema); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if trail, err = audit.NewPostgres(pool, *auditSchema); err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	hub := stream.NewHub(sym, *staleAfter)
@@ -165,7 +179,7 @@ func main() {
 		}()
 	}
 
-	api := &server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Writers: writers, Feed: feed, DevIdentity: *devIdentity}
+	api := &server.Server{Reader: access.Reader{Store: store}, Hub: hub, Users: users, Writers: writers, Feed: feed, DevIdentity: *devIdentity, Audit: trail}
 	if *authURL != "" {
 		api.Identity = identity.Remote(*authURL)
 	}

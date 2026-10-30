@@ -50,6 +50,11 @@ export interface GatewayChat {
   messages: GatewayMessage[];
   maxTokens: number;
   dataClass: DataClass;
+  /**
+   * Why the call is made, for PRD 7.2's audit trail: a task name such as
+   * `sql.generate`. The gateway refuses a dispatch without one.
+   */
+  purpose: string;
 }
 
 export interface GatewayResponse {
@@ -163,6 +168,11 @@ export interface GatewayPrompt {
   messages: GatewayMessage[];
   maxTokens: number;
   dataClass: DataClass;
+  /**
+   * Why the call is made, for PRD 7.2's audit trail: a task name such as
+   * `sql.generate`. The gateway refuses a dispatch without one.
+   */
+  purpose: string;
 }
 
 /**

@@ -7,8 +7,8 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 34 tests
-DATAPLANE_PG_URL=postgres://... go test ./pit/         # the Postgres store too
+go test -race ./...                                    # 37 tests, two of them need Postgres
+DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
 go run ./cmd/dataplane -auth-url https://picasso.example.com -users config/users.json -symbology config/symbology.json \
@@ -31,6 +31,7 @@ go run ./cmd/load ... stooq -symbol nvda.us -instrument NVDA      # licensed to 
 | `stream` | 2.3, 7.3 | The hub: decode, sequence, health, one conflator per subscriber; replay of a recording |
 | `sources` | 2.3, 5.1, 5.8 | Free sources into point-in-time facts: EDGAR company facts, Treasury par curve, ALFRED vintages, Stooq daily bars; the Coinbase live adapter; `Reconcile`, so a reload never rewrites the past |
 | `cmd/load` | 2.3 | Fetches a source, reconciles against what the data plane holds, appends over `POST /v1/facts` |
+| `audit` | 7.2 | The audit trail: its own Postgres schema, append-only for everyone, insert-only for the service |
 | `identity` | 7.2 | Verifies picasso-auth's session tokens, held to its TypeScript verdicts by `services/auth/testdata/tokens.json` |
 | `server` | 2.3 | `/v1/asof`, `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
@@ -132,6 +133,36 @@ An unmapped product is refused at startup, not once per tick.
 The stream test drives a synthetic feed through a real HTTP server and asserts the cap: about
 half a second of 200-a-second ticks arrives as two to four updates.
 
+## The audit trail
+
+PRD 7.2: "every read of position data ... writes an append-only audit record with actor,
+resource, purpose, and trace ID", to "a separate store ... with no delete path for application
+service accounts".
+
+- **A read that returns positions or MNPI-risk data is recorded before it is served.**
+  `/v1/asof`, `/v1/history` and `/v1/versions` each check what they are about to return. If
+  any of it is position or MNPI-risk data, the request must state a purpose in
+  `X-Picasso-Purpose`. The record (actor, tenant, action, key, purpose, trace id) is written
+  first. Without a purpose the answer is 400; with no trail configured, or a write that fails,
+  it is 503. Either way no data is sent. A read where those values come back blocked serves
+  nothing, so it writes nothing.
+- **A purpose is a task name**, such as `canvas.render`, of at most 64 characters. "check the
+  pm's book" is refused, because free text is how a position would end up in the trail.
+- **The trace id is the caller's W3C `traceparent`**, or a new one if the request has none.
+  It is returned in `X-Picasso-Trace`.
+- **The database holds the rest.** The trail is its own schema, `-audit-schema`, `audit` by
+  default. Triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` from anyone, the owner included.
+  `audit.GrantService` gives the application's role `INSERT` and nothing else. The test drops
+  the trigger and connects as that role. It may insert, and is refused `DELETE`, `UPDATE` and
+  `SELECT`: the service cannot even read back what it wrote.
+
+`scripts/historical-morning-remote.mjs` checks all of this through the binary, on Postgres,
+with a SYNTHETIC position:
+- `pm`'s read with no purpose is a 400;
+- with `canvas.render` it is served, and the trail gains exactly one row,
+  `pm|read:asof|book:pm:NVDA.shares|canvas.render`;
+- `analyst`, who may not see positions, gets the value blocked and adds no row.
+
 ## What is not covered
 
 - **No source has been reached.** This environment's network policy refuses every one of
@@ -164,6 +195,17 @@ half a second of 200-a-second ticks arrives as two to four updates.
   in `X-Picasso-User` when no token is sent. It is off unless asked for, and the binary refuses
   to start with neither it nor `-auth-url`. A logged-out token keeps working here until it
   expires, up to fifteen minutes, because nothing checks revocation.
+- **The binary does not drop its own privileges.** It writes the trail as whatever role `-pg`
+  names, and in development that is the schema's owner, which could drop the triggers.
+  `audit.GrantService` makes a role insert-only, and an operator has to run it and connect as
+  that role; `main` does not.
+- **No retention policy.** Nothing expires an audit record. "A distinct retention policy" is,
+  so far, "kept until the owner drops a trigger".
+- **The live stream is not on the trail.** `/v1/stream` checks entitlements per tick, and
+  writes no record if the symbology classifies an instrument as positions. There is no export
+  endpoint here to audit. canvas-guard's export bundle is built in the browser, and is not
+  recorded in this store. Nothing reads the trail through an API either: reading it is a query
+  the database owner runs.
 - **Server-Sent Events, JSON-encoded**, not WebTransport with a binary encoding (PRD 2.3).
 - **No snapshot recovery.** A gap is detected and reported; requesting a snapshot from the
   vendor to fill it is vendor-specific, and `Hub.Recovered` is the call a recovery would make.

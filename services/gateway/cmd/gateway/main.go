@@ -23,7 +23,10 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"github.com/raymondflorez/ray-research-tools/services/gateway/accounts"
+	"github.com/raymondflorez/ray-research-tools/services/gateway/audit"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/identity"
 	"github.com/raymondflorez/ray-research-tools/services/gateway/server"
 )
@@ -38,6 +41,9 @@ func main() {
 	returnURL := flag.String("return-url", "", "where a finished sign-in sends the browser")
 	authURL := flag.String("auth-url", "", "picasso-auth's URL: session tokens are verified against the keys it publishes")
 	devIdentity := flag.Bool("dev-identity", false, "also accept X-Picasso-User as the caller's name, for development; never on a network")
+	auditPG := flag.String("audit-pg", "", "Postgres URL for PRD 7.2's audit trail; without it the trail is in memory")
+	auditSchema := flag.String("audit-schema", "audit", "the audit trail's schema, with -audit-pg")
+	migrate := flag.Bool("migrate", false, "create the audit trail's schema, with -audit-pg")
 	flag.Parse()
 
 	var providers []server.Provider
@@ -81,13 +87,32 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	gw, err := server.New(server.Options{Providers: providers, Users: ids, Tenants: tenants, Identity: verifier, DevIdentity: *devIdentity, Vault: vault, PublicURL: *publicURL, ReturnURL: *returnURL})
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	var trail audit.Store = &audit.Memory{}
+	if *auditPG == "" {
+		fmt.Fprintln(os.Stderr, "the audit trail is in memory: every dispatch is recorded, and the record ends with the process (use -audit-pg)")
+	} else {
+		pool, err := pgxpool.New(ctx, *auditPG)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer pool.Close()
+		if *migrate {
+			if err := audit.Migrate(ctx, pool, *auditSchema); err != nil {
+				log.Fatal(err)
+			}
+		}
+		if trail, err = audit.NewPostgres(pool, *auditSchema); err != nil {
+			log.Fatal(err)
+		}
+	}
+	gw, err := server.New(server.Options{Providers: providers, Users: ids, Tenants: tenants, Identity: verifier, DevIdentity: *devIdentity, Audit: trail, Vault: vault, PublicURL: *publicURL, ReturnURL: *returnURL})
+	if err != nil {
+		log.Fatal(err)
+	}
 	srv := &http.Server{Addr: *addr, Handler: gw.Handler(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
 		<-ctx.Done()

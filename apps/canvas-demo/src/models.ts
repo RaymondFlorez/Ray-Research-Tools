@@ -158,6 +158,7 @@ $('send').addEventListener('click', async () => {
       messages: [{ role: 'user', text: prompt.value }],
       maxTokens: 512,
       dataClass: classPicker.value as DataClass,
+      purpose: 'models.try',
     });
     const r = lastResult;
     answer.textContent = r.stop === 'refusal'

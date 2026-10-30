@@ -6,13 +6,14 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 17 tests, one live and skipped by default
+go test -race ./...                       # 21 tests; one live and one on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
    -auth-url https://picasso.example.com -providers config/providers.json -users ../dataplane/config/users.json -vault vault.json \
-   -public-url http://127.0.0.1:8750 -return-url http://127.0.0.1:5173/models.html
-# or -ephemeral instead of the key and -vault, for development
+   -public-url http://127.0.0.1:8750 -return-url http://127.0.0.1:5173/models.html \
+   -audit-pg postgres://... -migrate
+# or -ephemeral instead of the key and -vault, for development; without -audit-pg the trail is in memory
 ```
 
 | Package | What it does |
@@ -21,6 +22,7 @@ GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
 | `accounts` | Each user's credential per provider, sealed with AES-256-GCM, bound to its user |
 | `server` | Providers, connecting by sign-in or API key, chat, and the audit log |
 | `identity` | Verifies picasso-auth's session tokens: the same package and contract test as the data plane's |
+| `audit` | PRD 7.2's trail, identical to the data plane's package. CI compares the two copies, and the data plane's job runs it on Postgres |
 
 ## Every model, three adapters
 
@@ -66,8 +68,20 @@ Self-hosted servers (`auth: none`) need nothing and are shared.
   date and the key's last four characters. The vault file holds only ciphertext, owner-only,
   and a sealed secret copied to another user's row fails to open. Provider errors are scrubbed
   of the credential.
-- **The audit log records the call, not the content.** Who, which provider and model, what data
-  class, the outcome and the tokens: append-only, and each user reads only their own.
+- **Every dispatch is on the audit trail before the provider is called** (PRD 7.2).
+  - A chat names its `purpose`, a task name such as `sql.generate`. A sentence is refused,
+    because free text is where a prompt would end up in the trail.
+  - The record is written first: actor, tenant, `provider/model`, purpose, the caller's
+    `traceparent` id (returned in `X-Picasso-Trace`), and the data class sent.
+  - A trail that cannot be written means no call. The test makes the trail fail, and checks
+    that the provider received nothing. With that check removed, the test fails: the call goes
+    out unrecorded.
+  - A second record with the same trace id holds the outcome and the token counts. The call
+    has happened by then, so if that write fails it is logged, and the answer is still returned.
+  - Neither record holds message content.
+- **Each user also sees their own calls.** `/v1/audit` lists who, which provider and model,
+  what data class, the outcome and the tokens. It is append-only, holds no content, and shows
+  each user only their own entries. It is a view for the user, separate from the trail.
 
 ## Measured against the real thing
 
@@ -91,6 +105,8 @@ Anthropic's API is the one provider host this environment reaches. Measured:
   `-dev-identity` escape for development. A logged-out token works here until it expires.
 - **No revocation upstream.** Disconnecting deletes the gateway's copy; the key stays valid with
   the provider until the user revokes it there.
-- **The vault key is one key.** No rotation, no KMS, and the audit log is in memory.
+- **The vault key is one key.** No rotation, no KMS. The per-user dispatch log is in memory. The
+  trail is in Postgres with `-audit-pg`, under the same limits as the data plane's: the process
+  writes as the role it is given, and nothing expires a record.
 - **No budgets or rate limits.** `canvas-router` holds the budget rules and does not yet call
   this gateway; nothing here stops a user spending their own account.

@@ -24,6 +24,14 @@ describe('RemotePointInTime', () => {
     expect(new Headers(calls[0]!.init!.headers).get('X-Picasso-User')).toBe('analyst');
   });
 
+  it('states its purpose on every read when given one, for the audit trail', async () => {
+    const { calls, fetcher } = recorder();
+    await new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', purpose: 'canvas.render', fetch: fetcher }).asOf({ key: 'k', knowledgeTime: '2024-01-01' });
+    await new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', fetch: fetcher }).asOf({ key: 'k', knowledgeTime: '2024-01-01' });
+    expect(new Headers(calls[0]!.init!.headers).get('X-Picasso-Purpose')).toBe('canvas.render');
+    expect(new Headers(calls[1]!.init!.headers).has('X-Picasso-Purpose')).toBe(false);
+  });
+
   it('surfaces a refusal as an error with the server\'s reason, not as an empty read', async () => {
     const { fetcher } = recorder(401, { error: 'unknown user' });
     const remote = new RemotePointInTime({ baseUrl: 'http://dp', user: 'nobody', fetch: fetcher });

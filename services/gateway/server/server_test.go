@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/raymondflorez/ray-research-tools/services/gateway/accounts"
+	"github.com/raymondflorez/ray-research-tools/services/gateway/audit"
 )
 
 type upstream struct {
@@ -44,7 +45,7 @@ func gateway(t *testing.T, providers []Provider, extra ...func(*Server)) (*Serve
 	k := make([]byte, 32)
 	_, _ = rand.Read(k)
 	v, _ := accounts.Open(k, "")
-	s, err := New(Options{Providers: providers, Users: []string{"pm", "analyst"}, DevIdentity: true, Vault: v, PublicURL: "http://gateway.test", ReturnURL: "http://app.test/models.html"})
+	s, err := New(Options{Providers: providers, Users: []string{"pm", "analyst"}, DevIdentity: true, Audit: &audit.Memory{}, Vault: v, PublicURL: "http://gateway.test", ReturnURL: "http://app.test/models.html"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +78,7 @@ func call(t *testing.T, srv *httptest.Server, method, path, user string, body an
 }
 
 func chatBody(provider, class string) map[string]any {
-	return map[string]any{"provider": provider, "model": "qwen-coder-32b", "messages": []map[string]string{{"role": "user", "text": "count the rows"}}, "maxTokens": 64, "dataClass": class}
+	return map[string]any{"provider": provider, "model": "qwen-coder-32b", "messages": []map[string]string{{"role": "user", "text": "count the rows"}}, "maxTokens": 64, "dataClass": class, "purpose": "sql.generate"}
 }
 
 func TestEachUserCallsOnTheirOwnAccount(t *testing.T) {

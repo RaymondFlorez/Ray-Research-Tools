@@ -68,7 +68,7 @@ const binary = join(work, 'dataplane');
 execFileSync('go', ['build', '-o', binary, './cmd/dataplane'], { cwd: join(ROOT, 'services/dataplane'), stdio: 'inherit' });
 const schema = `morning_${Date.now().toString(36)}`;
 const config = join(ROOT, 'services/dataplane/config');
-const dataplane = spawn(binary, ['-addr', `127.0.0.1:${PORT}`, '-dev-identity', '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-pg', PG, '-schema', schema, '-migrate'], { stdio: ['ignore', 'ignore', 'inherit'] });
+const dataplane = spawn(binary, ['-addr', `127.0.0.1:${PORT}`, '-dev-identity', '-users', `${config}/users.json`, '-symbology', `${config}/symbology.json`, '-pg', PG, '-schema', schema, '-audit-schema', `${schema}_audit`, '-migrate'], { stdio: ['ignore', 'ignore', 'inherit'] });
 
 try {
   const deadline = Date.now() + 20_000;
@@ -259,10 +259,31 @@ try {
     incomplete instanceof IncompleteHistory && incomplete.key === 'NVDA.revenue' && incomplete.withheld.length === 3,
     incomplete?.message);
   check('though it may load the public prices', (await loadHistory(as('analyst'), ['price:NVDA'])).dates().length === PRICES.length);
+
+  // PRD 7.2 through the service: a read that returns position data is
+  // written to the audit trail, in Postgres, before it is served, and is
+  // refused if it states no purpose. The position is SYNTHETIC.
+  const POSITION = [{ key: 'book:pm:NVDA.shares', validTime: '2024-08-05', knowledgeTime: '2024-08-05T21:00:00Z', value: 1200, dataClass: 'positions' }];
+  await as('loader').append(POSITION);
+  const trailRows = () => execFileSync('psql', [PG, '-tAc', `SELECT actor || '|' || action || '|' || resource || '|' || purpose FROM ${schema}_audit.records ORDER BY seq`], { encoding: 'utf8' }).trim().split('\n').filter(Boolean);
+  const trailBefore = trailRows().length;
+  let unstated;
+  try {
+    await as('pm').asOf({ key: 'book:pm:NVDA.shares', knowledgeTime: '2024-08-06T00:00:00Z' });
+  } catch (e) {
+    unstated = e;
+  }
+  check('a positions read that states no purpose is refused', unstated instanceof DataPlaneError && unstated.status === 400, unstated?.message);
+  const stated = await new RemotePointInTime({ baseUrl: BASE, user: 'pm', purpose: 'canvas.render' }).asOf({ key: 'book:pm:NVDA.shares', knowledgeTime: '2024-08-06T00:00:00Z' });
+  const rows = trailRows().slice(trailBefore);
+  check('with a purpose it is served, and the Postgres trail holds who, what and why',
+    stated.observations.length === 1 && stated.observations[0].value === 1200 && rows.length === 1 && rows[0] === 'pm|read:asof|book:pm:NVDA.shares|canvas.render', rows.join(' ; '));
+  const analystRead = await as('analyst').asOf({ key: 'book:pm:NVDA.shares', knowledgeTime: '2024-08-06T00:00:00Z' });
+  check('a reader not entitled to positions gets it blocked, and nothing is served to audit', analystRead.blocked.length === 1 && trailRows().length === trailBefore + 1);
 } finally {
   dataplane.kill();
   try {
-    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${schema} CASCADE`], { stdio: 'ignore' });
+    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${schema} CASCADE; DROP SCHEMA IF EXISTS ${schema}_audit CASCADE`], { stdio: 'ignore' });
   } catch {
     // A database the run cannot clean is left to its owner; the schema is unique to this run.
   }

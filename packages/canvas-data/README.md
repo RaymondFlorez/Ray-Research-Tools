@@ -19,7 +19,7 @@ npm test --workspace @picasso/canvas-data
 | `screener.ts` | 3.3, 5.8 | The `UniverseNode`'s screener: a hand-parsed expression, three-valued over missing data, resolved as of a date |
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
-| `remote.ts` | 2.3, 3.8 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live |
+| `remote.ts` | 2.3, 3.8, 7.2 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live; with a `purpose`, which the data plane requires before it serves position data |
 | `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
 | `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane, a withheld field counted apart from missing data |
 | `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |

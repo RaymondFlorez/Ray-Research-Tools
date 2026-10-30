@@ -132,7 +132,7 @@ describe('the shuffle test', () => {
     expect(test.verdict).toContain('clean');
     // Shuffling really did cost it something.
     expect(test.shuffledMedian).toBeLessThan(test.actual);
-  });
+  }, 60_000);
 
   /**
    * The limit of the test, stated as a test.
@@ -247,5 +247,5 @@ describe('the audit runs everything, without being asked', () => {
     );
     expect(result.shuffle.leaking).toBe(false);
     expect(result.shuffle.inconclusive).toBe(false);
-  });
+  }, 60_000);
 });

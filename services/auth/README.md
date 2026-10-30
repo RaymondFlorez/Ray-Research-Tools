@@ -111,9 +111,10 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   working there for the rest of its fifteen minutes.
 - **Sessions are in memory.** A restart ends every session's revocation record, and, without
   `--key`, every session.
-- **No PRD 7.2 audit record.** "Every read of position data, every export, and every AI
-  dispatch writes an append-only audit record" is not wired to these sessions. canvas-guard's
-  `AuditLog` and the gateway's per-dispatch log exist separately.
+- **Sign-ins are not audited.** The data plane and the gateway write PRD 7.2's records for
+  position reads and AI dispatches. Each record names the user, the tenant and a trace id, but
+  not the session id. Sign-in, refresh and logout are not recorded anywhere but this
+  process's memory.
 - **One signing key, no rotation.**
 - **MFA is what the provider says it is.** `amr` is trusted as reported, and `sms` counts as a
   second factor, as canvas-guard's README says.

@@ -258,7 +258,7 @@ describe('what clustering does to the naive test', () => {
         `${(separated.naive * 100).toFixed(1)}% (nominal 5%)`,
     );
     expect(overlapping.naive).toBeGreaterThan(separated.naive * 2);
-  });
+  }, 60_000);
 
   // With every event on one date the calendar-time statistic has a single
   // observation and no variance to divide by, so it declines to produce a

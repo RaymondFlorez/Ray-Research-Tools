@@ -145,5 +145,9 @@ jobs:
           cache-dependency-path: services/gateway/go.sum
       - name: gofmt
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      # The audit and identity packages are copies of the data plane's, and the
+      # data plane's job runs the audit store against Postgres; they must match.
+      - name: shared packages match the data plane's
+        run: diff -r ../dataplane/audit audit && diff -r ../dataplane/identity identity
       - run: go vet ./...
       - run: go test -race ./...
