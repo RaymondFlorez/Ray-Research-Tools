@@ -161,6 +161,15 @@ make gross exposure exactly one, so the gross limit originally proposed is not o
 it could never bind. Revisit if shorting is wanted: that brings the gross limit back and
 needs it in both solvers.
 
+## Deferred: waiting on decisions, to come back to once the other work is done
+
+Set aside at the user's request on 2026-10-30. Each one is built as far as it can be without the decision, and waits on it.
+
+- **Sign-in provider.** `services/auth` signs in against any OpenID provider and has only met a stand-in. Needs: which provider (Okta, Entra ID, Google, Auth0, Keycloak or another), a client registered with `<public-url>/auth/callback`, and its client id and secret.
+- **Live market data.** `services/dataplane/sources` and `cmd/load` are written to each free source's documented format and have reached none. Needs: data.sec.gov, www.sec.gov, home.treasury.gov, api.stlouisfed.org, stooq.com and ws-feed.exchange.coinbase.com allowed in the environment's network settings, a SEC contact for the User-Agent, and a free FRED key as `FRED_API_KEY`.
+- **Models.** `services/gateway` has made no successful model call. Needs: openrouter.ai allowed and a user signed in there, or any provider's API key pasted on the models page.
+- **The pull request into `main`.** The branch has not been proposed for merge.
+
 ## Critical path to production
 
 Everything left is integration with real systems, in roughly this order of leverage:
