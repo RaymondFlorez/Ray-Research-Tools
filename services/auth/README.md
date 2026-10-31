@@ -8,7 +8,7 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 13 tests
+npm test --workspace @picasso/auth          # 17 tests
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
    --users users.json --tenants config/tenants.json --key session-key.jwk
@@ -19,7 +19,7 @@ OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://pica
 | `oidc.ts` | The relying party: discovery, authorization code with PKCE and a nonce, ID-token verification |
 | `sessions.ts` | Picasso's session tokens: minted, verified and refreshed under canvas-guard's rules |
 | `verify.ts` | What a service does with a token, held to the Go services' verdicts |
-| `server.ts` | `/auth/login`, `/auth/callback`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/.well-known/jwks.json` |
+| `server.ts` | `/auth/login`, `/auth/callback`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/revoked`, `/.well-known/jwks.json` |
 | `standin.ts` | A **stand-in** OpenID provider for tests and the browser check; `main.ts` never loads it |
 
 ## Any provider
@@ -71,8 +71,9 @@ also accept the token from this cookie.
 
 The Go services verify tokens with their own code (`identity` in services/dataplane and
 services/gateway), using go-jose, and must decide as this does. `test/tokens.test.ts` writes
-`testdata/tokens.json`: eleven tokens, signed by a fixture key, each presented at a fixed
-moment, with this verifier's verdict. The cases:
+`testdata/tokens.json`: fourteen cases, tokens signed by a fixture key, each presented at a
+fixed moment, some with a list of logged-out sessions, and this verifier's verdict. The
+cases:
 - valid, including at the last second of leeway;
 - expired;
 - issued in the future;
@@ -81,11 +82,33 @@ moment, with this verifier's verdict. The cases:
 - signed by another key;
 - altered after signing;
 - `alg: none`;
-- no tenant.
+- no tenant;
+- logged out; another session logged out, which is accepted; logged out and expired, which is
+  `expired`.
 
 Both Go suites read the file and must agree, reason for reason. With the Go lifetime ceiling
 raised to two hours, the Go test fails on "an hour long". `UPDATE_TOKENS=1` rewrites the file,
 which is a change to the contract.
+
+## Logout reaches every service
+
+A service checks a token's signature itself, so a logout here would not reach it on its own.
+picasso-auth publishes the sessions that have ended at `/auth/revoked`. Each one stays on the
+list for fifteen minutes plus a minute: as long as any token it was issued could still
+verify, with thirty seconds of skew either way. After that it is the expiry check's job. So
+the list holds only the last quarter-hour's logouts.
+
+Each service re-reads the list at most every five seconds, when a token arrives. It does this
+through `RevocationList` here, and `identity` in Go. A copy that has not been refreshed for
+thirty seconds is "unknown", and every token is then refused: a service that cannot tell a
+logged-out session from a live one does not guess. Both languages are tested the same way.
+- a logout lands at the next re-read and not before;
+- one list read serves every verification within an interval;
+- an outage is tolerated up to the staleness limit and refused past it;
+- the service recovers when picasso-auth answers again.
+
+Removing the revocation check, or the staleness check, fails those tests. In the Go suite,
+the contract test fails too.
 
 ## The browser check
 
@@ -98,7 +121,9 @@ anywhere: the stand-in provider, this service, and the collaboration server with
 - a second user, signed in with a hardware key, syncs the same canvas;
 - a password alone is refused in a tenant that holds positions, and the page says why;
 - `?user=pm`, a typed name, is refused;
-- logout ends the session.
+- logout ends the session;
+- the token read from the browser's cookie store before logout, still unexpired, is refused
+  by the collaboration server afterwards.
 
 ## What is not covered
 
@@ -106,9 +131,10 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   OIDC this uses, and approves whoever `login_hint` names with no password. Nothing here has
   met Okta, Entra or Google, and none can be reached from here. The first real sign-in is
   the first test of that.
-- **Logout is this service's.** It ends the session here, but the data plane, the gateway and
-  the collaboration server check signatures, not a revocation list. A logged-out token keeps
-  working there for the rest of its fifteen minutes.
+- **Logout takes up to five seconds to reach a service**, and does not close a connection
+  already open: a collaboration WebSocket or a data plane stream started before it carries
+  on. The revocation list is public, like the key set. Its session ids are random and already
+  unusable, but it does show how many people logged out in the last quarter-hour.
 - **Sessions are in memory.** A restart ends every session's revocation record, and, without
   `--key`, every session.
 - **Sign-ins are not audited.** The data plane and the gateway write PRD 7.2's records for

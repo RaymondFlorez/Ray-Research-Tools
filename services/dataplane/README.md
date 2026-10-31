@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 37 tests, two of them need Postgres
+go test -race ./...                                    # 38 tests, two of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -193,8 +193,10 @@ with a SYNTHETIC position:
   published key, from the `Authorization` header or the session cookie. The token says who,
   and entitlements still come from the users file. `-dev-identity` also accepts a typed name
   in `X-Picasso-User` when no token is sent. It is off unless asked for, and the binary refuses
-  to start with neither it nor `-auth-url`. A logged-out token keeps working here until it
-  expires, up to fifteen minutes, because nothing checks revocation.
+  to start with neither it nor `-auth-url`. A logged-out session is refused within five
+  seconds, the interval at which picasso-auth's revocation list is re-read. If the list cannot
+  be read for thirty seconds, every token is refused (`identity` in this module). An open
+  `/v1/stream` is not cut off at logout.
 - **The binary does not drop its own privileges.** It writes the trail as whatever role `-pg`
   names, and in development that is the schema's owner, which could drop the triggers.
   `audit.GrantService` makes a role insert-only, and an operator has to run it and connect as

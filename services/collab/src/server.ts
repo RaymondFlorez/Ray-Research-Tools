@@ -27,7 +27,7 @@
 import { Server, type Extension, type onRequestPayload } from '@hocuspocus/server';
 import type pg from 'pg';
 import type { IncomingHttpHeaders } from 'node:http';
-import { SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
+import { RevocationList, SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
 import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
@@ -53,6 +53,8 @@ export interface CollabOptions {
   snapshotEveryMs?: number;
   /** Quiet time after which a canvas is snapshotted. */
   idleMs?: number;
+  /** How often picasso-auth's list of logged-out sessions is re-read; @picasso/auth's default otherwise. */
+  revocationRefreshMs?: number;
 }
 
 interface Context {
@@ -103,6 +105,9 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
   if (!o.authUrl && !o.devIdentity) throw new Error('authUrl is required: callers are identified by picasso-auth\'s session tokens (or devIdentity, for development)');
   const authBase = o.authUrl?.replace(/\/$/, '');
   const keys = authBase ? createRemoteJWKSet(new URL(`${authBase}/.well-known/jwks.json`)) : undefined;
+  const revocations = authBase
+    ? new RevocationList(`${authBase}/auth/revoked`, o.revocationRefreshMs !== undefined ? { refreshMs: o.revocationRefreshMs } : {})
+    : undefined;
 
   /**
    * Who is asking: a verified session token — the provider's token, the
@@ -110,8 +115,8 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
    * or, only with devIdentity and no token, a user's name.
    */
   const identify = async (token: string | undefined, devName: string | undefined): Promise<{ user: string; tenant?: string }> => {
-    if (token && token.split('.').length === 3 && keys && authBase) {
-      const v = await verifySessionToken(token, keys, { issuer: authBase });
+    if (token && token.split('.').length === 3 && keys && authBase && revocations) {
+      const v = await verifySessionToken(token, keys, { issuer: authBase, revoked: await revocations.current() });
       if (!v.ok) throw new Error(`session: ${v.reason}: ${v.message}`);
       return { user: v.session.user, tenant: v.session.tenant };
     }

@@ -223,12 +223,13 @@ suite('picasso-collab', () => {
   it('without devIdentity, only picasso-auth\'s session token opens a canvas', async () => {
     // picasso-auth's issuer, with its key set served where the collab server will look.
     let jwks: unknown;
-    const keyServer = createServer((_req, res) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(jwks)));
+    const keyServer = createServer((req, res) =>
+      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(req.url === '/auth/revoked' ? { sids: issuer.revoked() } : jwks)));
     await new Promise<void>((r) => keyServer.listen(0, '127.0.0.1', () => r()));
     const authUrl = `http://127.0.0.1:${(keyServer.address() as { port: number }).port}`;
     const issuer = await SessionIssuer.create({ issuer: authUrl, tenants: { acme: { holdsPositions: true }, globex: { holdsPositions: false } } });
     jwks = issuer.jwks();
-    const c = await startCollab({ pool, schema, users, authUrl, idleMs: 300, snapshotEveryMs: 1_000 });
+    const c = await startCollab({ pool, schema, users, authUrl, idleMs: 300, snapshotEveryMs: 1_000, revocationRefreshMs: 200 });
     servers.push(c);
     const token = async (user: string, tenant: string) => (await issuer.mint(user, tenant, { authTime: Date.now(), amr: ['pwd', 'otp'] })).token;
 
@@ -242,8 +243,14 @@ suite('picasso-collab', () => {
     expect(elsewhere.failed).toBeDefined();
     const res = await fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { 'X-Picasso-User': 'pm' } });
     expect(res.status).toBe(403);
-    const ok = await fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { authorization: `Bearer ${await token('pm', 'acme')}` } });
-    expect(ok.status).toBe(200);
+    const live = await issuer.mint('pm', 'acme', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const session = () => fetch(`${c.server.httpURL}/v1/session`, { method: 'POST', headers: { authorization: `Bearer ${live.token}` } });
+    expect((await session()).status).toBe(200);
+    // Logged out at picasso-auth: the same, unexpired token is refused here once the list is re-read.
+    issuer.end(live.session.sid);
+    await new Promise((r) => setTimeout(r, 250));
+    expect((await session()).status).toBe(403);
+    expect((await open(c, 'acme/tokens', live.token)).failed).toBeDefined();
     keyServer.close();
   });
 });

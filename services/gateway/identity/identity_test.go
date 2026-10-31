@@ -14,9 +14,10 @@ type contract struct {
 	Issuer string             `json:"issuer"`
 	JWKS   jose.JSONWebKeySet `json:"jwks"`
 	Cases  []struct {
-		Name     string `json:"name"`
-		Token    string `json:"token"`
-		Now      int64  `json:"now"`
+		Name     string   `json:"name"`
+		Token    string   `json:"token"`
+		Now      int64    `json:"now"`
+		Revoked  []string `json:"revoked"`
 		Expected struct {
 			OK     bool   `json:"ok"`
 			User   string `json:"user"`
@@ -41,6 +42,7 @@ func TestVerdictsMatchTheTypeScriptVerifier(t *testing.T) {
 	}
 	for _, tc := range c.Cases {
 		v := Static(c.Issuer, c.JWKS)
+		v.Revoke(tc.Revoked...)
 		now := time.Unix(tc.Now, 0)
 		v.Now = func() time.Time { return now }
 		s, refusal := v.Verify(context.Background(), tc.Token)

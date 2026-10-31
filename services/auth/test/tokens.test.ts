@@ -5,6 +5,9 @@
  * tests read the same file and must reach the same verdicts.
  * `UPDATE_TOKENS=1` rewrites it, which is a change to the contract.
  *
+ * A case may name the sessions logged out when it is presented (`revoked`):
+ * what a service read from picasso-auth's /auth/revoked.
+ *
  * The keys below are FIXTURES: they sign nothing but these tokens.
  */
 
@@ -38,7 +41,7 @@ async function cases() {
   const [h, p, s] = valid.split('.');
   const tampered = [h, Buffer.from(JSON.stringify({ ...JSON.parse(Buffer.from(p!, 'base64url').toString()), sub: 'admin' })).toString('base64url'), s].join('.');
   const none = [Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url'), p, ''].join('.');
-  const raw: Array<{ name: string; token: string; now: number }> = [
+  const raw: Array<{ name: string; token: string; now: number; revoked?: string[] }> = [
     { name: 'valid, a minute in', token: valid, now: T + 60 },
     { name: 'valid, at the last second of leeway', token: valid, now: T + 900 + 29 },
     { name: 'expired, past the leeway', token: valid, now: T + 900 + 31 },
@@ -50,11 +53,14 @@ async function cases() {
     { name: 'payload altered after signing', token: tampered, now: T + 60 },
     { name: 'alg none', token: none, now: T + 60 },
     { name: 'no tenant', token: await sign(KEYS.fixture, { tenant: undefined }), now: T + 60 },
+    { name: 'logged out', token: valid, now: T + 60, revoked: ['sid-fixture'] },
+    { name: 'another session logged out', token: valid, now: T + 60, revoked: ['sid-other'] },
+    { name: 'logged out, and expired', token: valid, now: T + 900 + 31, revoked: ['sid-fixture'] },
   ];
   const key = (await importJWK(publicOf(KEYS.fixture), 'EdDSA')) as CryptoKey;
   const out = [];
   for (const c of raw) {
-    const v = await verifySessionToken(c.token, key, { issuer: ISSUER, now: c.now * 1000 });
+    const v = await verifySessionToken(c.token, key, { issuer: ISSUER, now: c.now * 1000, revoked: new Set(c.revoked ?? []) });
     out.push({ ...c, expected: v.ok ? { ok: true, user: v.session.user, tenant: v.session.tenant } : { ok: false, reason: v.reason } });
   }
   return out;
@@ -70,7 +76,7 @@ describe('the session-token contract with the Go services', () => {
 
   it('refuses everything but the valid token', async () => {
     const c = await cases();
-    expect(c.filter((x) => x.expected.ok).map((x) => x.name)).toEqual(['valid, a minute in', 'valid, at the last second of leeway']);
+    expect(c.filter((x) => x.expected.ok).map((x) => x.name)).toEqual(['valid, a minute in', 'valid, at the last second of leeway', 'another session logged out']);
     expect(Object.fromEntries(c.filter((x) => !x.expected.ok).map((x) => [x.name, (x.expected as { reason: string }).reason]))).toEqual({
       'expired, past the leeway': 'expired',
       'issued in the future, past the leeway': 'not_yet_valid',
@@ -81,6 +87,8 @@ describe('the session-token contract with the Go services', () => {
       'payload altered after signing': 'invalid_signature',
       'alg none': 'unsupported_alg',
       'no tenant': 'malformed',
+      'logged out': 'revoked',
+      'logged out, and expired': 'expired',
     });
   });
 });

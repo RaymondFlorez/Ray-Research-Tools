@@ -45,8 +45,17 @@ export interface IssuerOptions {
   now?: () => number;
 }
 
+/**
+ * How long a logged-out session stays on the revocation list: as long as any
+ * token it was issued could still be accepted somewhere. A token lives fifteen
+ * minutes from when it was minted, which is at or before the logout, and a
+ * verifier allows thirty seconds of skew either way.
+ */
+export const REVOKED_FOR_MS = SESSION_TTL_MS + 2 * 30_000;
+
 export class SessionIssuer {
-  private readonly ended = new Set<string>();
+  /** Logged-out sessions, and when each may leave the list. */
+  private readonly ended = new Map<string, number>();
   private readonly now: () => number;
 
   private constructor(
@@ -137,8 +146,19 @@ export class SessionIssuer {
     return { token: await this.sign(next), session: next, refreshAt: decision.refreshAt };
   }
 
-  /** Logout: this issuer refuses the session from now on. */
+  /** Logout: this issuer refuses the session from now on, and lists it for the services. */
   end(sid: string): void {
-    this.ended.add(sid);
+    this.ended.set(sid, this.now() + REVOKED_FOR_MS);
+  }
+
+  /**
+   * The sessions every service must refuse, published at /auth/revoked. A
+   * session leaves the list once no token of its own can verify anywhere:
+   * after that, refusing it is the expiry check's job, here as everywhere.
+   */
+  revoked(): string[] {
+    const now = this.now();
+    for (const [sid, until] of this.ended) if (until <= now) this.ended.delete(sid);
+    return [...this.ended.keys()];
   }
 }

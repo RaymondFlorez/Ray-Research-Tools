@@ -86,7 +86,9 @@ says what was measured.
   header, or the session cookie a browser sends with its WebSocket, and is verified with
   `@picasso/auth`'s own verifier. A token whose tenant is not the user's is refused.
   `--dev-identity` accepts a user's name instead, for development; it is off unless asked for.
-  A logged-out token works here until it expires.
+  A logged-out session is refused within five seconds, from picasso-auth's revocation list.
+  A WebSocket that is already open stays open, though: Hocuspocus authenticates a
+  connection when it opens, and nothing here closes one at logout.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
 - **No retention job.** The database permits deleting rows older than ninety days; nothing

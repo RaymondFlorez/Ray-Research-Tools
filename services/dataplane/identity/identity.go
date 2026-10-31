@@ -11,6 +11,11 @@
 // one algorithm, EdDSA, and nothing else accepted; the issuer and the
 // audience; and the fifteen-minute ceiling, checked on the token rather than
 // assumed of the issuer.
+//
+// Logout reaches this service through the list of ended sessions
+// picasso-auth publishes at /auth/revoked, re-read at most every
+// RevocationRefresh. A verifier that has not read it for RevocationMaxStale
+// refuses every token: it cannot tell a logged-out session from a live one.
 package identity
 
 import (
@@ -36,6 +41,13 @@ const Leeway = 30 * time.Second
 
 // MaxLifetime is PRD 7.2's fifteen minutes.
 const MaxLifetime = 15 * time.Minute
+
+// RevocationRefresh is how often the list of logged-out sessions is re-read,
+// and so how long a logout can take to reach this service.
+const RevocationRefresh = 5 * time.Second
+
+// RevocationMaxStale is how old the list may get before every token is refused.
+const RevocationMaxStale = 30 * time.Second
 
 // Cookie is where a browser carries the token; a WebSocket cannot set a header.
 const Cookie = "picasso_session"
@@ -63,23 +75,94 @@ func refuse(reason, format string, args ...any) *Refusal {
 type Verifier struct {
 	Issuer  string
 	JWKSURL string
-	Client  *http.Client
-	Now     func() time.Time
+	// RevokedURL is picasso-auth's list of logged-out sessions. Empty for a
+	// static verifier, whose list is only what Revoke adds.
+	RevokedURL string
+	Client     *http.Client
+	Now        func() time.Time
 
 	mu      sync.Mutex
 	keys    jose.JSONWebKeySet
 	fetched time.Time
+
+	revMu      sync.Mutex
+	revoked    map[string]bool
+	revRead    time.Time // the last successful read
+	revAttempt time.Time
 }
 
 // Static is a verifier over a key set that never changes.
 func Static(issuer string, keys jose.JSONWebKeySet) *Verifier {
-	return &Verifier{Issuer: issuer, keys: keys, fetched: time.Now()}
+	return &Verifier{Issuer: issuer, keys: keys, fetched: time.Now(), revoked: map[string]bool{}}
 }
 
-// Remote is a verifier that reads picasso-auth's published keys.
+// Remote is a verifier that reads picasso-auth's published keys and its list
+// of logged-out sessions.
 func Remote(authURL string) *Verifier {
 	base := strings.TrimRight(authURL, "/")
-	return &Verifier{Issuer: base, JWKSURL: base + "/.well-known/jwks.json", Client: &http.Client{Timeout: 10 * time.Second}}
+	return &Verifier{Issuer: base, JWKSURL: base + "/.well-known/jwks.json", RevokedURL: base + "/auth/revoked", Client: &http.Client{Timeout: 10 * time.Second}}
+}
+
+// Revoke adds sessions to a static verifier's list.
+func (v *Verifier) Revoke(sids ...string) {
+	v.revMu.Lock()
+	defer v.revMu.Unlock()
+	if v.revoked == nil {
+		v.revoked = map[string]bool{}
+	}
+	for _, s := range sids {
+		v.revoked[s] = true
+	}
+}
+
+// revocation decides whether a session was logged out, re-reading the list
+// when it is older than RevocationRefresh, and refusing when no read has
+// succeeded within RevocationMaxStale.
+func (v *Verifier) revocation(ctx context.Context, sid string) *Refusal {
+	v.revMu.Lock()
+	defer v.revMu.Unlock()
+	if v.RevokedURL != "" {
+		now := v.now()
+		if now.Sub(v.revAttempt) >= RevocationRefresh {
+			v.revAttempt = now
+			if sids, err := v.readRevoked(ctx); err == nil {
+				v.revoked, v.revRead = sids, v.now()
+			}
+		}
+		if v.revRead.IsZero() || v.now().Sub(v.revRead) > RevocationMaxStale {
+			return refuse("revocation_unknown", "this service cannot reach picasso-auth's list of logged-out sessions")
+		}
+	}
+	if v.revoked[sid] {
+		return refuse("revoked", "this session was logged out")
+	}
+	return nil
+}
+
+func (v *Verifier) readRevoked(ctx context.Context) (map[string]bool, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, v.RevokedURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := v.Client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	var body struct {
+		SIDs []string `json:"sids"`
+	}
+	raw, _ := io.ReadAll(io.LimitReader(res.Body, 4<<20))
+	if res.StatusCode != http.StatusOK || json.Unmarshal(raw, &body) != nil || body.SIDs == nil {
+		return nil, fmt.Errorf("picasso-auth's revocation list: %s", res.Status)
+	}
+	out := make(map[string]bool, len(body.SIDs))
+	for _, s := range body.SIDs {
+		out[s] = true
+	}
+	return out, nil
 }
 
 func (v *Verifier) now() time.Time {
@@ -167,6 +250,9 @@ func (v *Verifier) Verify(ctx context.Context, token string) (Session, *Refusal)
 	}
 	if life := std.Expiry.Time().Sub(std.IssuedAt.Time()); life > MaxLifetime {
 		return Session{}, refuse("lifetime_too_long", "the token lives %d minutes against a limit of 15", int(life.Minutes()))
+	}
+	if r := v.revocation(ctx, p.SID); r != nil {
+		return Session{}, r
 	}
 	return Session{User: std.Subject, Tenant: p.Tenant, SID: p.SID, Expires: std.Expiry.Time()}, nil
 }

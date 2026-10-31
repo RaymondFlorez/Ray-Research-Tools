@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 21 tests; one live and one on Postgres, skipped by default
+go test -race ./...                       # 22 tests; one live and one on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
@@ -102,7 +102,8 @@ Anthropic's API is the one provider host this environment reaches. Measured:
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
   No sampling parameters are sent, since current Claude models reject them.
 - **Identity is picasso-auth's session token**, as at the data plane, with the same
-  `-dev-identity` escape for development. A logged-out token works here until it expires.
+  `-dev-identity` escape for development, and the same revocation list: a logged-out session
+  is refused within five seconds.
 - **No revocation upstream.** Disconnecting deletes the gateway's copy; the key stays valid with
   the provider until the user revokes it there.
 - **The vault key is one key.** No rotation, no KMS. The per-user dispatch log is in memory. The

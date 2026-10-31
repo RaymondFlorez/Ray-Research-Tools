@@ -2,7 +2,8 @@ import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Oidc } from '../src/oidc.js';
 import { SESSION_COOKIE, startAuth } from '../src/server.js';
-import { AUDIENCE, SessionIssuer } from '../src/sessions.js';
+import { AUDIENCE, REVOKED_FOR_MS, SessionIssuer } from '../src/sessions.js';
+import { REVOCATION_MAX_STALE_MS, REVOCATION_REFRESH_MS, RevocationList } from '../src/verify.js';
 import { startStandIn, type StandInOptions } from '../src/standin.js';
 
 const CLIENT = 'picasso-web';
@@ -120,6 +121,68 @@ describe('signing in', () => {
     b.jar.set(SESSION_COOKIE, token);
     expect(await (await b.go(`${s.url}/auth/me`)).json()).toMatchObject({ signedIn: false });
     expect((await b.go(`${s.url}/auth/refresh`, { method: 'POST' })).status).toBe(401);
+  });
+
+  it('publishes a logged-out session for the services, and only that one', async () => {
+    const [out, stays] = [new Browser(), new Browser()];
+    await out.signIn(s.url, 'pm');
+    await stays.signIn(s.url, 'pm');
+    const sidOf = (b: Browser) => JSON.parse(Buffer.from(b.jar.get(SESSION_COOKIE)!.split('.')[1]!, 'base64url').toString()).sid as string;
+    const [gone, live] = [sidOf(out), sidOf(stays)];
+    await out.go(`${s.url}/auth/logout`, { method: 'POST' });
+    const { sids } = (await (await fetch(`${s.url}/auth/revoked`)).json()) as { sids: string[] };
+    expect(sids).toContain(gone);
+    expect(sids).not.toContain(live);
+  });
+});
+
+describe('the revocation list', () => {
+  it('keeps a session only while one of its tokens could still verify', async () => {
+    let now = 1_793_000_000_000;
+    const issuer = await SessionIssuer.create({ issuer: 'https://picasso.example', tenants, now: () => now });
+    const { session } = await issuer.mint('pm', 'desk', { authTime: now, amr: ['pwd', 'otp'] });
+    issuer.end(session.sid);
+    now += REVOKED_FOR_MS - 1;
+    expect(issuer.revoked()).toEqual([session.sid]);
+    now += 1;
+    expect(issuer.revoked()).toEqual([]);
+    // By then the last token minted before the logout is past its expiry and the verifiers' leeway.
+    expect(now).toBeGreaterThan(session.exp + 30_000);
+  });
+
+  it('reaches a service within one refresh, and goes unknown when picasso-auth does not answer', async () => {
+    let now = 0;
+    let sids: string[] = [];
+    let down = false;
+    let reads = 0;
+    const fetcher = (async () => {
+      reads += 1;
+      if (down) throw new Error('connection refused');
+      return new Response(JSON.stringify({ sids }), { status: 200 });
+    }) as typeof fetch;
+    const list = new RevocationList('http://auth/auth/revoked', { fetch: fetcher, now: () => now });
+    const [first, second] = await Promise.all([list.current(), list.current()]);
+    expect(first).toEqual(new Set());
+    expect(second).toEqual(new Set());
+    expect(reads).toBe(1);
+    sids = ['sid-a'];
+    now = REVOCATION_REFRESH_MS - 1;
+    expect(await list.current()).toEqual(new Set());
+    now = REVOCATION_REFRESH_MS;
+    expect(await list.current()).toEqual(new Set(['sid-a']));
+    down = true;
+    now += REVOCATION_MAX_STALE_MS;
+    expect(await list.current()).toEqual(new Set(['sid-a']));
+    now += 1;
+    expect(await list.current()).toBe('unknown');
+    down = false;
+    now += REVOCATION_REFRESH_MS;
+    expect(await list.current()).toEqual(new Set(['sid-a']));
+  });
+
+  it('is unknown before it has ever been read', async () => {
+    const list = new RevocationList('http://auth/auth/revoked', { fetch: (async () => new Response('nope', { status: 502 })) as typeof fetch });
+    expect(await list.current()).toBe('unknown');
   });
 });
 

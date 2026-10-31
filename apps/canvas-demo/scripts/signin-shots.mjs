@@ -137,12 +137,20 @@ try {
   // That page's own refusals (403 on its session request) are expected; drop them.
   errors.splice(typedErrors);
 
-  // 6. Logout ends it.
+  // 6. Logout ends it, here and at the other services. The token is read the
+  // way a thief would have to: from the browser's cookie store, not the page.
+  const stolen = (await pm.context().cookies()).find((c) => c.name === 'picasso_session')?.value;
+  const atCollab = (token) => fetch(`http://127.0.0.1:${COLLAB_PORT}/v1/session`, { method: 'POST', headers: { authorization: `Bearer ${token}` } }).then((r) => r.status);
+  const before = stolen ? await atCollab(stolen) : 0;
   await pm.click('#logout');
   await pm.waitForFunction(() => window.__shared.state() === 'signed-out');
   await pm.reload();
   await pm.waitForFunction(() => window.__shared?.state() === 'signed-out');
   check('logout ends the session: a reload is signed out', (await pm.isVisible('#signin')));
+  // The collaboration server re-reads picasso-auth's revocation list every 5 seconds.
+  await new Promise((r) => setTimeout(r, 5_500));
+  const after = stolen ? await atCollab(stolen) : 0;
+  check('and the collaboration server refuses the logged-out session\'s unexpired token', before === 200 && after === 403, `${before} before logout, ${after} after`);
 
   check('no console errors', errors.length === 0, errors.join(' | '));
   await browser.close();

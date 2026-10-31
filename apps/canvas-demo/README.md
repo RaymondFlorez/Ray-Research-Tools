@@ -236,9 +236,10 @@ it expires. `?user=` remains the development path, and works only against server
 with `--dev-identity`.
 
 `scripts/signin-shots.mjs` runs a stand-in OpenID provider, picasso-auth and the collaboration
-server, none with a development identity. It checks eight things: the sign-in, the HttpOnly
-cookie, two users on one canvas, the MFA refusal, a typed name refused, logout, and no
-console errors. If the sign-in service is unreachable, the page says so instead of throwing,
+server, none with a development identity. It checks nine things: the sign-in, the HttpOnly
+cookie, two users on one canvas, the MFA refusal, a typed name refused, logout, the
+collaboration server refusing the logged-out session's unexpired token, and no console
+errors. If the sign-in service is unreachable, the page says so instead of throwing,
 which the CSP check, run with no services, depends on.
 
 ## Models

@@ -7,6 +7,7 @@
  *   POST /auth/refresh                            → a fresh token for a live session
  *   POST /auth/logout
  *   GET  /auth/me
+ *   GET  /auth/revoked                            → sessions logged out, for the services
  *   GET  /.well-known/jwks.json
  *
  * Three rules beyond the OIDC flow itself:
@@ -86,6 +87,11 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
     const url = new URL(req.url ?? '/', 'http://auth');
     if (req.method === 'GET' && url.pathname === '/.well-known/jwks.json') {
       json(res, 200, options.issuer.jwks());
+      return;
+    }
+    if (req.method === 'GET' && url.pathname === '/auth/revoked') {
+      // Public, like the key set: a session id on this list is one nobody can use.
+      json(res, 200, { sids: options.issuer.revoked() });
       return;
     }
     if (req.method === 'GET' && url.pathname === '/auth/login') {
