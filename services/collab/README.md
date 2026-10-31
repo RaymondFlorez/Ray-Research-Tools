@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 9 tests; they skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 10 tests; they skip without a database
 node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -45,6 +45,30 @@ snapshots and no idle one while editing, then one idle snapshot after, in five o
   row and is refused on a fresh one.
 - **A version is immutable.** No `UPDATE`, `DELETE` or `TRUNCATE`, and a second "pre-CPI" on
   one canvas is a 409, not a replacement.
+
+## Retention
+
+PRD 3.9 keeps the full update log for ninety days. The server runs a retention job a minute
+after it starts, then every six hours (`--retention-hours`, 0 for never). It removes what the
+ninety days no longer require, without changing what any canvas opens to. A canvas opens to
+its latest snapshot plus every update after it. So:
+- an update goes once it is past ninety days **and** the latest snapshot includes it;
+- a snapshot goes once it is past ninety days **and** is not the latest;
+- a canvas with old updates its latest snapshot does not include is snapshotted from the log
+  first, so they become removable on the same run.
+
+Both conditions are in the `DELETE` statements themselves, and the database's triggers still
+refuse anything younger than ninety days. Named versions are never touched.
+
+The test builds three canvases from real Yjs updates, dated in the past:
+- one with old and recent updates, an old snapshot and an older one;
+- one whose old updates were never snapshotted;
+- one with only recent updates.
+
+It runs the deleting step alone first, which leaves the never-snapshotted canvas's updates
+where they are, then the whole job. Each canvas opens to the same content before and after,
+and a second run changes nothing. Removing either condition from its `DELETE` fails the
+test: six updates go instead of three, or two snapshots instead of one.
 
 ## Rules the server holds
 
@@ -91,7 +115,9 @@ says what was measured.
   connection when it opens, and nothing here closes one at logout.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
-- **No retention job.** The database permits deleting rows older than ninety days; nothing
-  does it yet.
+- **The update log's history is not kept past ninety days.** After the job runs, an old
+  canvas cannot be replayed edit by edit before that, only opened as its snapshot. Named
+  versions are what is meant to keep a past state for good. The `sessions` table has no
+  retention at all.
 - **Presence is Hocuspocus's awareness, unthrottled here.** canvas-sync's 20Hz cursor throttle
   runs in the client.

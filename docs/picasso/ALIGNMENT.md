@@ -65,7 +65,7 @@ run (GitHub Actions run 37340683867) passed all three jobs.
 | 3.7 hypothesis builder | Built | `canvas-hypothesis`; `HypothesisLedger` keeps the record and re-resolves on each observation (`hypothesis-ledger.test.ts`); the durable store is Infra (3.9) |
 | 3.8 interaction model (pan momentum, palette, frame, search, time scrub) | Built | `canvas-core` viewport/search/frame, `canvas-data` timescrub |
 | 3.9 named versions, templates | Built | `canvas-sync` snapshot, `canvas-core` template |
-| 3.9 Postgres snapshots every 30s | Built | `services/collab`: Hocuspocus, every update logged (90-day retention held by the database), snapshots at most 30s apart while editing and on idle, immutable named versions with the dataset snapshot ids read from the canvas; tested against Postgres with real clients, and two browsers through it in `shared-shots.mjs` |
+| 3.9 Postgres snapshots every 30s | Built | `services/collab`: Hocuspocus, every update logged (90-day retention held by the database, and a retention job that removes only what no canvas needs to open), snapshots at most 30s apart while editing and on idle, immutable named versions with the dataset snapshot ids read from the canvas; tested against Postgres with real clients, and two browsers through it in `shared-shots.mjs` |
 
 **Node kinds (3.3).** Built: DataTile and ChartNode (`canvas-render` scene, chart; the fact
 tile and the series chart evaluate at the canvas's time through the Go data plane);

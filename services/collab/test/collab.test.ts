@@ -13,7 +13,7 @@ import * as Y from 'yjs';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import { SessionIssuer } from '@picasso/auth';
-import { migrate } from '../src/store.js';
+import { CanvasStore, migrate } from '../src/store.js';
 import { startCollab, type Collab } from '../src/server.js';
 
 const URL_ = process.env.COLLAB_PG_URL ?? process.env.DATAPLANE_PG_URL;
@@ -199,6 +199,60 @@ suite('picasso-collab', () => {
     await pool.query(`INSERT INTO ${schema}.updates (doc, author, at, body) VALUES ('acme/old', 'pm', now() - interval '91 days', '\\x00')`);
     const removed = await pool.query(`DELETE FROM ${schema}.updates WHERE doc = 'acme/old'`);
     expect(removed.rowCount).toBe(1);
+  });
+
+  it('the retention job removes what ninety days no longer require, and every canvas opens the same', async () => {
+    const store = new CanvasStore(pool, schema);
+    // Real Yjs updates, one per edit, as a client sends them.
+    const edits = (doc: string, n: number) => {
+      const y = new Y.Doc();
+      const out: Uint8Array[] = [];
+      y.on('update', (u: Uint8Array) => out.push(u));
+      for (let i = 0; i < n; i += 1) y.getMap('nodes').set(`${doc}-${i}`, i);
+      return { y, out };
+    };
+    const put = async (doc: string, body: Uint8Array, daysAgo: number) =>
+      Number((await pool.query<{ seq: string }>(`INSERT INTO ${schema}.updates (doc, author, at, body) VALUES ($1, 'pm', now() - make_interval(days => $2), $3) RETURNING seq`, [doc, daysAgo, Buffer.from(body)])).rows[0]!.seq);
+    const snap = async (doc: string, state: Uint8Array, through: number, daysAgo: number) =>
+      pool.query(`INSERT INTO ${schema}.snapshots (doc, at, through_update, reason, state) VALUES ($1, now() - make_interval(days => $2), $3, 'test', $4)`, [doc, daysAgo, through, Buffer.from(state)]);
+    const opened = async (doc: string) => {
+      const y = new Y.Doc();
+      Y.applyUpdate(y, (await store.load(doc)).state!);
+      return y.getMap('nodes').toJSON();
+    };
+
+    // A: five updates, three past ninety days; an old snapshot through the
+    // second, the latest (also old) through the third.
+    const a = edits('acme/ret-a', 5);
+    const seqA = [];
+    for (const [i, u] of a.out.entries()) seqA.push(await put('acme/ret-a', u, i < 3 ? 100 : 10));
+    const partial = new Y.Doc();
+    Y.applyUpdate(partial, a.out[0]!);
+    Y.applyUpdate(partial, a.out[1]!);
+    await snap('acme/ret-a', Y.encodeStateAsUpdate(partial), seqA[1]!, 95);
+    Y.applyUpdate(partial, a.out[2]!);
+    await snap('acme/ret-a', Y.encodeStateAsUpdate(partial), seqA[2]!, 91);
+    // B: three updates, all past ninety days, never snapshotted.
+    const b = edits('acme/ret-b', 3);
+    for (const u of b.out) await put('acme/ret-b', u, 120);
+    // C: recent only.
+    const c = edits('acme/ret-c', 2);
+    for (const u of c.out) await put('acme/ret-c', u, 1);
+
+    const before = { a: await opened('acme/ret-a'), b: await opened('acme/ret-b'), c: await opened('acme/ret-c') };
+    expect(before.a).toEqual(a.y.getMap('nodes').toJSON());
+    // Deleting alone takes nothing B needs: no snapshot includes its updates yet.
+    expect(await store.prune()).toEqual({ updates: 3, snapshots: 1 });
+    expect(await store.counts('acme/ret-b')).toMatchObject({ updates: 3, snapshots: 0 });
+    expect({ a: await opened('acme/ret-a'), b: await opened('acme/ret-b'), c: await opened('acme/ret-c') }).toEqual(before);
+    const r = await store.retain();
+    expect(r).toEqual({ snapshotted: 1, updates: 3, snapshots: 0 });
+    expect({ a: await opened('acme/ret-a'), b: await opened('acme/ret-b'), c: await opened('acme/ret-c') }).toEqual(before);
+    expect(await store.counts('acme/ret-a')).toMatchObject({ updates: 2, snapshots: 1 });
+    expect(await store.counts('acme/ret-b')).toMatchObject({ updates: 0, snapshots: 1 });
+    expect(await store.counts('acme/ret-c')).toMatchObject({ updates: 2, snapshots: 0 });
+    // Nothing left to do: a second run changes nothing.
+    expect(await store.retain()).toEqual({ snapshotted: 0, updates: 0, snapshots: 0 });
   });
 
   it('hands every tab of a session the same secret, and never an ended session\'s', async () => {

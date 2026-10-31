@@ -227,6 +227,61 @@ export class CanvasStore {
     return (r.rowCount ?? 0) > 0;
   }
 
+  /**
+   * The retention job: removes what the ninety days no longer require,
+   * without changing what any canvas opens to.
+   *
+   * A canvas opens to its latest snapshot plus every update after it. So an
+   * update may go only once it is past ninety days and the latest snapshot
+   * includes it, and a snapshot only once it is past ninety days and is not
+   * the latest. Both conditions are in the DELETE statements, not checked
+   * beforehand, and the triggers still refuse anything younger than ninety
+   * days. A canvas with old updates its latest snapshot does not include is
+   * snapshotted first, from the log, so they become removable.
+   */
+  async retain(): Promise<{ snapshotted: number; updates: number; snapshots: number }> {
+    const behind = await this.pool.query<{ doc: string }>(
+      `SELECT DISTINCT u.doc FROM ${this.schema}.updates u
+        WHERE u.at < now() - interval '90 days'
+          AND u.seq > COALESCE((SELECT s.through_update FROM ${this.schema}.snapshots s WHERE s.doc = u.doc ORDER BY s.seq DESC LIMIT 1), 0)`,
+    );
+    for (const { doc } of behind.rows) {
+      const { state, throughUpdate } = await this.load(doc);
+      if (state) await this.snapshot(doc, state, throughUpdate, 'retention');
+    }
+    return { snapshotted: behind.rows.length, ...(await this.prune()) };
+  }
+
+  /**
+   * The deleting half of `retain`, on its own: what is past ninety days and
+   * not needed to open any canvas as it stands. Safe to run at any moment,
+   * since the conditions are read in the statements that delete.
+   */
+  async prune(): Promise<{ updates: number; snapshots: number }> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
+      const latest = `(SELECT s.seq, s.through_update FROM ${this.schema}.snapshots s WHERE s.doc = %DOC% ORDER BY s.seq DESC LIMIT 1)`;
+      const updates = await client.query(
+        `DELETE FROM ${this.schema}.updates u
+          WHERE u.at < now() - interval '90 days'
+            AND u.seq <= (SELECT l.through_update FROM ${latest.replace('%DOC%', 'u.doc')} l)`,
+      );
+      const snapshots = await client.query(
+        `DELETE FROM ${this.schema}.snapshots x
+          WHERE x.at < now() - interval '90 days'
+            AND x.seq <> (SELECT l.seq FROM ${latest.replace('%DOC%', 'x.doc')} l)`,
+      );
+      await client.query('COMMIT');
+      return { updates: updates.rowCount ?? 0, snapshots: snapshots.rowCount ?? 0 };
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   /** Counts, for health and for tests. */
   async counts(doc: string): Promise<{ updates: number; snapshots: number; versions: number }> {
     const r = await this.pool.query<{ u: string; s: string; v: string }>(

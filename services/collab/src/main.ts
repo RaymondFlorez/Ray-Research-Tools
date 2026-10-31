@@ -26,6 +26,7 @@ const { values } = parseArgs({
     address: { type: 'string', default: '127.0.0.1' },
     'auth-url': { type: 'string' },
     'dev-identity': { type: 'boolean', default: false },
+    'retention-hours': { type: 'string', default: '6' },
   },
 });
 if (!values.pg || !values.users) {
@@ -38,6 +39,7 @@ if (values.migrate) await migrate(pool, values.schema);
 const collab = await startCollab({
   pool, schema: values.schema, users, port: Number(values.port), address: values.address,
   ...(values['auth-url'] ? { authUrl: values['auth-url'] } : {}), devIdentity: values['dev-identity'],
+  retentionEveryMs: Number(values['retention-hours']) * 3_600_000,
 });
 console.error(`picasso-collab listening on ${collab.url}`);
 const stop = async () => {

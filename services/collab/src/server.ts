@@ -55,6 +55,12 @@ export interface CollabOptions {
   idleMs?: number;
   /** How often picasso-auth's list of logged-out sessions is re-read; @picasso/auth's default otherwise. */
   revocationRefreshMs?: number;
+  /**
+   * How often the retention job runs (`CanvasStore.retain`): six hours by
+   * default, the first run a minute after start so a server restarted more
+   * often still runs it. 0 turns it off.
+   */
+  retentionEveryMs?: number;
 }
 
 interface Context {
@@ -259,11 +265,27 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     extensions: [persistence],
   });
   await server.listen();
+  const retentionEveryMs = o.retentionEveryMs ?? 6 * 3_600_000;
+  const retain = () =>
+    store.retain().then(
+      (r) => (r.updates || r.snapshots ? console.error(`retention: ${r.updates} updates and ${r.snapshots} snapshots past ninety days removed, ${r.snapshotted} canvases snapshotted first`) : undefined),
+      (err) => console.error(`retention: ${(err as Error).message}`),
+    );
+  const timers: NodeJS.Timeout[] = [];
+  if (retentionEveryMs > 0) {
+    timers.push(setTimeout(() => {
+      void retain();
+      timers.push(setInterval(() => void retain(), retentionEveryMs).unref());
+    }, Math.min(60_000, retentionEveryMs)).unref());
+  }
   return {
     server,
     store,
     url: server.webSocketURL,
     snapshots: counts,
-    destroy: () => server.destroy(),
+    destroy: () => {
+      for (const t of timers) clearTimeout(t);
+      return server.destroy();
+    },
   };
 }
