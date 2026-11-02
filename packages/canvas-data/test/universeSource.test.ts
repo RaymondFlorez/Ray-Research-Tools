@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BitemporalStore } from '../src/bitemporal.js';
 import { localSource, type PointInTimeSource } from '../src/factTile.js';
 import { createUniverseNode, UnknownField } from '../src/screener.js';
-import { evaluateUniverseNode, type InstrumentReference } from '../src/universeSource.js';
+import { evaluateUniverseNode, loadScreenRows, type InstrumentReference } from '../src/universeSource.js';
 
 const THE_MORNING = '2024-08-05T09:30:00Z';
 const TODAY = () => '2026-09-10T00:00:00Z';
@@ -137,5 +137,80 @@ describe('a universe on a scrubbed canvas', () => {
       },
     };
     expect(await evaluateUniverseNode(node, slow, reference, CATALOG, pinned, TODAY)).toEqual({ kind: 'superseded', asof: THE_MORNING });
+  });
+});
+
+describe('how old a screened value is', () => {
+  const two: InstrumentReference[] = [
+    { instrument: 'NVDA', listed: '1999-01-22' },
+    { instrument: 'AMD', listed: '1979-03-17' },
+  ];
+  const aged = () => {
+    const s = new BitemporalStore<number>();
+    s.appendAll([
+      { key: 'NVDA.market_cap', validTime: '2024-08-02', knowledgeTime: '2024-08-02', value: 2.6e12 },
+      // Last reported two years before the morning.
+      { key: 'AMD.market_cap', validTime: '2022-06-30', knowledgeTime: '2022-07-01', value: 1.3e11 },
+    ]);
+    return localSource(s);
+  };
+
+  it('carries each value\'s period, and the oldest one the screen used', async () => {
+    const r = await evaluateUniverseNode(createUniverseNode('u', 'market_cap > 100b'), aged(), two, CATALOG, pinned, TODAY);
+    if (r.kind !== 'universe') throw new Error('unreachable');
+    // Without a limit the two-year-old figure is screened on, and the universe says how old it is.
+    expect(r.universe.members).toEqual(['AMD', 'NVDA']);
+    expect(r.universe.oldestPeriod).toEqual({ market_cap: '2022-06-30' });
+    expect(r.universe.stale).toEqual({ count: 0, byField: {} });
+  });
+
+  it('with maxAgeDays, an older value is stale: not screened, and counted apart', async () => {
+    const node = createUniverseNode('u', 'market_cap > 100b');
+    node.params = { ...node.params, maxAgeDays: 400 };
+    const r = await evaluateUniverseNode(node, aged(), two, CATALOG, pinned, TODAY);
+    if (r.kind !== 'universe') throw new Error('unreachable');
+    expect(r.universe.members).toEqual(['NVDA']);
+    expect(r.universe.stale).toEqual({ count: 1, byField: { market_cap: 1 } });
+    expect(r.universe.undecided.count).toBe(0);
+    expect(r.universe.oldestPeriod).toEqual({ market_cap: '2024-08-02' });
+    node.params = { ...node.params, maxAgeDays: 'a year' };
+    await expect(evaluateUniverseNode(node, aged(), two, CATALOG, pinned, TODAY)).rejects.toThrow(/maxAgeDays/);
+  });
+
+  it('says on the row which period, known when, and why it is stale', async () => {
+    const rows = await loadScreenRows(aged(), two, ['market_cap'], THE_MORNING, { maxAgeDays: 400 });
+    const amd = rows.find((row) => row.instrument === 'AMD')!;
+    expect(amd.fields.market_cap).toBeUndefined();
+    expect(amd.periods).toEqual({ market_cap: { validTime: '2022-06-30', knownAt: '2022-07-01' } });
+    expect(amd.stale?.market_cap).toMatch(/^latest period 2022-06-30, 767 days before 2024-08-05T09:30:00Z; the screen allows 400$/);
+  });
+});
+
+describe('a screen through a source that reads in batches', () => {
+  it('is one batched read, and the same universe as key-by-key reads', async () => {
+    const base = localSource(store());
+    const batches: string[][] = [];
+    const batched: PointInTimeSource = {
+      name: base.name,
+      read: async () => {
+        throw new Error('a batching source is not read key by key');
+      },
+      readMany: async (keys, knowledgeTime) => {
+        batches.push([...keys]);
+        return new Map(await Promise.all(keys.map(async (key) => [key, await base.read({ key, knowledgeTime })] as const)));
+      },
+    };
+    const expression = 'sector == "semis" and market_cap > 100b and short_interest < 0.05';
+    for (const time of [pinned, live]) {
+      batches.length = 0;
+      const one = await evaluateUniverseNode(createUniverseNode('u', expression), base, reference, CATALOG, time, TODAY);
+      const many = await evaluateUniverseNode(createUniverseNode('u', expression), batched, reference, CATALOG, time, TODAY);
+      expect(many).toEqual(one);
+      expect(batches.length).toBe(1);
+    }
+    // The names trading on the morning, two fields each.
+    batches.length = 0;
+    await evaluateUniverseNode(createUniverseNode('u', expression), batched, reference, CATALOG, pinned, TODAY);
+    expect(batches[0]!.length).toBe(5 * 2);
   });
 });

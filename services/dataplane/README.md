@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 39 tests, two of them need Postgres
+go test -race ./...                                    # 41 tests, two of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -33,7 +33,7 @@ go run ./cmd/load ... stooq -symbol nvda.us -instrument NVDA      # licensed to 
 | `cmd/load` | 2.3 | Fetches a source, reconciles against what the data plane holds, appends over `POST /v1/facts` |
 | `audit` | 7.2 | The audit trail: its own Postgres schema, append-only for everyone, insert-only for the service |
 | `identity` | 7.2 | Verifies picasso-auth's session tokens, held to its TypeScript verdicts by `services/auth/testdata/tokens.json` |
-| `server` | 2.3 | `/v1/asof`, `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
+| `server` | 2.3 | `/v1/asof`, `POST /v1/asof/batch` (up to 5,000 keys at one knowledge time, each the single read's answer), `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
 
@@ -140,7 +140,8 @@ resource, purpose, and trace ID", to "a separate store ... with no delete path f
 service accounts".
 
 - **A read that returns positions or MNPI-risk data is recorded before it is served.**
-  `/v1/asof`, `/v1/history` and `/v1/versions` each check what they are about to return. If
+  `/v1/asof`, its batch, `/v1/history` and `/v1/versions` each check what they are about to
+  return; a batch records one row per key that returns such data. If
   any of it is position or MNPI-risk data, the request must state a purpose in
   `X-Picasso-Purpose`. The record (actor, tenant, action, key, purpose, trace id) is written
   first. Without a purpose the answer is 400; with no trail configured, or a write that fails,

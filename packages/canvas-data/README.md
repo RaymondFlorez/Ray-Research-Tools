@@ -21,7 +21,7 @@ npm test --workspace @picasso/canvas-data
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 | `remote.ts` | 2.3, 3.8, 7.2 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live; with a `purpose`, which the data plane requires before it serves position data |
 | `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
-| `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane, a withheld field counted apart from missing data |
+| `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane in one batch, a withheld or stale field counted apart from missing data, and the age of what was screened |
 | `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale, recovering or ended |
 
@@ -259,6 +259,21 @@ field whose latest period the reader may not see is *withheld*: never the older 
 place, the same rule as the fact tile (`latestKnown`), and a name left undecided by it is
 counted under `withheld`, apart from the names left undecided for want of data.
 
+**A screen says how old its data is.** Every row carries, per field, the period it screened
+on and when that period became known. The universe gives the oldest period it screened on,
+per field. A node with `maxAgeDays` treats an older value as *stale*: it stays on the row
+with its period and the reason, is not screened on, and its name is counted under `stale`,
+apart from both withheld and missing data. The test screens a market cap last reported two
+years before the morning (767 days). Without a limit, it passes and the universe says
+`2022-06-30`. With 400 days, it is stale.
+
+**A screen is one request.** A source with `readMany` gets every key the screen needs at once,
+and `remoteSource` sends them to the data plane's `POST /v1/asof/batch`. The client splits a
+batch at the server's limit, 5,000 keys, and a Go test reads this package's constant to hold
+the two equal. A batched screen and a key-by-key screen are the same universe, on the morning
+and live. Through the service, `historical-morning-remote.mjs` counts one request per screen,
+and checks that its universe matches the in-process one.
+
 `seriesChart.ts` is the chart counterpart: every period in range at the value known at the
 canvas's time, and a withheld period as an entry with its reason, at its place in the order, so a
 line drawn through the points breaks there.
@@ -397,12 +412,11 @@ reads on a third, so most of the reads written down were empty. They now come fr
 - **Four readers go through the data plane, one request per key.** The fact tile, the series
   chart and the screen evaluate through either source, and canvas-sim's `loadHistory` loads a
   backtest's history through `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs`
-  holds each to the in-process answer. A screen makes one read per name per field: there is no
-  batched or cross-sectional read, so a large universe is that many requests.
-- **A screen does not know how old a value is.** It screens each name on the latest period
-  known at the date, however long ago that period was; a market cap last reported two years
-  earlier passes or fails like one from yesterday. The fact tile shows when its value became
-  known; the screen's rows do not carry it.
+  holds each to the in-process answer. A screen is one request, but the data plane still
+  answers a batch one query per key. The fact tile and the series chart still read key by key.
+- **Value age is per screen, not per field.** `maxAgeDays` applies to every point-in-time field
+  the expression names, and it is measured from the end of the period, by its valid time, not
+  from when the value became known. Without it, nothing is stale.
 - **Categorical fields and listing dates are not point-in-time.** They come from the
   instrument reference as it stands, so a sector reclassification applies to every date.
 - **The series chart draws nothing.** It produces the points; there is no rendering of a line,

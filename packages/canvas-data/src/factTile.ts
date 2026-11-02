@@ -24,7 +24,7 @@
 
 import { createNode, type NodeID, type PicassoNode, type Vec2 } from '@picasso/canvas-core';
 import type { AsOfQuery, BitemporalStore, Instant } from './bitemporal.js';
-import type { RemotePointInTime } from './remote.js';
+import type { RemotePointInTime, RemoteRead } from './remote.js';
 import { knowledgeTimeFor, type CanvasTime } from './timescrub.js';
 
 export interface SourceRead {
@@ -37,6 +37,12 @@ export interface PointInTimeSource {
   /** What the source is, in the analyst's terms: shown under the number. */
   readonly name: string;
   read(query: AsOfQuery): Promise<SourceRead>;
+  /**
+   * Many keys at one knowledge time, in one round trip where the source has
+   * one: each key's read exactly as `read` would return it. A source without
+   * it is read one key at a time.
+   */
+  readMany?(keys: readonly string[], knowledgeTime: string): Promise<ReadonlyMap<string, SourceRead>>;
 }
 
 /** The in-process store. It holds no classes, so nothing in it is blocked. */
@@ -57,19 +63,22 @@ export function localSource(store: BitemporalStore<number>, name = 'local store'
 
 /** The data plane, under the client's user and entitlements. */
 export function remoteSource(remote: RemotePointInTime, name = 'data plane'): PointInTimeSource {
+  const convert = (r: RemoteRead): SourceRead => ({
+    observations: r.observations.map((o) => ({
+      validTime: o.validTime,
+      value: o.value,
+      knownAt: o.knownAt,
+      ...(o.source !== undefined ? { source: o.source } : {}),
+    })),
+    blocked: r.blocked.map((b) => ({ validTime: b.validTime, message: b.decision.message })),
+  });
   return {
     name,
-    read: async (query) => {
-      const r = await remote.asOf(query);
-      return {
-        observations: r.observations.map((o) => ({
-          validTime: o.validTime,
-          value: o.value,
-          knownAt: o.knownAt,
-          ...(o.source !== undefined ? { source: o.source } : {}),
-        })),
-        blocked: r.blocked.map((b) => ({ validTime: b.validTime, message: b.decision.message })),
-      };
+    read: async (query) => convert(await remote.asOf(query)),
+    readMany: async (keys, knowledgeTime) => {
+      const out = new Map<string, SourceRead>();
+      for (const [key, r] of await remote.asOfMany(keys, knowledgeTime)) out.set(key, convert(r));
+      return out;
     },
   };
 }

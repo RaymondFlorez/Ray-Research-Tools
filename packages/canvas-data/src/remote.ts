@@ -55,6 +55,9 @@ export interface RemoteFact {
   vendor?: string;
 }
 
+/** The most keys one batched read may name: `server.MaxBatchKeys` in the data plane. */
+export const MAX_BATCH_KEYS = 5000;
+
 export class DataPlaneError extends Error {
   constructor(
     readonly status: number,
@@ -97,6 +100,32 @@ export class RemotePointInTime {
   }
 
   /**
+   * Many keys at one knowledge time: `POST /v1/asof/batch`, each key's answer
+   * exactly the single read's. Split into requests of at most
+   * `MAX_BATCH_KEYS`, the data plane's limit.
+   */
+  async asOfMany(keys: readonly string[], knowledgeTime: Instant): Promise<Map<string, RemoteRead>> {
+    const distinct = [...new Set(keys)];
+    const out = new Map<string, RemoteRead>();
+    for (let i = 0; i < distinct.length; i += MAX_BATCH_KEYS) {
+      const chunk = distinct.slice(i, i + MAX_BATCH_KEYS);
+      const res = await this.fetcher(`${this.base}/v1/asof/batch`, {
+        method: 'POST',
+        headers: { ...this.headers(), 'content-type': 'application/json' },
+        body: JSON.stringify({ knowledge: knowledgeTime, keys: chunk }),
+      });
+      const body = (await res.json()) as { results?: Record<string, RemoteRead>; error?: string };
+      if (!res.ok || !body.results) throw new DataPlaneError(res.status, body.error ?? 'batch refused');
+      for (const key of chunk) {
+        const r = body.results[key];
+        if (!r) throw new DataPlaneError(res.status, `the batch answered without ${key}`);
+        out.set(key, r);
+      }
+    }
+    return out;
+  }
+
+  /**
    * What a node on a canvas at `time` reads: as of the pin when the canvas is
    * scrubbed, as of now when it is live.
    */
@@ -133,10 +162,14 @@ export class RemotePointInTime {
     return body.appended ?? 0;
   }
 
-  private async get<T>(path: string): Promise<T> {
+  private headers(): Record<string, string> {
     const headers: Record<string, string> = { 'X-Picasso-User': this.options.user };
     if (this.options.purpose) headers['X-Picasso-Purpose'] = this.options.purpose;
-    const res = await this.fetcher(`${this.base}${path}`, { headers });
+    return headers;
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    const res = await this.fetcher(`${this.base}${path}`, { headers: this.headers() });
     const body = (await res.json()) as T & { error?: string };
     if (!res.ok) throw new DataPlaneError(res.status, body.error ?? 'request refused');
     return body;

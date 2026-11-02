@@ -51,6 +51,14 @@ export interface ScreenRow {
    * entitlement is reported apart from one left out for want of data.
    */
   withheld?: Readonly<Record<string, string>>;
+  /** The period each point-in-time value is for, and when it became known. */
+  periods?: Readonly<Record<string, { validTime: string; knownAt: string }>>;
+  /**
+   * Fields whose latest known period is older than the screen allows, with
+   * why. Unknown, as a missing value is, but reported apart: the data exists
+   * and is too old to screen on.
+   */
+  stale?: Readonly<Record<string, string>>;
 }
 
 type Op = '==' | '!=' | '<' | '<=' | '>' | '>=';
@@ -351,6 +359,16 @@ export interface Universe {
    * from this reader. Not counted in `undecided`.
    */
   withheld: { count: number; byField: Record<string, number> };
+  /**
+   * Names that could not be decided because a value they needed is older
+   * than the screen allows. Not counted in `undecided` or `withheld`.
+   */
+  stale: { count: number; byField: Record<string, number> };
+  /**
+   * The oldest period screened on, per point-in-time field, among eligible
+   * names: how old the data behind this universe can be.
+   */
+  oldestPeriod: Record<string, string>;
   /** Names eligible on the date at all, before the expression. */
   eligible: number;
 }
@@ -365,27 +383,40 @@ export interface Universe {
 export function resolveUniverse(expression: string, rows: readonly ScreenRow[], asof: string): Universe {
   const expr = parseScreen(expression);
   const known = new Set<string>();
-  for (const row of rows) for (const field of [...Object.keys(row.fields), ...Object.keys(row.withheld ?? {})]) known.add(field);
+  for (const row of rows) {
+    for (const field of [...Object.keys(row.fields), ...Object.keys(row.withheld ?? {}), ...Object.keys(row.stale ?? {})]) known.add(field);
+  }
   refuseUnknownFields(expr, known);
 
   const members: string[] = [];
   const byField: Record<string, number> = {};
   const withheldByField: Record<string, number> = {};
+  const staleByField: Record<string, number> = {};
+  const oldestPeriod: Record<string, string> = {};
   let undecided = 0;
   let withheld = 0;
+  let stale = 0;
   let eligible = 0;
   for (const row of rows) {
     if (row.listed > asof) continue;
     if (row.delisted !== undefined && row.delisted <= asof) continue;
     eligible += 1;
+    for (const [field, p] of Object.entries(row.periods ?? {})) {
+      if (row.fields[field] === undefined) continue;
+      if (oldestPeriod[field] === undefined || p.validTime < oldestPeriod[field]!) oldestPeriod[field] = p.validTime;
+    }
     const unknownFields = new Set<string>();
     const truth = evaluate(expr, row, unknownFields);
     if (truth === true) members.push(row.instrument);
     else if (truth === undefined) {
       const blocked = [...unknownFields].filter((field) => row.withheld?.[field] !== undefined);
+      const old = [...unknownFields].filter((field) => row.stale?.[field] !== undefined);
       if (blocked.length > 0) {
         withheld += 1;
         for (const field of blocked) withheldByField[field] = (withheldByField[field] ?? 0) + 1;
+      } else if (old.length > 0) {
+        stale += 1;
+        for (const field of old) staleByField[field] = (staleByField[field] ?? 0) + 1;
       } else {
         undecided += 1;
         for (const field of unknownFields) byField[field] = (byField[field] ?? 0) + 1;
@@ -398,6 +429,8 @@ export function resolveUniverse(expression: string, rows: readonly ScreenRow[], 
     members: members.sort(),
     undecided: { count: undecided, byField },
     withheld: { count: withheld, byField: withheldByField },
+    stale: { count: stale, byField: staleByField },
+    oldestPeriod,
     eligible,
   };
 }

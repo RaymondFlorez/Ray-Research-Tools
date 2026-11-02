@@ -70,7 +70,7 @@ func audited(c entitle.Class) bool { return c == entitle.Positions || c == entit
 // auditRead writes the trail for a read about to return sensitive data, and
 // says whether the read may proceed. It fails closed: no stated purpose, or a
 // record that cannot be written, and the caller gets an error, not the data.
-func (s *Server) auditRead(w http.ResponseWriter, r *http.Request, e entitle.Entitlements, action, resource string) bool {
+func (s *Server) auditRead(w http.ResponseWriter, r *http.Request, e entitle.Entitlements, action string, resources ...string) bool {
 	purpose := strings.TrimSpace(r.Header.Get(audit.PurposeHeader))
 	if purpose == "" {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "this read returns positions data: state its purpose in " + audit.PurposeHeader})
@@ -85,10 +85,12 @@ func (s *Server) auditRead(w http.ResponseWriter, r *http.Request, e entitle.Ent
 		return false
 	}
 	trace := audit.TraceID(r)
-	rec := audit.Record{Actor: e.UserID, Tenant: e.TenantID, Action: action, Resource: resource, Purpose: purpose, TraceID: trace, Outcome: "served"}
-	if err := s.Audit.Append(r.Context(), rec); err != nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the audit trail could not be written, so the data is not served: " + err.Error()})
-		return false
+	for _, resource := range resources {
+		rec := audit.Record{Actor: e.UserID, Tenant: e.TenantID, Action: action, Resource: resource, Purpose: purpose, TraceID: trace, Outcome: "served"}
+		if err := s.Audit.Append(r.Context(), rec); err != nil {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the audit trail could not be written, so the data is not served: " + err.Error()})
+			return false
+		}
 	}
 	w.Header().Set(audit.TraceHeader, trace)
 	return true
@@ -98,6 +100,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
 	mux.HandleFunc("GET /v1/asof", s.withUser(s.asOf))
+	mux.HandleFunc("POST /v1/asof/batch", s.withUser(s.asOfBatch))
 	mux.HandleFunc("GET /v1/stream", s.withUser(s.stream))
 	mux.HandleFunc("GET /v1/feed", s.withUser(func(w http.ResponseWriter, _ *http.Request, _ entitle.Entitlements) {
 		feed := s.Feed
@@ -203,6 +206,64 @@ func (s *Server) asOf(w http.ResponseWriter, r *http.Request, e entitle.Entitlem
 		}
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// MaxBatchKeys bounds one batched read.
+const MaxBatchKeys = 5000
+
+type batchRequest struct {
+	Knowledge string   `json:"knowledge"`
+	Keys      []string `json:"keys"`
+}
+
+// asOfBatch is /v1/asof for many keys at one knowledge time, in one request:
+// what a screen reads, a field of every name at once. Each key's answer is
+// exactly the single read's, blocked values included, and the audit rule is
+// the single read's too: any key returning position data needs a purpose,
+// and each such key is recorded, all before anything is sent.
+func (s *Server) asOfBatch(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {
+	var req batchRequest
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "body: " + err.Error()})
+		return
+	}
+	if req.Knowledge == "" || len(req.Keys) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "knowledge and at least one key are required"})
+		return
+	}
+	if len(req.Keys) > MaxBatchKeys {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("%d keys in one batch; the limit is %d", len(req.Keys), MaxBatchKeys)})
+		return
+	}
+	results := make(map[string]access.Result, len(req.Keys))
+	var sensitive []string
+	for _, key := range req.Keys {
+		if key == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an empty key"})
+			return
+		}
+		if _, seen := results[key]; seen {
+			continue
+		}
+		res, err := s.Reader.AsOf(r.Context(), e, pit.Query{Key: key, KnowledgeTime: req.Knowledge})
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+			return
+		}
+		results[key] = res
+		for _, o := range res.Observations {
+			if audited(o.Class) {
+				sensitive = append(sensitive, key)
+				break
+			}
+		}
+	}
+	if len(sensitive) > 0 && !s.auditRead(w, r, e, "read:asof", sensitive...) {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
 // maxAppend bounds one append request's body.

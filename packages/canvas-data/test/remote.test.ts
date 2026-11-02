@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DataPlaneError, RemotePointInTime } from '../src/remote.js';
+import { DataPlaneError, MAX_BATCH_KEYS, RemotePointInTime } from '../src/remote.js';
 
 /** Records what was asked and answers with a canned body. */
 function recorder(status = 200, body: unknown = { observations: [], blocked: [] }) {
@@ -30,6 +30,24 @@ describe('RemotePointInTime', () => {
     await new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', fetch: fetcher }).asOf({ key: 'k', knowledgeTime: '2024-01-01' });
     expect(new Headers(calls[0]!.init!.headers).get('X-Picasso-Purpose')).toBe('canvas.render');
     expect(new Headers(calls[1]!.init!.headers).has('X-Picasso-Purpose')).toBe(false);
+  });
+
+  it('reads many keys in one POST, split at the data plane\'s limit, each key once', async () => {
+    const bodies: Array<{ knowledge: string; keys: string[] }> = [];
+    const fetcher = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const body = JSON.parse(String(init!.body)) as { knowledge: string; keys: string[] };
+      bodies.push(body);
+      return new Response(JSON.stringify({ results: Object.fromEntries(body.keys.map((k) => [k, { observations: [], blocked: [] }])) }), { status: 200 });
+    }) as typeof fetch;
+    const remote = new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', purpose: 'screen.run', fetch: fetcher });
+    const keys = Array.from({ length: MAX_BATCH_KEYS + 1 }, (_, i) => `K${i}.market_cap`);
+    const out = await remote.asOfMany([...keys, 'K0.market_cap'], '2024-08-05T09:30:00Z');
+    expect(out.size).toBe(MAX_BATCH_KEYS + 1);
+    expect(bodies.map((b) => b.keys.length)).toEqual([MAX_BATCH_KEYS, 1]);
+    expect(bodies[0]!.knowledge).toBe('2024-08-05T09:30:00Z');
+
+    const short = (async () => new Response(JSON.stringify({ results: {} }), { status: 200 })) as typeof fetch;
+    await expect(new RemotePointInTime({ baseUrl: 'http://dp', user: 'pm', fetch: short }).asOfMany(['k'], '2024-01-01')).rejects.toThrow('without k');
   });
 
   it('surfaces a refusal as an error with the server\'s reason, not as an empty read', async () => {

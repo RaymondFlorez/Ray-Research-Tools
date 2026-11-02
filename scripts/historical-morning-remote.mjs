@@ -178,10 +178,13 @@ try {
     return v.universe;
   };
   for (const [label, time] of [['the morning', pinned], ['today', live]]) {
-    const remote = await screen(remoteSource(as('pm')), time);
+    const requests = [];
+    const counted = new RemotePointInTime({ baseUrl: BASE, user: 'pm', fetch: (url, init) => (requests.push(String(url)), fetch(url, init)) });
+    const remote = await screen(remoteSource(counted), time);
     const inProcess = await screen(localSource(capsLocal), time);
-    check(`a screen at ${label} reads the same universe through the service as in-process`,
-      JSON.stringify(remote) === JSON.stringify(inProcess), remote.members.join(', '));
+    check(`a screen at ${label} reads the same universe through the service as in-process, in one request`,
+      JSON.stringify(remote) === JSON.stringify(inProcess) && requests.length === 1 && requests[0].endsWith('/v1/asof/batch'),
+      `${remote.members.join(', ')}; ${requests.length} request(s)`);
   }
   const screenAnalyst = await screen(remoteSource(as('analyst')), live);
   check('live, the unlicensed reader\'s screen leaves NVDA out as withheld, not screened on its older public figure',
