@@ -23,7 +23,7 @@ npm test --workspace @picasso/canvas-data
 | `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
 | `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane, a withheld field counted apart from missing data |
 | `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |
-| `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale or recovering |
+| `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale, recovering or ended |
 
 ## Scope: what this is and is not
 
@@ -366,7 +366,8 @@ states it may not fake. A tile the user is not licensed for shows the reason and
 even one that arrived before the block. A stale series keeps counting its age between the
 server's health reports, on the local clock, so a dead feed does not leave "2s ago" frozen on
 screen. And a series whose channel had a sequence gap says *recovering* until the server
-clears it — silence does not clear a gap. `apps/canvas-demo/live.html` draws the tiles
+clears it — silence does not clear a gap. When the server ends the stream because the session
+was logged out, every tile says so and none keeps its last value. `apps/canvas-demo/live.html` draws the tiles
 through canvas-guard's `present()`, and `live-shots.mjs` checks all of it in Chromium against
 the real Go service.
 

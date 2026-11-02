@@ -111,8 +111,12 @@ says what was measured.
   `@picasso/auth`'s own verifier. A token whose tenant is not the user's is refused.
   `--dev-identity` accepts a user's name instead, for development; it is off unless asked for.
   A logged-out session is refused within five seconds, from picasso-auth's revocation list.
-  A WebSocket that is already open stays open, though: Hocuspocus authenticates a
-  connection when it opens, and nothing here closes one at logout.
+  A connection already open is held under its session and closed on the same schedule, with
+  the reason. The test closes one pm connection and leaves another user's open.
+  `signin-shots.mjs` keeps a second tab of pm's open through a logout in the first, and that
+  tab's next edit reaches no one; with the sweep disabled, it arrives. When the list cannot be
+  read, open connections are closed too. That follows from the same check, and is tested at
+  the list, not end to end.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
 - **The update log's history is not kept past ninety days.** After the job runs, an old

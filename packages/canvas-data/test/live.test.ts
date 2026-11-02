@@ -32,6 +32,14 @@ describe('LiveTiles', () => {
     expect(new LiveTiles().tile('NVDA', 0)).toEqual({ instrument: 'NVDA', kind: 'waiting', state: 'live' });
   });
 
+  it('stops showing values once the server ends the stream at logout', () => {
+    const tiles = new LiveTiles();
+    tiles.apply(update('NVDA', 120.5, 1_000), 10);
+    tiles.apply({ event: 'ended', data: JSON.stringify({ reason: 'revoked', message: 'this session was logged out' }) }, 20);
+    expect(tiles.ended?.reason).toBe('revoked');
+    expect(tiles.tile('NVDA', 30)).toEqual({ instrument: 'NVDA', kind: 'ended', state: 'stale', reason: 'this session was logged out' });
+  });
+
   it('shows the latest value with the server time it was true', () => {
     const tiles = new LiveTiles();
     tiles.apply(update('NVDA', 120.5, 1_000), 10);

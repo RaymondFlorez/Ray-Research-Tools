@@ -142,6 +142,13 @@ try {
   const stolen = (await pm.context().cookies()).find((c) => c.name === 'picasso_session')?.value;
   const atCollab = (token) => fetch(`http://127.0.0.1:${COLLAB_PORT}/v1/session`, { method: 'POST', headers: { authorization: `Bearer ${token}` } }).then((r) => r.status);
   const before = stolen ? await atCollab(stolen) : 0;
+  // A second tab of pm's, open on the canvas when the first logs out.
+  const pmTab = await pm.context().newPage();
+  pmTab.on('pageerror', (e) => errors.push(`pm tab: ${e}`));
+  await pmTab.goto(`${SITE}/apps/canvas-demo/shared.html`);
+  await pmTab.waitForFunction(() => window.__shared?.state() === 'synced', null, { timeout: 10_000 });
+  const loaderNodes = () => loader.evaluate(() => window.__shared.nodes().length);
+  const beforeLogout = await loaderNodes();
   await pm.click('#logout');
   await pm.waitForFunction(() => window.__shared.state() === 'signed-out');
   await pm.reload();
@@ -151,6 +158,14 @@ try {
   await new Promise((r) => setTimeout(r, 5_500));
   const after = stolen ? await atCollab(stolen) : 0;
   check('and the collaboration server refuses the logged-out session\'s unexpired token', before === 200 && after === 403, `${before} before logout, ${after} after`);
+  // The other tab's socket was opened before the logout; its edits must not land.
+  const tabErrors = errors.length;
+  await pmTab.click('#add').catch(() => {});
+  await new Promise((r) => setTimeout(r, 1_500));
+  const afterLogout = await loaderNodes();
+  check('a tab still open from before the logout is cut off: its edit reaches no one', afterLogout === beforeLogout, `${beforeLogout} nodes before, ${afterLogout} after`);
+  // That tab's own refusals (its reconnect is refused) are expected; drop them.
+  errors.splice(tabErrors);
 
   check('no console errors', errors.length === 0, errors.join(' | '));
   await browser.close();

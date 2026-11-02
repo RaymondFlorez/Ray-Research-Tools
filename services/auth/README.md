@@ -131,9 +131,10 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   OIDC this uses, and approves whoever `login_hint` names with no password. Nothing here has
   met Okta, Entra or Google, and none can be reached from here. The first real sign-in is
   the first test of that.
-- **Logout takes up to five seconds to reach a service**, and does not close a connection
-  already open: a collaboration WebSocket or a data plane stream started before it carries
-  on. The revocation list is public, like the key set. Its session ids are random and already
+- **Logout takes up to five seconds to reach a service.** Connections already open are closed
+  on the same schedule: a collaboration canvas connection, and a data plane stream at its
+  next health report. A session that merely expires is not cut off mid-connection; only
+  logout, or a list that cannot be read, closes one. The revocation list is public, like the key set. Its session ids are random and already
   unusable, but it does show how many people logged out in the last quarter-hour.
 - **Sessions are in memory.** A restart ends every session's revocation record, and, without
   `--key`, every session.

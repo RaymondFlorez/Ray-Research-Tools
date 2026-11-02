@@ -13,6 +13,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -121,13 +122,25 @@ func (s *Server) now() time.Time {
 	return time.Now()
 }
 
+type sessionKey struct{}
+
+// sessionOf is the session a request was verified under, if it came with a
+// token: what a stream re-checks while it runs.
+func sessionOf(r *http.Request) (identity.Session, bool) {
+	s, ok := r.Context().Value(sessionKey{}).(identity.Session)
+	return s, ok
+}
+
 func (s *Server) withUser(h func(http.ResponseWriter, *http.Request, entitle.Entitlements)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		e, status, msg := s.caller(r)
+		e, session, status, msg := s.caller(r)
 		if status != 0 {
 			// Not an empty result: an unknown caller is refused outright.
 			writeJSON(w, status, map[string]string{"error": msg})
 			return
+		}
+		if session != nil {
+			r = r.WithContext(context.WithValue(r.Context(), sessionKey{}, *session))
 		}
 		h(w, r, e)
 	}
@@ -137,28 +150,28 @@ func (s *Server) withUser(h func(http.ResponseWriter, *http.Request, entitle.Ent
 // DevIdentity is on and no token was sent, the name in UserHeader. A token's
 // tenant must be the user's own; entitlements always come from this
 // service's users file, never from the token.
-func (s *Server) caller(r *http.Request) (entitle.Entitlements, int, string) {
+func (s *Server) caller(r *http.Request) (entitle.Entitlements, *identity.Session, int, string) {
 	if token := identity.Token(r); token != "" && s.Identity != nil {
 		session, refusal := s.Identity.Verify(r.Context(), token)
 		if refusal != nil {
-			return entitle.Entitlements{}, http.StatusUnauthorized, "session: " + refusal.Error()
+			return entitle.Entitlements{}, nil, http.StatusUnauthorized, "session: " + refusal.Error()
 		}
 		e, ok := s.Users[session.User]
 		if !ok {
-			return entitle.Entitlements{}, http.StatusUnauthorized, "unknown user"
+			return entitle.Entitlements{}, nil, http.StatusUnauthorized, "unknown user"
 		}
 		if e.TenantID != "" && e.TenantID != session.Tenant {
-			return entitle.Entitlements{}, http.StatusForbidden, "the session is for another tenant"
+			return entitle.Entitlements{}, nil, http.StatusForbidden, "the session is for another tenant"
 		}
-		return e, 0, ""
+		return e, &session, 0, ""
 	}
 	if s.DevIdentity {
 		if e, ok := s.Users[r.Header.Get(UserHeader)]; ok {
-			return e, 0, ""
+			return e, nil, 0, ""
 		}
-		return entitle.Entitlements{}, http.StatusUnauthorized, "unknown user"
+		return entitle.Entitlements{}, nil, http.StatusUnauthorized, "unknown user"
 	}
-	return entitle.Entitlements{}, http.StatusUnauthorized, "sign in: no session token"
+	return entitle.Entitlements{}, nil, http.StatusUnauthorized, "sign in: no session token"
 }
 
 func (s *Server) asOf(w http.ResponseWriter, r *http.Request, e entitle.Entitlements) {
@@ -379,6 +392,16 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, e entitle.Entitl
 			}
 			flusher.Flush()
 		case <-health.C:
+			// A stream outlives the request that verified it, so the session
+			// is checked again here: logged out, or no longer checkable, and
+			// the stream ends with the reason rather than running on.
+			if session, ok := sessionOf(r); ok && s.Identity != nil {
+				if refusal := s.Identity.StillLive(r.Context(), session.SID); refusal != nil {
+					send(w, "ended", map[string]string{"reason": refusal.Reason, "message": refusal.Message})
+					flusher.Flush()
+					return
+				}
+			}
 			send(w, "health", sub.Health(float64(s.now().UnixMilli())))
 			flusher.Flush()
 		}

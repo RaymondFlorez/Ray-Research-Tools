@@ -139,6 +139,14 @@ func (v *Verifier) revocation(ctx context.Context, sid string) *Refusal {
 	return nil
 }
 
+// StillLive is for a connection that outlasts the request that opened it: a
+// stream, a socket. It says whether the session that opened it has since been
+// logged out, or whether the list that would say so cannot be read, in which
+// case the connection is closed like any other unverifiable session.
+func (v *Verifier) StillLive(ctx context.Context, sid string) *Refusal {
+	return v.revocation(ctx, sid)
+}
+
 func (v *Verifier) readRevoked(ctx context.Context) (map[string]bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()

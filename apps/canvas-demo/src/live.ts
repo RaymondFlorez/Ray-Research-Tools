@@ -59,6 +59,9 @@ async function connect(): Promise<void> {
 
 function render(view: TileView, now: number): string {
   const head = `<div class="sym">${view.instrument}</div>`;
+  if (view.kind === 'ended') {
+    return `<div class="tile ended" data-kind="ended">${head}<div class="value">—</div><div class="caption">stream ended · ${view.reason}</div></div>`;
+  }
   if (view.kind === 'blocked') {
     return `<div class="tile blocked" data-kind="blocked">${head}<div class="value">—</div><div class="caption">blocked · ${view.reason}</div></div>`;
   }

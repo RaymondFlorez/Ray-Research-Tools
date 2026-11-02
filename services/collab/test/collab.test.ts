@@ -305,6 +305,27 @@ suite('picasso-collab', () => {
     await new Promise((r) => setTimeout(r, 250));
     expect((await session()).status).toBe(403);
     expect((await open(c, 'acme/tokens', live.token)).failed).toBeDefined();
+
+    // A socket already open when its session logs out is closed, and its
+    // edits after that reach no one; another session's socket stays.
+    const pmSession = await issuer.mint('pm', 'acme', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const analystSession = await issuer.mint('analyst', 'acme', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const pm = await open(c, 'acme/logout', pmSession.token);
+    const analyst = await open(c, 'acme/logout', analystSession.token);
+    let closedWith: string | undefined;
+    pm.provider.on('close', ({ event }: { event: { reason: string } }) => {
+      closedWith ??= event.reason;
+    });
+    pm.canvas.addNode(node('before'));
+    await until(() => analyst.canvas.getNode('before') !== undefined);
+    issuer.end(pmSession.session.sid);
+    await until(() => closedWith !== undefined, 3_000);
+    // Hocuspocus closes the canvas's connection on the shared socket, with the reason.
+    expect(closedWith).toBe('the session was logged out');
+    pm.canvas.addNode(node('after', 300));
+    await new Promise((r) => setTimeout(r, 600));
+    expect(analyst.canvas.getNode('after')).toBeUndefined();
+    expect(analyst.provider.isSynced).toBe(true);
     keyServer.close();
   });
 });

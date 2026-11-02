@@ -62,9 +62,11 @@ export interface TileView {
   instrument: string;
   /**
    * `value`: a number to show. `blocked`: the caller may not see it.
-   * `waiting`: nothing has arrived yet — which is not zero.
+   * `waiting`: nothing has arrived yet — which is not zero. `ended`: the
+   * server closed the stream because the session that opened it was logged
+   * out; what it last sent is not shown as if it were still arriving.
    */
-  kind: 'value' | 'blocked' | 'waiting';
+  kind: 'value' | 'blocked' | 'waiting' | 'ended';
   values?: Record<string, number>;
   /** Ticks the last update stood for. */
   ticks?: number;
@@ -94,6 +96,12 @@ interface Held {
 export class LiveTiles {
   private readonly held = new Map<string, Held>();
   private updates = 0;
+  private endedBy: { reason: string; message: string } | undefined;
+
+  /** Why the server ended the stream, once it has. */
+  get ended(): { reason: string; message: string } | undefined {
+    return this.endedBy;
+  }
 
   /** Applies one event, at local time `now` (ms). Unknown events are ignored. */
   apply(e: SseEvent, now: number): void {
@@ -115,6 +123,8 @@ export class LiveTiles {
       delete h.values;
       delete h.ticks;
       delete h.asOfMs;
+    } else if (e.event === 'ended') {
+      this.endedBy = JSON.parse(e.data) as { reason: string; message: string };
     } else if (e.event === 'health') {
       const list = JSON.parse(e.data) as Array<{ instrument: string; state: FeedState; elapsedMs: number; reason?: string }>;
       for (const report of list) {
@@ -130,6 +140,7 @@ export class LiveTiles {
 
   /** What one tile shows at local time `now`. */
   tile(instrument: string, now: number): TileView {
+    if (this.endedBy) return { instrument, kind: 'ended', state: 'stale', reason: this.endedBy.message };
     const h = this.held.get(instrument);
     if (!h) return { instrument, kind: 'waiting', state: 'live' };
     if (h.blocked) return { instrument, kind: 'blocked', state: h.state, reason: h.blocked.message };
