@@ -326,6 +326,22 @@ suite('picasso-collab', () => {
     await new Promise((r) => setTimeout(r, 600));
     expect(analyst.canvas.getNode('after')).toBeUndefined();
     expect(analyst.provider.isSynced).toBe(true);
+
+    // The same with the sweep effectively off: each message is checked as it
+    // arrives, so the edit is refused even though no sweep has closed the socket.
+    const unswept = await startCollab({ pool, schema, users, authUrl, idleMs: 300, snapshotEveryMs: 1_000, revocationRefreshMs: 200, sweepEveryMs: 3_600_000 });
+    servers.push(unswept);
+    const pm2 = await issuer.mint('pm', 'acme', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const analyst2 = await issuer.mint('analyst', 'acme', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const writer = await open(unswept, 'acme/gate', pm2.token);
+    const reader = await open(unswept, 'acme/gate', analyst2.token);
+    writer.canvas.addNode(node('kept'));
+    await until(() => reader.canvas.getNode('kept') !== undefined);
+    issuer.end(pm2.session.sid);
+    await new Promise((r) => setTimeout(r, 300));
+    writer.canvas.addNode(node('refused', 300));
+    await new Promise((r) => setTimeout(r, 600));
+    expect(reader.canvas.getNode('refused')).toBeUndefined();
     keyServer.close();
   });
 });

@@ -55,6 +55,8 @@ export interface CollabOptions {
   idleMs?: number;
   /** How often picasso-auth's list of logged-out sessions is re-read; @picasso/auth's default otherwise. */
   revocationRefreshMs?: number;
+  /** How often idle connections are swept against that list; the refresh interval otherwise. */
+  sweepEveryMs?: number;
   /**
    * How often the retention job runs (`CanvasStore.retain`): six hours by
    * default, the first run a minute after start so a server restarted more
@@ -140,14 +142,22 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
   };
 
   /**
-   * A WebSocket outlives the token that opened it, so each one is held under
-   * its session and checked against the revocation list every time the list
-   * can have changed. A logged-out session's sockets are closed, and so is
-   * every socket when the list cannot be read: the rule for a new connection
-   * holds for an open one.
+   * A WebSocket outlives the token that opened it. Two checks keep the rule
+   * for a new connection true of an open one. Every message is checked
+   * against the revocation list before it is applied, so nothing a
+   * logged-out session sends lands once this service's copy of the list
+   * knows. And every connection is held under its session and swept on the
+   * list's interval, so an idle one is closed too, and stops receiving.
+   * A list that cannot be read closes them all.
    */
+  const ended = async (sid: string | undefined): Promise<string | undefined> => {
+    if (!sid || !revocations) return undefined;
+    const revoked = await revocations.current();
+    if (revoked === 'unknown') return 'the session cannot be checked: picasso-auth is unreachable';
+    return revoked.has(sid) ? 'the session was logged out' : undefined;
+  };
   const open = new Map<string, Set<Connection<Context>>>();
-  const sweepEveryMs = o.revocationRefreshMs ?? REVOCATION_REFRESH_MS;
+  const sweepEveryMs = o.sweepEveryMs ?? o.revocationRefreshMs ?? REVOCATION_REFRESH_MS;
   let sweeping = false;
   const sweep = async () => {
     if (!revocations || open.size === 0 || sweeping) return;
@@ -188,6 +198,11 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
         set.delete(connection);
         if (set.size === 0 && open.get(sid) === set) open.delete(sid);
       });
+    },
+    async beforeHandleMessage({ context }) {
+      const reason = await ended(context?.sid);
+      // Hocuspocus closes the connection on a throw, and the message is not applied.
+      if (reason) throw Object.assign(new Error(reason), { code: 4401, reason });
     },
     async onLoadDocument({ document, documentName }) {
       const loaded = await store.load(documentName);

@@ -111,12 +111,21 @@ says what was measured.
   `@picasso/auth`'s own verifier. A token whose tenant is not the user's is refused.
   `--dev-identity` accepts a user's name instead, for development; it is off unless asked for.
   A logged-out session is refused within five seconds, from picasso-auth's revocation list.
-  A connection already open is held under its session and closed on the same schedule, with
-  the reason. The test closes one pm connection and leaves another user's open.
-  `signin-shots.mjs` keeps a second tab of pm's open through a logout in the first, and that
-  tab's next edit reaches no one; with the sweep disabled, it arrives. When the list cannot be
-  read, open connections are closed too. That follows from the same check, and is tested at
-  the list, not end to end.
+  A connection already open is held by two checks:
+  - **Every message is checked against the list before it is applied**, so nothing a
+    logged-out session sends lands once this service's copy of the list knows. The test turns
+    the sweep off and the edit is still refused; without this check, it lands.
+  - **Every connection is swept on the list's interval**, so an idle one is closed too, with
+    the reason, and stops receiving. The test closes one pm connection and leaves another
+    user's open.
+
+  The sweep came first, and on its own it was not enough. `signin-shots.mjs` keeps a second
+  tab of pm's open through a logout in the first, and that tab's next edit must reach no one.
+  CI caught the edit arriving. The list had been refreshed, by the script's own request, while
+  the next sweep was still up to five seconds away. Run again with only the sweep, the check
+  failed four times in four. With the per-message check, it passed three in three. When the
+  list cannot be read, open connections are closed too. That follows from the same check, and
+  is tested at the list, not end to end.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
 - **The update log's history is not kept past ninety days.** After the job runs, an old
