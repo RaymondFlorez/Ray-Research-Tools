@@ -39,6 +39,13 @@ binaries refuse to start with neither that nor an auth URL.
 `services/auth/test/tokens.test.ts` writes `services/auth/testdata/tokens.json`
 and the Go `identity` tests must reach the same verdicts (`UPDATE_TOKENS=1`).
 
+The PRD 7.2 audit trail is written from Go (`audit` in the data plane and the
+gateway, identical copies that CI diffs) and from TypeScript (exports, in
+`services/collab/src/audit.ts`). All three are held to
+`services/audit-contract.json`, which holds the schema as Postgres describes it
+and the purposes that pass and fail. `UPDATE_AUDIT_CONTRACT=1` on the Go test
+regenerates it.
+
 The Go data plane and `canvas-data` implement the same point-in-time,
 conflation and entitlement rules. `canvas-data/test/conformance.test.ts`
 writes `services/dataplane/testdata/conformance.json` and the Go tests must

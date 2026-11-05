@@ -14,6 +14,8 @@ import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import pg from 'pg';
 import { startCollab, type Users } from './server.js';
+import type { VendorPolicy } from '@picasso/canvas-guard';
+import { migrateAudit, PostgresAudit } from './audit.js';
 import { migrate } from './store.js';
 
 const { values } = parseArgs({
@@ -27,6 +29,8 @@ const { values } = parseArgs({
     'auth-url': { type: 'string' },
     'dev-identity': { type: 'boolean', default: false },
     'retention-hours': { type: 'string', default: '6' },
+    'audit-schema': { type: 'string', default: 'audit' },
+    'vendor-policies': { type: 'string' },
   },
 });
 if (!values.pg || !values.users) {
@@ -35,11 +39,18 @@ if (!values.pg || !values.users) {
 }
 const users = JSON.parse(readFileSync(values.users, 'utf8')) as Users;
 const pool = new pg.Pool({ connectionString: values.pg });
-if (values.migrate) await migrate(pool, values.schema);
+if (values.migrate) {
+  await migrate(pool, values.schema);
+  await migrateAudit(pool, values['audit-schema']);
+}
+const vendorPolicies = values['vendor-policies'] ? (JSON.parse(readFileSync(values['vendor-policies'], 'utf8')) as VendorPolicy[]) : [];
+if (vendorPolicies.length === 0) console.error('no vendor policies: every licensed figure in an export is withheld (use --vendor-policies)');
 const collab = await startCollab({
   pool, schema: values.schema, users, port: Number(values.port), address: values.address,
   ...(values['auth-url'] ? { authUrl: values['auth-url'] } : {}), devIdentity: values['dev-identity'],
   retentionEveryMs: Number(values['retention-hours']) * 3_600_000,
+  audit: new PostgresAudit(pool, values['audit-schema']),
+  vendorPolicies,
 });
 console.error(`picasso-collab listening on ${collab.url}`);
 const stop = async () => {

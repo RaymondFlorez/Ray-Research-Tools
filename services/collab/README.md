@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 10 tests; they skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 15 tests; 14 skip without a database
 node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -16,6 +16,7 @@ node services/collab/dist/main.js --auth-url https://picasso.example.com --pg po
 |---|---|
 | `store.ts` | The update log, snapshots and named versions in Postgres, each rule held by the database |
 | `server.ts` | Hocuspocus with tenant-scoped sign-in, logging every update, snapshotting, and the versions API |
+| `audit.ts` | PRD 7.2's audit trail, written from TypeScript, held to the Go package's schema by `services/audit-contract.json` |
 | `main.ts` | The binary |
 
 Clients are canvas-sync's `SyncedCanvas` over `@hocuspocus/provider`: the document schema,
@@ -98,6 +99,35 @@ removed, a reopened five-edit canvas still has five log rows, because Hocuspocus
 call `onChange` for what `onLoadDocument` applies. The tag stays as a guard, and the comment
 says what was measured.
 
+## Exports
+
+PRD 7.2: "every export ... writes an append-only audit record", and "exports strip or blur
+non-redistributable vendor data according to per-vendor rules encoded in the export service".
+`POST /v1/exports?doc=` is that service.
+
+The figures are computed in the browser, since computation does not sync, so the client sends
+the cells: each one's value, class, vendor, dataset snapshots and traces. canvas-guard's
+`buildBundle` then does the rest:
+- it applies the vendor rules held here (`--vendor-policies`; `config/vendor-policies.json`
+  strips Stooq, whose redistribution terms have not been assessed);
+- it withholds a licensed figure from a vendor with no rule;
+- it refuses position or MNPI-risk data leaving the tenant (403);
+- it refuses a figure with nothing to reproduce it from (422).
+
+The request names a purpose, a task name as everywhere else. The record goes on the audit
+trail before the bundle comes back: actor, tenant, the canvas, the purpose, the trace id, and
+how many cells were exported and redacted. A trail that cannot be written means no bundle
+(503). A refused export is recorded as refused. The test removes the 503 and fails, the bundle
+going out unrecorded. `signin-shots.mjs` exports from a signed-in browser on its session
+alone, and finds the row in Postgres with Stooq's figure withheld.
+
+**One trail, two languages.** The data plane and the gateway write the trail in Go, and this
+writes it in TypeScript, to the same table. `services/audit-contract.json` holds the schema as
+Postgres describes it after migrating, together with the purposes either side must accept and
+refuse. The Go `audit` test writes the schema part (`UPDATE_AUDIT_CONTRACT=1`), and
+`test/audit.test.ts` migrates with this package and must match. Dropping one `CHECK` from
+either side's migration fails that side's test.
+
 ## What is not covered
 
 - **One page goes through it.** `apps/canvas-demo/shared.html` syncs through this server, and
@@ -126,6 +156,13 @@ says what was measured.
   failed four times in four. With the per-message check, it passed three in three. When the
   list cannot be read, open connections are closed too. That follows from the same check, and
   is tested at the list, not end to end.
+- **An export is a JSON bundle, not a PDF.** PRD 2.3's WeasyPrint pipeline is not here, and
+  nothing renders the bundle yet. The demo pages have no export button; the API is driven
+  by the tests and `signin-shots.mjs`.
+- **The export service trusts the cells' classes.** It cannot recompute a figure, so a client
+  that labels a position `public` gets it past the tenant rule. The rule stops an honest
+  client's mistake, and the record says who exported what. A client that wants to leak what
+  it was entitled to see does not need this path at all.
 - **One process.** No Redis fan-out between instances, so two servers would hold two copies of
   an open canvas.
 - **The update log's history is not kept past ninety days.** After the job runs, an old

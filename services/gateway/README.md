@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 22 tests; one live and one on Postgres, skipped by default
+go test -race ./...                       # 24 tests; one live and two on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \

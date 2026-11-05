@@ -236,10 +236,11 @@ it expires. `?user=` remains the development path, and works only against server
 with `--dev-identity`.
 
 `scripts/signin-shots.mjs` runs a stand-in OpenID provider, picasso-auth and the collaboration
-server, none with a development identity. It checks ten things:
+server, none with a development identity. It checks eleven things:
 - the sign-in;
 - the HttpOnly cookie;
 - two users on one canvas;
+- an export on the session alone, recorded on the Postgres trail with Stooq's figure withheld;
 - the MFA refusal;
 - a typed name refused;
 - logout;

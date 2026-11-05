@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 41 tests, two of them need Postgres
+go test -race ./...                                    # 43 tests, three of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -156,6 +156,11 @@ service accounts".
   `audit.GrantService` gives the application's role `INSERT` and nothing else. The test drops
   the trigger and connects as that role. It may insert, and is refused `DELETE`, `UPDATE` and
   `SELECT`: the service cannot even read back what it wrote.
+- **Every writer creates the same trail.** The gateway carries this package. The
+  collaboration server writes exports to the same table from TypeScript. The schema, as
+  Postgres describes it after `Migrate`, and the purposes that pass and fail are in
+  `services/audit-contract.json`. This package's test writes the schema part
+  (`UPDATE_AUDIT_CONTRACT=1`) and checks it; the TypeScript test must match it.
 
 `scripts/historical-morning-remote.mjs` checks all of this through the binary, on Postgres,
 with a SYNTHETIC position:

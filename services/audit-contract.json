@@ -1,0 +1,58 @@
+{
+ "note": "What every writer of the PRD 7.2 audit trail agrees on. The schema part is written by services/dataplane/audit (UPDATE_AUDIT_CONTRACT=1); services/gateway/audit and services/collab are held to it. Do not edit the schema by hand.",
+ "queries": {
+  "checks": "SELECT conname || '|' || pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 AND r.relname = 'records' ORDER BY conname",
+  "columns": "SELECT column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '') FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'records' ORDER BY ordinal_position",
+  "functions": "SELECT p.proname || '|' || regexp_replace(p.prosrc, '\\s+', ' ', 'g') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = $1 ORDER BY p.proname",
+  "triggers": "SELECT t.tgname || '|' || pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class r ON r.oid = t.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 AND r.relname = 'records' AND NOT t.tgisinternal ORDER BY t.tgname"
+ },
+ "schema": {
+  "checks": [
+   "records_action_check|CHECK ((action \u003c\u003e ''::text))",
+   "records_actor_check|CHECK ((actor \u003c\u003e ''::text))",
+   "records_pkey|PRIMARY KEY (seq)",
+   "records_purpose_check|CHECK ((purpose \u003c\u003e ''::text))",
+   "records_resource_check|CHECK ((resource \u003c\u003e ''::text))",
+   "records_trace_id_check|CHECK ((trace_id \u003c\u003e ''::text))"
+  ],
+  "columns": [
+   "seq|bigint|NO|nextval('\u003cschema\u003e.records_seq_seq'::regclass)",
+   "at|timestamp with time zone|NO|now()",
+   "actor|text|NO|",
+   "tenant|text|NO|",
+   "action|text|NO|",
+   "resource|text|NO|",
+   "purpose|text|NO|",
+   "trace_id|text|NO|",
+   "outcome|text|NO|"
+  ],
+  "functions": [
+   "refuse| BEGIN RAISE EXCEPTION '% on the audit trail is refused: it is append-only', TG_OP; END "
+  ],
+  "triggers": [
+   "no_change|CREATE TRIGGER no_change BEFORE DELETE OR UPDATE ON \u003cschema\u003e.records FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.refuse()",
+   "no_truncate|CREATE TRIGGER no_truncate BEFORE TRUNCATE ON \u003cschema\u003e.records FOR EACH STATEMENT EXECUTE FUNCTION \u003cschema\u003e.refuse()"
+  ]
+ },
+ "purposes": {
+  "accepted": [
+   "p",
+   "sql.generate",
+   "canvas.render",
+   "risk:var-99",
+   "models.try",
+   "export.pdf",
+   "a_b.c-d:e"
+  ],
+  "refused": [
+   "",
+   "check the pm's NVDA book",
+   "Sql.Generate",
+   "sql..generate",
+   "sql.",
+   ".sql",
+   "sql generate",
+   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ]
+ }
+}

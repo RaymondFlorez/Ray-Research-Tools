@@ -64,7 +64,7 @@ async function waitFor(url, timeoutMs = 20_000) {
 }
 
 const collabArgs = (migrate) => [join(ROOT, 'services/collab/dist/main.js'), '--dev-identity', '--pg', PG, '--users', join(ROOT, 'services/dataplane/config/users.json'),
-  '--schema', SCHEMA, '--port', String(COLLAB_PORT), ...(migrate ? ['--migrate'] : [])];
+  '--schema', SCHEMA, '--audit-schema', `${SCHEMA}_audit`, '--port', String(COLLAB_PORT), ...(migrate ? ['--migrate'] : [])];
 const startCollab = async (migrate) => {
   const child = spawn(process.execPath, collabArgs(migrate), { stdio: ['ignore', 'ignore', 'inherit'] });
   await waitFor(`http://127.0.0.1:${COLLAB_PORT}/v1/healthz`);
@@ -229,7 +229,7 @@ try {
   server.kill();
   collab.kill();
   try {
-    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE`], { stdio: 'ignore' });
+    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SCHEMA}_audit CASCADE`], { stdio: 'ignore' });
   } catch {
     // left to its owner; the schema is unique to this run
   }

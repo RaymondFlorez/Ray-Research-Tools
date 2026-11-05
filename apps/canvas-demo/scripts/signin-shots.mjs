@@ -7,7 +7,7 @@
  * --dev-identity, all behind the demo server. Then signs in through the
  * provider in Chromium, and checks what PRD 7.2 asks: a session the page cannot
  * read, a second factor required in a tenant holding positions, a typed name
- * refused, and logout that ends it.
+ * refused, an export recorded on the audit trail, and logout that ends it.
  *
  *   COLLAB_PG_URL=postgres://... node apps/canvas-demo/scripts/signin-shots.mjs [outDir]
  */
@@ -75,7 +75,7 @@ const users = join(ROOT, 'services/dataplane/config/users.json');
 const children = [
   spawn(process.execPath, [join(ROOT, 'services/auth/dist/main.js'), '--public-url', SITE, '--oidc-issuer', idp.issuer, '--client-id', 'picasso-web',
     '--users', users, '--tenants', join(ROOT, 'services/auth/config/tenants.json'), '--port', String(AUTH_PORT)], { stdio: ['ignore', 'ignore', 'inherit'] }),
-  spawn(process.execPath, [join(ROOT, 'services/collab/dist/main.js'), '--auth-url', SITE, '--pg', PG, '--users', users, '--schema', SCHEMA, '--migrate',
+  spawn(process.execPath, [join(ROOT, 'services/collab/dist/main.js'), '--auth-url', SITE, '--pg', PG, '--users', users, '--schema', SCHEMA, '--audit-schema', `${SCHEMA}_audit`, '--vendor-policies', join(ROOT, 'services/collab/config/vendor-policies.json'), '--migrate',
     '--port', String(COLLAB_PORT)], { stdio: ['ignore', 'ignore', 'inherit'] }),
   spawn(process.execPath, ['scripts/serve.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), AUTH_URL: `http://127.0.0.1:${AUTH_PORT}`, COLLAB_URL: `http://127.0.0.1:${COLLAB_PORT}` }, stdio: 'ignore' }),
 ];
@@ -121,6 +121,22 @@ try {
   await loader.waitForFunction(() => window.__shared.nodes().length >= 1, null, { timeout: 5_000 }).catch(() => {});
   check('a second user, signed in with a hardware key, syncs the same canvas', (await state(loader)) === 'synced' && (await loader.evaluate(() => window.__shared.nodes().length)) === 1);
   await pm.screenshot({ path: `${OUT}/signin-pm.png` });
+
+  // 3b. An export, on the session alone, goes on the Postgres audit trail before it comes back.
+  const exported = await loader.evaluate(async () => {
+    const res = await fetch('/collab/v1/exports?doc=dev%2Fsemis', {
+      method: 'POST', headers: { 'content-type': 'application/json', 'X-Picasso-Purpose': 'export.pdf' },
+      body: JSON.stringify({ title: 'Semis note', leavesTenant: false, cells: [
+        { id: 'rev', label: 'NVDA revenue', value: 30.04, classification: 'public', datasetSnapshots: { edgar: 's1' }, traceIds: [], asof: '2024-08-05' },
+        { id: 'px', label: 'NVDA close', value: 104.25, classification: 'licensed', vendor: 'stooq', datasetSnapshots: { stooq: 's2' }, traceIds: [], asof: '2024-08-05' },
+      ] }),
+    });
+    return { status: res.status, body: await res.json() };
+  });
+  const trailRow = execFileSync('psql', [PG, '-tAc', `SELECT actor || '|' || action || '|' || resource || '|' || purpose || '|' || outcome FROM ${SCHEMA}_audit.records`], { encoding: 'utf8' }).trim();
+  check('an export on the session alone is recorded on the trail, with the vendor rule applied',
+    exported.status === 200 && exported.body.bundle.cells[1].value === 'withheld' && trailRow === 'loader|export|dev/semis|export.pdf|exported 2 cells, 1 redacted, within the tenant',
+    `${exported.status}; ${trailRow}`);
 
   // 4. A password alone, in a tenant that holds positions.
   const analyst = await tab('analyst');
@@ -173,7 +189,7 @@ try {
   for (const c of children) c.kill();
   await idp.close();
   try {
-    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE`], { stdio: 'ignore' });
+    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SCHEMA}_audit CASCADE`], { stdio: 'ignore' });
   } catch {
     // left to its owner; the schema is unique to this run
   }

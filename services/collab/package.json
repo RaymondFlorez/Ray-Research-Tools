@@ -21,6 +21,7 @@
     "@picasso/canvas-sync": "*",
     "@picasso/canvas-core": "*",
     "@picasso/auth": "*",
+    "@picasso/canvas-guard": "*",
     "jose": "6.2.12"
   },
   "devDependencies": {

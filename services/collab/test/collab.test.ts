@@ -14,6 +14,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import { SessionIssuer } from '@picasso/auth';
 import { CanvasStore, migrate } from '../src/store.js';
+import { MemoryAudit, migrateAudit, PostgresAudit } from '../src/audit.js';
 import { startCollab, type Collab } from '../src/server.js';
 
 const URL_ = process.env.COLLAB_PG_URL ?? process.env.DATAPLANE_PG_URL;
@@ -253,6 +254,77 @@ suite('picasso-collab', () => {
     expect(await store.counts('acme/ret-c')).toMatchObject({ updates: 2, snapshots: 0 });
     // Nothing left to do: a second run changes nothing.
     expect(await store.retain()).toEqual({ snapshotted: 0, updates: 0, snapshots: 0 });
+  });
+
+  it('exports through the audit trail: vendor rules applied, leaks refused, the record written first', async () => {
+    const trail = new MemoryAudit();
+    const c = await start({ audit: trail, vendorPolicies: [{ vendor: 'vendor-b', rule: 'strip' }, { vendor: 'vendor-d', rule: 'blur', precision: 2 }] });
+    const exportAs = async (user: string, doc: string, body: unknown, headers: Record<string, string> = {}) => {
+      const res = await fetch(`${c.server.httpURL}/v1/exports?doc=${encodeURIComponent(doc)}`, {
+        method: 'POST', headers: { 'X-Picasso-User': user, 'content-type': 'application/json', ...headers }, body: JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json()) as { bundle?: { cells: Array<{ id: string; value: unknown; redaction?: unknown }>; appendix: { datasetSnapshots: Record<string, string> } }; traceId?: string; error?: string } };
+    };
+    const cell = (id: string, over: Record<string, unknown> = {}) => ({
+      id, label: id, value: 12_345.678, classification: 'public', datasetSnapshots: { prices: 'snap-1' }, traceIds: [], asof: '2024-08-05T09:30:00Z', ...over,
+    });
+    const memo = {
+      title: 'Post-CPI note', leavesTenant: false,
+      cells: [cell('rev'), cell('cap', { classification: 'licensed', vendor: 'vendor-b' }), cell('si', { classification: 'licensed', vendor: 'vendor-c' }), cell('px', { classification: 'licensed', vendor: 'vendor-d' })],
+    };
+    const purpose = { 'X-Picasso-Purpose': 'export.pdf', traceparent: '00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01' };
+
+    expect((await exportAs('pm', 'acme/export', memo)).status).toBe(400);
+    expect((await exportAs('pm', 'acme/export', memo, { 'X-Picasso-Purpose': 'send it to the partner' })).status).toBe(400);
+    expect(trail.records()).toEqual([]);
+
+    const ok = await exportAs('pm', 'acme/export', memo, purpose);
+    expect(ok.status).toBe(200);
+    expect(ok.body.traceId).toBe('4bf92f3577b34da6a3ce929d0e0e4736');
+    const values = Object.fromEntries(ok.body.bundle!.cells.map((x) => [x.id, x.value]));
+    // vendor-b strips; vendor-c has no rule here, so it is withheld too; vendor-d blurs to two digits.
+    expect(values).toEqual({ rev: 12_345.678, cap: 'withheld', si: 'withheld', px: 12_000 });
+    expect(ok.body.bundle!.appendix.datasetSnapshots).toEqual({ prices: 'snap-1' });
+    expect(trail.records()).toEqual([{ actor: 'pm', tenant: 'acme', action: 'export', resource: 'acme/export', purpose: 'export.pdf', traceId: '4bf92f3577b34da6a3ce929d0e0e4736', outcome: 'exported 4 cells, 3 redacted, within the tenant' }]);
+
+    // Position data leaving the tenant: refused, and the attempt recorded.
+    const leak = await exportAs('pm', 'acme/export', { ...memo, leavesTenant: true, cells: [cell('book', { classification: 'positions' })] }, purpose);
+    expect(leak.status).toBe(403);
+    expect(leak.body.bundle).toBeUndefined();
+    expect(trail.records().at(-1)!.outcome).toBe('refused: ExportWouldLeak');
+    // A figure with nothing to reproduce it from.
+    expect((await exportAs('pm', 'acme/export', { ...memo, cells: [cell('x', { datasetSnapshots: {} })] }, purpose)).status).toBe(422);
+    // Another tenant's canvas.
+    expect((await exportAs('outsider', 'acme/export', memo, purpose)).status).toBe(403);
+    const recorded = trail.records().length;
+
+    // No record, no export.
+    trail.fail = true;
+    const down = await exportAs('pm', 'acme/export', memo, purpose);
+    expect(down.status).toBe(503);
+    expect(down.body.bundle).toBeUndefined();
+    trail.fail = false;
+    expect(trail.records().length).toBe(recorded);
+    const none = await start();
+    const unconfigured = await fetch(`${none.server.httpURL}/v1/exports?doc=acme/export`, { method: 'POST', headers: { 'X-Picasso-User': 'pm', 'X-Picasso-Purpose': 'export.pdf' }, body: JSON.stringify(memo) });
+    expect(unconfigured.status).toBe(503);
+  });
+
+  it('writes the export record to the Postgres trail', async () => {
+    const auditSchema = `${schema}_audit`;
+    await migrateAudit(pool, auditSchema);
+    try {
+      const c = await start({ audit: new PostgresAudit(pool, auditSchema) });
+      const res = await fetch(`${c.server.httpURL}/v1/exports?doc=acme/export`, {
+        method: 'POST', headers: { 'X-Picasso-User': 'analyst', 'X-Picasso-Purpose': 'export.deck' },
+        body: JSON.stringify({ title: 'Deck', leavesTenant: true, cells: [{ id: 'rev', label: 'Revenue', value: 30.04, classification: 'public', datasetSnapshots: { edgar: 's1' }, traceIds: [], asof: '2024-08-05' }] }),
+      });
+      expect(res.status).toBe(200);
+      const rows = (await pool.query(`SELECT actor, tenant, action, resource, purpose, outcome FROM ${auditSchema}.records`)).rows;
+      expect(rows).toEqual([{ actor: 'analyst', tenant: 'acme', action: 'export', resource: 'acme/export', purpose: 'export.deck', outcome: 'exported 1 cells, 0 redacted, leaving the tenant' }]);
+    } finally {
+      await pool.query(`DROP SCHEMA ${auditSchema} CASCADE`);
+    }
   });
 
   it('hands every tab of a session the same secret, and never an ended session\'s', async () => {
