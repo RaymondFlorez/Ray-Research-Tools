@@ -26,6 +26,7 @@
 
 import { Server, type Connection, type Extension, type onRequestPayload } from '@hocuspocus/server';
 import type pg from 'pg';
+import { randomUUID } from 'node:crypto';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
 import { REVOCATION_REFRESH_MS, RevocationList, SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
@@ -103,6 +104,8 @@ interface Context {
 }
 
 const LOADED = Symbol('loaded from the store');
+/** An update another instance logged, applied here: already in the log, so not logged again. */
+const FANNED_IN = Symbol('from another instance');
 
 /** Splits `tenant/canvas`, refusing anything else. */
 export function parseDocName(name: string): { tenant: string; canvas: string } {
@@ -130,6 +133,8 @@ export interface Collab {
   url: string;
   /** Snapshots taken, by reason, since start. */
   snapshots: { interval: number; idle: number };
+  /** Updates other instances logged that this one applied to an open canvas. */
+  fannedIn: { count: number };
   destroy(): Promise<void>;
 }
 
@@ -141,6 +146,8 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
   const lastChange = new Map<string, number>();
   const pending = new Map<string, Promise<unknown>>();
   const counts = { interval: 0, idle: 0 };
+  const instanceId = randomUUID();
+  const fannedIn = { count: 0 };
 
   if (!o.authUrl && !o.devIdentity) throw new Error('authUrl is required: callers are identified by picasso-auth\'s session tokens (or devIdentity, for development)');
   const authBase = o.authUrl?.replace(/\/$/, '');
@@ -304,11 +311,11 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
       return document;
     },
     async onChange({ documentName, update, context, transactionOrigin }) {
-      if (transactionOrigin === LOADED) return;
+      if (transactionOrigin === LOADED || transactionOrigin === FANNED_IN) return;
       lastChange.set(documentName, Date.now());
       // Appends for one canvas are chained, so the log keeps arrival order.
       const write = (pending.get(documentName) ?? Promise.resolve()).then(async () => {
-        const seq = await store.append(documentName, context?.user ?? 'server', update);
+        const seq = await store.append(documentName, context?.user ?? 'server', update, instanceId);
         throughUpdate.set(documentName, Math.max(throughUpdate.get(documentName) ?? 0, seq));
       });
       pending.set(documentName, write.catch((err) => console.error(`update log for ${documentName}: ${(err as Error).message}`)));
@@ -421,6 +428,26 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     extensions: [persistence],
   });
   await server.listen();
+
+  /**
+   * More than one process (PRD 7.3). Every update is announced on Postgres as
+   * it is logged, and each instance applies what the others log to the
+   * canvases it has open, so clients on different instances edit one canvas.
+   * Yjs updates are idempotent and commute, so the order notifications
+   * arrive in does not matter. A canvas not open here is not touched: it
+   * loads from the log when someone opens it.
+   */
+  const stopListening = await store.listen(({ doc, seq, from }) => {
+    if (from === instanceId) return;
+    const open = server.hocuspocus.documents.get(doc);
+    if (!open) return;
+    void store.update(doc, seq).then((body) => {
+      if (!body) return;
+      Y.applyUpdate(open, body, FANNED_IN);
+      throughUpdate.set(doc, Math.max(throughUpdate.get(doc) ?? 0, seq));
+      fannedIn.count += 1;
+    }, (err) => console.error(`fan-out of ${doc}#${seq}: ${(err as Error).message}`));
+  });
   const retentionEveryMs = o.retentionEveryMs ?? 6 * 3_600_000;
   const retain = () =>
     store.retain().then(
@@ -439,9 +466,11 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     store,
     url: server.webSocketURL,
     snapshots: counts,
-    destroy: () => {
+    fannedIn,
+    destroy: async () => {
       for (const t of timers) clearTimeout(t);
       if (sweeper) clearInterval(sweeper);
+      await stopListening();
       return server.destroy();
     },
   };

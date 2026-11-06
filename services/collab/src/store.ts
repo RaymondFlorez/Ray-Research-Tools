@@ -134,13 +134,54 @@ export class CanvasStore {
     if (!IDENT.test(schema)) throw new Error(`schema name ${JSON.stringify(schema)}`);
   }
 
-  /** Appends one update; returns its position in the log. */
-  async append(doc: string, author: string, update: Uint8Array): Promise<number> {
+  /** The channel this schema's updates are announced on, for other instances. */
+  get channel(): string {
+    return `picasso_collab_${this.schema}`.slice(0, 63);
+  }
+
+  /**
+   * Appends one update and announces it to every instance listening, in one
+   * statement: an update is never logged without the announcement, or
+   * announced without being logged. `from` names the instance that wrote it,
+   * so that instance can ignore its own. Returns its position in the log.
+   */
+  async append(doc: string, author: string, update: Uint8Array, from = ''): Promise<number> {
     const r = await this.pool.query<{ seq: string }>(
-      `INSERT INTO ${this.schema}.updates (doc, author, body) VALUES ($1, $2, $3) RETURNING seq`,
-      [doc, author, Buffer.from(update)],
+      `WITH row AS (INSERT INTO ${this.schema}.updates (doc, author, body) VALUES ($1, $2, $3) RETURNING seq)
+       SELECT seq, pg_notify($4, json_build_object('doc', $1::text, 'seq', seq, 'from', $5::text)::text) FROM row`,
+      [doc, author, Buffer.from(update), this.channel, from],
     );
     return Number(r.rows[0]!.seq);
+  }
+
+  /** One logged update, by its position. */
+  async update(doc: string, seq: number): Promise<Uint8Array | undefined> {
+    const r = await this.pool.query<{ body: Buffer }>(`SELECT body FROM ${this.schema}.updates WHERE doc = $1 AND seq = $2`, [doc, seq]);
+    return r.rows[0] ? new Uint8Array(r.rows[0].body) : undefined;
+  }
+
+  /**
+   * Listens for updates other instances append, on a connection of its own
+   * rather than one borrowed from the pool, which it would hold for as long as
+   * it listens. The returned function stops.
+   */
+  async listen(onUpdate: (u: { doc: string; seq: number; from: string }) => void): Promise<() => Promise<void>> {
+    const client = new pg.Client(this.pool.options);
+    await client.connect();
+    client.on('notification', (msg) => {
+      if (msg.channel !== this.channel || !msg.payload) return;
+      try {
+        const u = JSON.parse(msg.payload) as { doc: string; seq: number; from: string };
+        onUpdate({ doc: u.doc, seq: Number(u.seq), from: u.from });
+      } catch {
+        // Not one of ours.
+      }
+    });
+    await client.query(`LISTEN ${this.channel}`);
+    client.on('error', (err) => console.error(`update fan-out: ${err.message}`));
+    return async () => {
+      await client.end().catch(() => {});
+    };
   }
 
   /** Records the merged state, which includes every update up to `throughUpdate`. */

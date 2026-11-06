@@ -337,6 +337,26 @@ suite('picasso-collab', () => {
     }
   });
 
+  it('runs as two processes on one database: clients on either edit one canvas, each update logged once', async () => {
+    const one = await start();
+    const two = await start();
+    const a = await open(one, 'acme/two-instances', 'pm');
+    const b = await open(two, 'acme/two-instances', 'analyst');
+    a.canvas.addNode(node('from-one'));
+    await until(() => b.canvas.getNode('from-one') !== undefined);
+    b.canvas.addNode(node('from-two', 300));
+    await until(() => a.canvas.getNode('from-two') !== undefined);
+    a.canvas.moveNode('from-two', { x: 40, y: 40 });
+    await until(() => b.canvas.getNode('from-two')?.position.x === 40);
+    // Every row once: nothing an instance applied from another was logged again.
+    const rows = (await pool.query(`SELECT author, count(*) AS n, count(DISTINCT body) AS d FROM ${schema}.updates WHERE doc = 'acme/two-instances' GROUP BY author ORDER BY author`)).rows;
+    expect(rows.map((r) => r.author)).toEqual(['analyst', 'pm']);
+    for (const r of rows) expect(Number(r.n)).toBe(Number(r.d));
+    const by = Object.fromEntries(rows.map((r) => [r.author, Number(r.n)]));
+    expect(two.fannedIn.count).toBe(by.pm);
+    expect(one.fannedIn.count).toBe(by.analyst);
+  });
+
   it('hands every tab of a session the same secret, and never an ended session\'s', async () => {
     const c = await start();
     const session = async (user: string) => {

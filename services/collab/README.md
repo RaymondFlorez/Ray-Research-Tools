@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 15 tests; 14 skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 16 tests; 15 skip without a database
 node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -70,6 +70,24 @@ It runs the deleting step alone first, which leaves the never-snapshotted canvas
 where they are, then the whole job. Each canvas opens to the same content before and after,
 and a second run changes nothing. Removing either condition from its `DELETE` fails the
 test: six updates go instead of three, or two snapshots instead of one.
+
+## More than one process
+
+Hocuspocus's own answer to running more than one server is Redis, which is not here. Postgres is
+shared already, so it carries the fan-out. Each update is logged and announced in one statement
+(`INSERT … RETURNING` and `pg_notify`), so nothing is logged without the announcement or
+announced without the log. Every instance listens, on a connection of its own. For a canvas it
+has open, it fetches the announced row and applies it, tagged so it is not logged a second
+time. A canvas not open on an instance is left alone, and loads from the log when it is opened.
+Yjs updates are idempotent and commute, so the order announcements arrive in does not matter.
+
+The test runs two servers on one database, with a client on each:
+- an edit on either server reaches the other;
+- every row in the log appears once, with no update logged twice;
+- each server applied exactly the rows the other's client wrote.
+
+Without the tag that stops re-logging, the receiving server logs every update a second time,
+as `server`, and the test fails.
 
 ## Rules the server holds
 
@@ -164,8 +182,12 @@ either side's migration fails that side's test.
   that labels a position `public` gets it past the tenant rule. The rule stops an honest
   client's mistake, and the record says who exported what. A client that wants to leak what
   it was entitled to see does not need this path at all.
-- **One process.** No Redis fan-out between instances, so two servers would hold two copies of
-  an open canvas.
+- **Presence stays on its instance.** Edits fan out between instances; cursors and selections
+  (Hocuspocus awareness) do not, so two users on different instances see each other's work but
+  not each other's cursors.
+- **A missed announcement is not replayed.** An instance applies what it hears while it
+  listens. If its listening connection drops, it misses what was announced meanwhile until the
+  canvas is next loaded from the log. Nothing reconnects the listener.
 - **The update log's history is not kept past ninety days.** After the job runs, an old
   canvas cannot be replayed edit by edit before that, only opened as its snapshot. Named
   versions are what is meant to keep a past state for good. The `sessions` table has no
