@@ -123,6 +123,34 @@ ORDER BY valid_time, knowledge_time DESC, seq DESC`, p.schema), q.Key, q.Knowled
 	return out, rows.Err()
 }
 
+// AsOfMany answers every key in one statement: the same DISTINCT ON as AsOf,
+// partitioned by key as well as valid time.
+func (p *Postgres) AsOfMany(ctx context.Context, keys []string, knowledgeTime string) (map[string][]Observation, error) {
+	out := make(map[string][]Observation, len(keys))
+	for _, k := range keys {
+		out[k] = []Observation{}
+	}
+	rows, err := p.pool.Query(ctx, fmt.Sprintf(`
+SELECT DISTINCT ON (key, valid_time) key, valid_time, value, knowledge_time, coalesce(source, ''), data_class, coalesce(vendor, '')
+FROM %s.facts
+WHERE key = ANY($1) AND knowledge_time <= $2
+ORDER BY key, valid_time, knowledge_time DESC, seq DESC`, p.schema), keys, knowledgeTime)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var key, class string
+		var o Observation
+		if err := rows.Scan(&key, &o.ValidTime, &o.Value, &o.KnownAt, &o.Source, &class, &o.Vendor); err != nil {
+			return nil, err
+		}
+		o.Class = entitle.Class(class)
+		out[key] = append(out[key], o)
+	}
+	return out, rows.Err()
+}
+
 func (p *Postgres) Versions(ctx context.Context, key string, from, to *string) ([]Fact, error) {
 	return p.facts(ctx, fmt.Sprintf(`
 SELECT key, valid_time, knowledge_time, value, coalesce(source, ''), restatement, data_class, coalesce(vendor, '')

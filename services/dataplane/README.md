@@ -23,7 +23,7 @@ go run ./cmd/load ... stooq -symbol nvda.us -instrument NVDA      # licensed to 
 
 | Package | PRD | What it does |
 |---|---|---|
-| `pit` | 5.8 | Point-in-time facts: in memory and on Postgres, append-only enforced by the database |
+| `pit` | 5.8 | Point-in-time facts: in memory and on Postgres, append-only enforced by the database; `AsOfMany` answers a batch in one statement, held to each key's single read across the conformance contract |
 | `access` | 2.3, 7.2 | As-of reads, with what the caller may not see reported as blocked |
 | `entitle` | 7.2 | Whether one record may be shown to one user |
 | `ingest` | 2.3 | Adapter interface, the canonical wire format, symbology, sequence gaps, series health, subjects, partitions |
@@ -33,7 +33,7 @@ go run ./cmd/load ... stooq -symbol nvda.us -instrument NVDA      # licensed to 
 | `cmd/load` | 2.3 | Fetches a source, reconciles against what the data plane holds, appends over `POST /v1/facts` |
 | `audit` | 7.2 | The audit trail: its own Postgres schema, append-only for everyone, insert-only for the service |
 | `identity` | 7.2 | Verifies picasso-auth's session tokens, held to its TypeScript verdicts by `services/auth/testdata/tokens.json` |
-| `server` | 2.3 | `/v1/asof`, `POST /v1/asof/batch` (up to 5,000 keys at one knowledge time, each the single read's answer), `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
+| `server` | 2.3 | `/v1/asof`, `POST /v1/asof/batch` (up to 5,000 keys at one knowledge time, each the single read's answer, in one SQL statement), `/v1/history`, `/v1/versions`, `POST /v1/facts` (writers only), `/v1/stream` (Server-Sent Events), `/v1/feed`, `/v1/counts` |
 
 ## One set of rules, two languages, one file
 

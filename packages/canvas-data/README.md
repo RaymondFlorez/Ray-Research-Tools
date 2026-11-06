@@ -412,8 +412,8 @@ reads on a third, so most of the reads written down were empty. They now come fr
 - **Four readers go through the data plane, one request per key.** The fact tile, the series
   chart and the screen evaluate through either source, and canvas-sim's `loadHistory` loads a
   backtest's history through `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs`
-  holds each to the in-process answer. A screen is one request, but the data plane still
-  answers a batch one query per key. The fact tile and the series chart still read key by key.
+  holds each to the in-process answer. A screen is one request and one SQL statement. The fact
+  tile and the series chart still read key by key.
 - **Value age is per screen, not per field.** `maxAgeDays` applies to every point-in-time field
   the expression names, and it is measured from the end of the period, by its valid time, not
   from when the value became known. Without it, nothing is stale.

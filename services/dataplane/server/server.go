@@ -237,23 +237,26 @@ func (s *Server) asOfBatch(w http.ResponseWriter, r *http.Request, e entitle.Ent
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": fmt.Sprintf("%d keys in one batch; the limit is %d", len(req.Keys), MaxBatchKeys)})
 		return
 	}
-	results := make(map[string]access.Result, len(req.Keys))
-	var sensitive []string
+	distinct := make([]string, 0, len(req.Keys))
+	seen := map[string]bool{}
 	for _, key := range req.Keys {
 		if key == "" {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an empty key"})
 			return
 		}
-		if _, seen := results[key]; seen {
-			continue
+		if !seen[key] {
+			seen[key] = true
+			distinct = append(distinct, key)
 		}
-		res, err := s.Reader.AsOf(r.Context(), e, pit.Query{Key: key, KnowledgeTime: req.Knowledge})
-		if err != nil {
-			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-			return
-		}
-		results[key] = res
-		for _, o := range res.Observations {
+	}
+	results, err := s.Reader.AsOfMany(r.Context(), e, distinct, req.Knowledge)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	var sensitive []string
+	for _, key := range distinct {
+		for _, o := range results[key].Observations {
 			if audited(o.Class) {
 				sensitive = append(sensitive, key)
 				break

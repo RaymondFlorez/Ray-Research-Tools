@@ -61,6 +61,10 @@ type Observation struct {
 type Store interface {
 	Append(ctx context.Context, facts ...Fact) error
 	AsOf(ctx context.Context, q Query) ([]Observation, error)
+	// AsOfMany is AsOf for each key at one knowledge time, with no valid-time
+	// bounds: what a screen reads. Each key's answer is exactly AsOf's, and a
+	// key with nothing known is present with an empty slice.
+	AsOfMany(ctx context.Context, keys []string, knowledgeTime string) (map[string][]Observation, error)
 	History(ctx context.Context, key, validTime string) ([]Fact, error)
 	// Versions is every version of every fact for key with a valid time in
 	// [from, to] (nil is unbounded), by valid time, knowledge time, then
@@ -129,6 +133,18 @@ func (m *Memory) AsOf(_ context.Context, q Query) ([]Observation, error) {
 		out = append(out, Observation{ValidTime: f.ValidTime, Value: f.Value, KnownAt: f.KnowledgeTime, Source: f.Source, Class: f.Class, Vendor: f.Vendor})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ValidTime < out[j].ValidTime })
+	return out, nil
+}
+
+func (m *Memory) AsOfMany(ctx context.Context, keys []string, knowledgeTime string) (map[string][]Observation, error) {
+	out := make(map[string][]Observation, len(keys))
+	for _, k := range keys {
+		obs, err := m.AsOf(ctx, Query{Key: k, KnowledgeTime: knowledgeTime})
+		if err != nil {
+			return nil, err
+		}
+		out[k] = obs
+	}
 	return out, nil
 }
 

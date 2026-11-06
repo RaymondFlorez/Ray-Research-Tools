@@ -32,6 +32,27 @@ type Result struct {
 type Reader struct{ Store pit.Store }
 
 // AsOf reads as of the query's knowledge time, then withholds what the user may not see.
+// AsOfMany is AsOf for many keys at one knowledge time, in one store call.
+func (r Reader) AsOfMany(ctx context.Context, e entitle.Entitlements, keys []string, knowledgeTime string) (map[string]Result, error) {
+	all, err := r.Store.AsOfMany(ctx, keys, knowledgeTime)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]Result, len(all))
+	for key, obs := range all {
+		res := Result{Observations: []pit.Observation{}, Blocked: []Blocked{}}
+		for _, o := range obs {
+			if d := entitle.Check(o.Class, o.Vendor, e); d.Allowed {
+				res.Observations = append(res.Observations, o)
+			} else {
+				res.Blocked = append(res.Blocked, Blocked{ValidTime: o.ValidTime, Decision: d})
+			}
+		}
+		out[key] = res
+	}
+	return out, nil
+}
+
 func (r Reader) AsOf(ctx context.Context, e entitle.Entitlements, q pit.Query) (Result, error) {
 	all, err := r.Store.AsOf(ctx, q)
 	if err != nil {

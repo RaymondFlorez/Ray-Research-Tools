@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -88,6 +89,31 @@ func TestBothStoresAnswerAsTheTypeScriptDoes(t *testing.T) {
 			}
 			if len(got) > 0 {
 				nonEmpty++
+			}
+		}
+		// A batch at each knowledge time the contract reads at is each key's single read.
+		keys := map[string]bool{}
+		for _, c := range f.PointInTime.AsOf {
+			keys[c.Query.Key] = true
+		}
+		keys["NO.SUCH.KEY"] = true
+		all := make([]string, 0, len(keys))
+		for k := range keys {
+			all = append(all, k)
+		}
+		for _, c := range f.PointInTime.AsOf {
+			many, err := store.AsOfMany(ctx, all, c.Query.KnowledgeTime)
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			if len(many) != len(all) {
+				t.Fatalf("%s at %s: %d keys answered of %d", name, c.Query.KnowledgeTime, len(many), len(all))
+			}
+			for _, k := range all {
+				one, _ := store.AsOf(ctx, Query{Key: k, KnowledgeTime: c.Query.KnowledgeTime})
+				if !reflect.DeepEqual(many[k], one) {
+					t.Fatalf("%s %s at %s: batch %+v, single %+v", name, k, c.Query.KnowledgeTime, many[k], one)
+				}
 			}
 		}
 		if nonEmpty < 20 {
