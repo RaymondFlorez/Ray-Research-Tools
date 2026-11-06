@@ -16,6 +16,7 @@ npm test --workspace @picasso/canvas-render
 | `edges.ts` | 3.5 | Quadratic bezier geometry, port anchors, per-class styling, flow pulse |
 | `mount.ts` | 3.1 | Which nodes the DOM layer should mount, with the 120ms LOD debounce |
 | `chart.ts` | 7.1, 3.3 | Crosshair resolution, range select, and min/max decimation — the interaction half of a chart node |
+| `series.ts` | 3.3 | Drawing a fact series: step lines, a withheld period as a marked gap that breaks the line, and a 1-2-5 value scale, as geometry and SVG |
 | `wash.ts` | 3.6 | Passive-mode heat with a 20 minute half-life, and anomaly halo severity |
 | `ribbon.ts` | 3.6 | The event ribbon: ninety minutes of firings by time, merged where they collide, and the click that flies to them |
 | `surface.ts` | 3.3, 5.4 | `SurfaceNode`: heatmap layout, the 3D orbit camera and painted mesh, picking, and the break-even contour |
@@ -137,6 +138,24 @@ two are at the same depth on a shared edge. Picking is checked the same way: eve
 point the depth buffer says is visible picks back to itself. And through
 `canvas-integration`'s `surface.test.ts`, a StrategyNode wired into a SurfaceNode reads the
 engine's own P&L back at every heatmap cell and under the cursor in 3D.
+
+## Drawing a fact series
+
+canvas-data's `evaluateSeriesChart` decides the points; `series.ts` draws them, keeping three
+rules:
+- **A step, not a slope.** A reported figure holds until the next is reported. A line between
+  two quarters would show values that were never reported, the interpolation `chart.ts`'s
+  readout already refuses.
+- **A withheld period breaks the line.** The step before it stops where it begins. The period
+  is a hatched band with its reason, and nothing is drawn through it.
+- **The scale is honest.** Value ticks are 1, 2 or 5 times a power of ten and span every value
+  drawn, and each label names a value on the axis.
+
+The tests place each period by a time scale computed in the test, without the routine. They
+also check that every segment is horizontal or vertical, that nothing is drawn inside a gap,
+and that the tick steps are uniform and nice. The SVG takes its colors from the page through
+CSS variables, and escapes what it is given. `apps/canvas-demo/morning.html` draws it, and
+`morning-shots.mjs` checks the result in Chromium.
 
 ## What is not here
 

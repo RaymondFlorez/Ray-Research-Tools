@@ -24,3 +24,4 @@ export * from './redteam.js';
 export * from './session.js';
 export * from './keyring.js';
 export * from './transclude.js';
+export * from './exportPdf.js';

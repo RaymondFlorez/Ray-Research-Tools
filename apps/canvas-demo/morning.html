@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Picasso historical morning</title>
+    <style>
+      html, body { margin: 0; background: #f6f5f2; color: #1c1a17; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      main { padding: 24px; display: flex; flex-direction: column; gap: 14px; max-width: 760px; }
+      h1 { font-size: 16px; margin: 0; }
+      .controls { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; }
+      label { color: #6f6a61; }
+      #chart { background: #fff; border: 1px solid #c9c6bf; border-radius: 6px; padding: 8px; overflow-x: auto;
+        --series-line: #1f5f8b; --series-gap: #9a5b12; --series-grid: #8a857b; --series-text: #4a463f; }
+      table { border-collapse: collapse; }
+      td, th { text-align: left; padding: 3px 14px 3px 0; border-bottom: 1px solid #e3e0d9; }
+      th { color: #6f6a61; font-weight: 500; }
+      td.withheld { color: #9a5b12; }
+      button { font: inherit; padding: 4px 12px; }
+      #export-status { color: #3a362f; }
+      .note { color: #6f6a61; max-width: 640px; }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "@picasso/canvas-core": "/packages/canvas-core/dist/index.js",
+          "@picasso/canvas-data": "/packages/canvas-data/dist/index.js",
+          "@picasso/canvas-render": "/packages/canvas-render/dist/index.js"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <main>
+      <h1>NVDA revenue, as the canvas's time saw it</h1>
+      <div class="controls">
+        <span><label for="time">canvas time</label>
+          <select id="time"><option value="morning">pinned: 5 Aug 2024, 09:30 UTC</option><option value="live">live</option></select></span>
+        <span><label for="user">viewing as</label>
+          <select id="user"><option value="pm">pm (vendor-b licensed)</option><option value="analyst">analyst (no vendor-b licence)</option></select></span>
+        <button id="export" type="button">Export PDF</button>
+      </div>
+      <div id="chart"></div>
+      <table><thead><tr><th>period</th><th>USD bn</th><th>known</th></tr></thead><tbody id="rows"></tbody></table>
+      <div id="export-status"></div>
+      <p class="note">Sample data: the reported quarterly figures, with SYNTHETIC licensed restatements of the June quarter, so the time scrub and the licence rule have something to show. Pinned, the chart draws what was known that morning. Live, the June quarter's latest figure is licensed: a reader without the licence sees a gap there, never the older public figure.</p>
+    </main>
+    <script type="module" src="/apps/canvas-demo/dist/morning.js"></script>
+  </body>
+</html>

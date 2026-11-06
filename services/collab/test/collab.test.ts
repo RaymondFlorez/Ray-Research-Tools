@@ -287,6 +287,16 @@ suite('picasso-collab', () => {
     expect(ok.body.bundle!.appendix.datasetSnapshots).toEqual({ prices: 'snap-1' });
     expect(trail.records()).toEqual([{ actor: 'pm', tenant: 'acme', action: 'export', resource: 'acme/export', purpose: 'export.pdf', traceId: '4bf92f3577b34da6a3ce929d0e0e4736', outcome: 'exported 4 cells, 3 redacted, within the tenant' }]);
 
+    // The same export as a PDF: recorded first, the trace on the page and in the header.
+    const asPdf = await fetch(`${c.server.httpURL}/v1/exports?doc=acme%2Fexport&format=pdf`, {
+      method: 'POST', headers: { 'X-Picasso-User': 'pm', 'content-type': 'application/json', ...purpose }, body: JSON.stringify(memo),
+    });
+    const bytes = Buffer.from(await asPdf.arrayBuffer());
+    expect([asPdf.status, asPdf.headers.get('content-type'), asPdf.headers.get('x-picasso-trace')]).toEqual([200, 'application/pdf', '4bf92f3577b34da6a3ce929d0e0e4736']);
+    expect(bytes.subarray(0, 8).toString('latin1')).toBe('%PDF-1.4');
+    expect(bytes.toString('latin1')).toContain('Withheld: vendor-b: not redistributable)');
+    expect(trail.records().at(-1)!.outcome).toBe('exported 4 cells, 3 redacted, within the tenant, as PDF');
+
     // Position data leaving the tenant: refused, and the attempt recorded.
     const leak = await exportAs('pm', 'acme/export', { ...memo, leavesTenant: true, cells: [cell('book', { classification: 'positions' })] }, purpose);
     expect(leak.status).toBe(403);

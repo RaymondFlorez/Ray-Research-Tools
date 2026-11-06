@@ -20,7 +20,7 @@ npm test --workspace @picasso/canvas-data
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 | `remote.ts` | 2.3, 3.8, 7.2 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live; with a `purpose`, which the data plane requires before it serves position data |
-| `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded |
+| `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded. `classifiedSource` is the data plane's entitled read in process, held to the Go service's answers |
 | `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane in one batch, a withheld or stale field counted apart from missing data, and the age of what was screened |
 | `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale, recovering or ended |
@@ -419,9 +419,9 @@ reads on a third, so most of the reads written down were empty. They now come fr
   from when the value became known. Without it, nothing is stale.
 - **Categorical fields and listing dates are not point-in-time.** They come from the
   instrument reference as it stands, so a sector reclassification applies to every date.
-- **The series chart draws nothing.** It produces the points; there is no rendering of a line,
-  and the demo pages do not yet show one. canvas-equity's estimate-revision chart is a
-  separate node with no evaluator.
+- **One series per chart.** The series chart produces the points and canvas-render draws them
+  (`apps/canvas-demo/morning.html`); there is no multi-series chart or overlay.
+  canvas-equity's estimate-revision chart is a separate node with no evaluator.
 - **Reconnection.** `LiveTiles` folds a stream; it does not reconnect one. The demo
   reconnects only when the user changes, and a dropped connection shows as disconnected.
 - **Ingest and normalization.** Records arrive already shaped; nothing here parses a vendor

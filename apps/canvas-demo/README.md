@@ -84,10 +84,10 @@ and every figure measured on it are unchanged.
 
 Every page is served with a strict CSP, `COOP: same-origin` and
 `COEP: require-corp` (`scripts/security-headers.mjs`), and
-`scripts/csp-check.mjs` loads all eleven in Chromium and checks, per page, that
+`scripts/csp-check.mjs` loads all twelve in Chromium and checks, per page, that
 nothing the page needs was refused, that `eval` and `new Function` are, that an
 injected inline script does not run, and that the page is cross-origin isolated.
-67 checks, all passing.
+72 checks, all passing.
 
 Two details the PRD's sentence does not settle and the browser does. The
 pricing core is WebAssembly, whose compilation CSP gates: `'wasm-unsafe-eval'`
@@ -226,6 +226,25 @@ loaded, so a refused user's tab made a request the server rightly answered 403. 
 now listed once the server has let the user in. The first screenshot also showed six nodes
 drawn as five: offline, and after a reload, two nodes took the same slot. Each user now has
 their own band, and the slot comes from the document, not a counter a reload resets.
+
+## The historical morning
+
+`morning.html` is a ChartNode of NVIDIA's quarterly revenue, evaluated at the canvas's time
+through canvas-data's entitled in-process read (`classifiedSource`), and drawn by
+canvas-render's series renderer. The figures are SAMPLE data: reported quarters, with
+SYNTHETIC licensed restatements of the June quarter. Its Export PDF sends the drawn figures to
+the collaboration server's export service.
+
+`scripts/morning-shots.mjs` runs the collaboration server, with Postgres and the shipped vendor
+rules, behind the demo server. It checks in Chromium:
+- pinned to 5 August 2024, the chart draws the two quarters known then, June at its first
+  figure (26.04, 30.04);
+- live, a licensed reader sees all five quarters, June at its latest restatement (29.71);
+- live, an unlicensed reader sees June as a gap with its reason, and the line broken there;
+- Export PDF downloads a PDF that `pdftotext` reads back with the figures, June withheld
+  under the vendor rule, and the appendix;
+- the export is on the Postgres audit trail, under the trace the PDF prints;
+- no console errors.
 
 ## Sign-in
 

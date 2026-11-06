@@ -103,7 +103,8 @@ says what was measured.
 
 PRD 7.2: "every export ... writes an append-only audit record", and "exports strip or blur
 non-redistributable vendor data according to per-vendor rules encoded in the export service".
-`POST /v1/exports?doc=` is that service.
+`POST /v1/exports?doc=` is that service. With `&format=pdf` it returns the bundle as a PDF
+(canvas-guard's `bundlePdf`), whose appendix prints the trace the export was recorded under.
 
 The figures are computed in the browser, since computation does not sync, so the client sends
 the cells: each one's value, class, vendor, dataset snapshots and traces. canvas-guard's
@@ -156,9 +157,9 @@ either side's migration fails that side's test.
   failed four times in four. With the per-message check, it passed three in three. When the
   list cannot be read, open connections are closed too. That follows from the same check, and
   is tested at the list, not end to end.
-- **An export is a JSON bundle, not a PDF.** PRD 2.3's WeasyPrint pipeline is not here, and
-  nothing renders the bundle yet. The demo pages have no export button; the API is driven
-  by the tests and `signin-shots.mjs`.
+- **The PDF is plain text pages.** PRD 2.3's WeasyPrint pipeline is not here. canvas-guard
+  writes the PDF itself: figures and notes, no charts, no house layout. One demo page,
+  `morning.html`, has an export button.
 - **The export service trusts the cells' classes.** It cannot recompute a figure, so a client
   that labels a position `public` gets it past the tenant rule. The rule stops an honest
   client's mistake, and the record says who exported what. A client that wants to leak what

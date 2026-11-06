@@ -16,3 +16,4 @@ export * from './scene.js';
 export * from './chart.js';
 export * from './ribbon.js';
 export * from './surface.js';
+export * from './series.js';

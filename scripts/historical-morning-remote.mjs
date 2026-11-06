@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart } =
+const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart, classifiedSource } =
   await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
 const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
 const { backtest, History, IncompleteHistory, loadHistory } = await import(join(ROOT, 'packages/canvas-sim/dist/index.js'));
@@ -152,6 +152,18 @@ try {
       { validTime: '2024-06-30', withheld: 'Requires a vendor-b licence.' },
       { validTime: '2024-09-30', value: 35.08, knownAt: '2024-11-20' },
     ]), JSON.stringify(chartAnalyst.points));
+
+  // canvas-data's in-process entitled read against the service's, for both readers.
+  const entitlementsOf = { pm: { userId: 'pm', tenantId: 'dev', vendors: new Set(['vendor-b', 'stooq']), positions: true, mnpi: false }, analyst: { userId: 'analyst', tenantId: 'dev', vendors: new Set(), positions: false, mnpi: false } };
+  let entitledAgree = 0;
+  for (const user of ['pm', 'analyst']) {
+    for (const time of [pinned, live]) {
+      const remote = await chartAt(remoteSource(as(user)), time);
+      const inProcess = await chartAt(classifiedSource(FACTS, entitlementsOf[user]), time);
+      if (JSON.stringify(remote) === JSON.stringify(inProcess)) entitledAgree += 1;
+    }
+  }
+  check('canvas-data\'s in-process entitled read draws the chart the service does, for both readers, morning and live', entitledAgree === 4, `${entitledAgree} of 4`);
 
   // A UniverseNode on the same canvas. Market caps are SYNTHETIC figures; the
   // latest NVDA one comes from the licensed feed.

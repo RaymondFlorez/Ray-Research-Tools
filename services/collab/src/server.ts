@@ -31,7 +31,7 @@ import { REVOCATION_REFRESH_MS, RevocationList, SESSION_COOKIE, verifySessionTok
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
 import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
-import { buildBundle, ExportWouldLeak, UnreproducibleExport, type ExportCell, type VendorPolicy } from '@picasso/canvas-guard';
+import { buildBundle, bundlePdf, ExportWouldLeak, UnreproducibleExport, type ExportCell, type VendorPolicy } from '@picasso/canvas-guard';
 import { checkPurpose, traceId, type AuditStore } from './audit.js';
 import { CanvasStore, VersionExists } from './store.js';
 
@@ -223,7 +223,13 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
    * trail before the bundle is returned, and a trail that cannot be written
    * means no bundle. A refused export is recorded too, as refused.
    */
-  const exportBundle = async (request: IncomingMessage, ctx: Context, doc: string, send: (status: number, body: unknown) => void) => {
+  const exportBundle = async (
+    request: IncomingMessage,
+    ctx: Context,
+    doc: string,
+    send: (status: number, body: unknown) => void,
+    pdf: ((bytes: Uint8Array, trace: string) => void) | undefined,
+  ) => {
     const purpose = String(request.headers['x-picasso-purpose'] ?? '').trim();
     if (!purpose) return send(400, { error: 'an export states its purpose in X-Picasso-Purpose; it goes on the audit trail' });
     const bad = checkPurpose(purpose);
@@ -260,12 +266,13 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     try {
       await o.audit.append({
         ...record,
-        outcome: `exported ${bundle.cells.length} cells, ${redacted} redacted, ${body.leavesTenant ? 'leaving the tenant' : 'within the tenant'}`,
+        outcome: `exported ${bundle.cells.length} cells, ${redacted} redacted, ${body.leavesTenant ? 'leaving the tenant' : 'within the tenant'}${pdf ? ', as PDF' : ''}`,
       });
     } catch (aerr) {
       return send(503, { error: `the audit trail could not be written, so nothing is exported: ${(aerr as Error).message}` });
     }
-    send(200, { bundle, traceId: trace });
+    if (pdf) pdf(bundlePdf(bundle, { traceId: trace }), trace);
+    else send(200, { bundle, traceId: trace });
   };
 
   const persistence: Extension<Context> = {
@@ -381,7 +388,13 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
             else throw err;
           }
         } else if (url.pathname === '/v1/exports' && request.method === 'POST') {
-          await exportBundle(request, ctx, doc, send);
+          const asPdf = url.searchParams.get('format') === 'pdf';
+          await exportBundle(request, ctx, doc, send, asPdf
+            ? (bytes, trace) => {
+                response.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="export.pdf"', 'cache-control': 'no-store', 'x-picasso-trace': trace });
+                response.end(Buffer.from(bytes));
+              }
+            : undefined);
         } else if (url.pathname === '/v1/versions/state' && request.method === 'GET') {
           const v = await store.version(doc, url.searchParams.get('name') ?? '');
           if (!v) send(404, { error: 'no such version' });

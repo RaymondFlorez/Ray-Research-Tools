@@ -14,6 +14,7 @@ PRD 7's hardening layer.
 | `slo.ts` | SLO burn, per-node-kind paging, canary promotion, and the automatic-rollback rule. |
 | `audit.ts` | Append-only with no delete path, expressed in the interface rather than in a policy document. |
 | `exportBundle.ts` | Audit appendix, vendor licence redaction, and the refusal to export a figure that cannot be reproduced. |
+| `exportPdf.ts` | The bundle as a PDF: figures with their redaction notes, notices, and the audit appendix on its own page, deterministic bytes. |
 | `latency.ts` | PRD 7.1's budget table as data, with the evidence behind each row and the check against an observed distribution. |
 | `redteam.ts` | The suite phase 7 exits on. |
 | `keyring.ts` | PRD 4.4's per-tenant vendor keys: references only, no platform fallback, no way to reach another tenant's. |
@@ -219,6 +220,21 @@ string or a cached value. A stale or unverified node's value is shown *with* tha
 a degradation rung's badge rides along: during a feed outage, "NVDA last 118.5 (stale
 data)". Live means re-rendering: the function is pure in the document and the reader, and
 `transclusions` lists what a pad depends on.
+
+## The bundle as a PDF
+
+PRD 2.3's export pipeline is WeasyPrint, which is not here. `bundlePdf` writes PDF 1.4
+directly. It produces text pages in the standard Helvetica faces, with nothing embedded or
+compressed, and the same bundle always gives the same bytes. A redacted cell prints as the
+bundle holds it (`withheld`, or the rounded figure), with its note beside it. The appendix
+(dataset snapshots, traces, model versions and the audit trace of the export) is always
+printed, and an empty list says "none".
+
+The test checks the cross-reference table against the bytes, every offset landing on its
+object. It then reads the file back with `pdftotext`, which shares no code with the writer:
+each figure, each redaction note, the notices, an escaped `( ) \`, a long bundle running to
+several numbered pages, and the appendix. CI installs poppler and sets
+`PICASSO_REQUIRE_PDFTOTEXT=1`, so the read-back cannot be skipped there.
 
 ## What is not here
 

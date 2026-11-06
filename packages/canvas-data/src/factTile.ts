@@ -23,7 +23,8 @@
  */
 
 import { createNode, type NodeID, type PicassoNode, type Vec2 } from '@picasso/canvas-core';
-import type { AsOfQuery, BitemporalStore, Instant } from './bitemporal.js';
+import { BitemporalStore, type AsOfQuery, type Instant } from './bitemporal.js';
+import { checkEntitlement, type DataClass, type Entitlements } from './entitlements.js';
 import type { RemotePointInTime, RemoteRead } from './remote.js';
 import { knowledgeTimeFor, type CanvasTime } from './timescrub.js';
 
@@ -58,6 +59,47 @@ export function localSource(store: BitemporalStore<number>, name = 'local store'
       })),
       blocked: [],
     }),
+  };
+}
+
+/** A fact as the data plane stores it: a number, with its class and, when licensed, its vendor. */
+export interface ClassifiedFact {
+  key: string;
+  validTime: Instant;
+  knowledgeTime: Instant;
+  value: number;
+  source?: string;
+  dataClass: DataClass;
+  vendor?: string;
+}
+
+/**
+ * The data plane's read, in process: classified facts read as of a knowledge
+ * time and then checked against one user's entitlements, as `data-access`
+ * does. The latest version of a period is chosen first and checked second, so
+ * a period whose latest version the user may not see is withheld, never
+ * answered with an older version they may. That order is the rule, and
+ * `scripts/historical-morning-remote.mjs` holds this to the Go service's
+ * answers for a licensed and an unlicensed user.
+ */
+export function classifiedSource(facts: readonly ClassifiedFact[], entitlements: Entitlements, name = 'local store'): PointInTimeSource {
+  const store = new BitemporalStore<ClassifiedFact>();
+  store.appendAll(facts.map((f) => ({ key: f.key, validTime: f.validTime, knowledgeTime: f.knowledgeTime, value: f })));
+  return {
+    name,
+    read: async (query) => {
+      const out: SourceRead = { observations: [], blocked: [] };
+      for (const o of store.asOf(query)) {
+        const f = o.value;
+        const decision = checkEntitlement({ id: f.key, dataClass: f.dataClass, ...(f.vendor !== undefined ? { vendor: f.vendor } : {}) }, entitlements);
+        if (decision.allowed) {
+          out.observations.push({ validTime: f.validTime, value: f.value, knownAt: f.knowledgeTime, ...(f.source !== undefined ? { source: f.source } : {}) });
+        } else {
+          out.blocked.push({ validTime: f.validTime, message: decision.message ?? 'Not entitled.' });
+        }
+      }
+      return out;
+    },
   };
 }
 
