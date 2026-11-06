@@ -63,7 +63,12 @@ func TestPurposesAreTheContracts(t *testing.T) {
 func describe(ctx context.Context, pool *pgxpool.Pool, schema string, queries map[string]string) (map[string][]string, error) {
 	out := map[string][]string{}
 	for name, q := range queries {
-		rows, err := pool.Query(ctx, q, schema)
+		// A query names the schema as $1, or inline as <schema> where a parameter cannot go.
+		var args []any
+		if strings.Contains(q, "$1") {
+			args = append(args, schema)
+		}
+		rows, err := pool.Query(ctx, strings.ReplaceAll(q, "<schema>", schema), args...)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", name, err)
 		}

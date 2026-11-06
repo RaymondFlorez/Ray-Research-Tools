@@ -42,7 +42,9 @@ suite('the audit trail on Postgres', () => {
   it('is the schema the Go package creates, as Postgres describes both', async () => {
     expect(Object.keys(contract.schema).sort()).toEqual(Object.keys(contract.queries).sort());
     for (const [name, query] of Object.entries(contract.queries)) {
-      const rows = (await pool.query<Record<string, string>>(query, [schema])).rows;
+      // A query names the schema as $1, or inline as <schema> where a parameter cannot go.
+      const sql = query.split('<schema>').join(schema);
+      const rows = (await pool.query<Record<string, string>>(sql, sql.includes('$1') ? [schema] : [])).rows;
       const got = rows.map((row) => Object.values(row)[0]!.split(schema).join('<schema>'));
       expect({ [name]: got }).toEqual({ [name]: contract.schema[name] });
     }

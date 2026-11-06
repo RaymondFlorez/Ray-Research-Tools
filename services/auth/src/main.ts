@@ -9,7 +9,9 @@
  * The provider sends the browser back to `<public-url>/auth/callback`, which
  * must be registered with it. `--key` holds the session-signing key as a
  * private JWK; without it a key is made at start, and every session ends when
- * the process does.
+ * the process does. To rotate it, restart with the new key as `--key` and the
+ * old one as `--retired-key`: tokens it signed keep verifying, and new ones
+ * are signed with the new key. Drop `--retired-key` fifteen minutes later.
  */
 
 import { readFileSync } from 'node:fs';
@@ -26,6 +28,7 @@ const { values } = parseArgs({
     users: { type: 'string' },
     tenants: { type: 'string' },
     key: { type: 'string' },
+    'retired-key': { type: 'string', multiple: true },
     port: { type: 'string', default: '8770' },
     address: { type: 'string', default: '127.0.0.1' },
   },
@@ -42,6 +45,7 @@ const issuer = await SessionIssuer.create({
   issuer: publicUrl,
   tenants: read(values.tenants!),
   ...(values.key ? { privateJwk: read(values.key) } : {}),
+  ...(values['retired-key'] ? { retiredJwks: values['retired-key'].map(read) } : {}),
 });
 const oidc = new Oidc({
   issuer: values['oidc-issuer']!,

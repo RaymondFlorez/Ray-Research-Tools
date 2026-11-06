@@ -48,7 +48,15 @@ export function traceId(traceparent: string | undefined): string {
   return randomBytes(16).toString('hex');
 }
 
-/** Creates the trail's schema, as its owner: the Go `audit.Migrate`, statement for statement. */
+/** The minimum time a record is kept, set when the schema is created: the Go `audit.DefaultRetentionDays`. */
+export const DEFAULT_RETENTION_DAYS = 2557;
+
+/**
+ * Creates the trail's schema, as its owner: the Go `audit.Migrate`,
+ * statement for statement. The database stamps each record's time; a record
+ * goes only through the owner's `expire()`, and only past the retention
+ * period the schema holds.
+ */
 export async function migrateAudit(pool: pg.Pool, schema: string): Promise<void> {
   if (!IDENT.test(schema)) throw new Error(`schema ${JSON.stringify(schema)} is not a plain identifier`);
   await pool.query(`
@@ -64,14 +72,52 @@ CREATE TABLE IF NOT EXISTS ${schema}.records (
   trace_id text NOT NULL CHECK (trace_id <> ''),
   outcome text NOT NULL
 );
+CREATE TABLE IF NOT EXISTS ${schema}.retention (
+  one boolean PRIMARY KEY DEFAULT true CHECK (one),
+  min_days integer NOT NULL CHECK (min_days >= 1)
+);
+INSERT INTO ${schema}.retention (min_days) VALUES (${DEFAULT_RETENTION_DAYS}) ON CONFLICT DO NOTHING;
 CREATE OR REPLACE FUNCTION ${schema}.refuse() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION '% on the audit trail is refused: it is append-only', TG_OP;
 END $$;
+CREATE OR REPLACE FUNCTION ${schema}.stamp() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.at := now();
+  RETURN NEW;
+END $$;
+CREATE OR REPLACE FUNCTION ${schema}.guard_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_setting('picasso.audit_expiry', true) IS DISTINCT FROM 'on' THEN
+    RAISE EXCEPTION 'DELETE on the audit trail is refused: it is append-only';
+  END IF;
+  IF OLD.at > now() - make_interval(days => (SELECT min_days FROM ${schema}.retention)) THEN
+    RAISE EXCEPTION 'record % is inside the retention period and is kept', OLD.seq;
+  END IF;
+  RETURN OLD;
+END $$;
+CREATE OR REPLACE FUNCTION ${schema}.expire() RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE n bigint;
+BEGIN
+  PERFORM set_config('picasso.audit_expiry', 'on', true);
+  DELETE FROM ${schema}.records WHERE at <= now() - make_interval(days => (SELECT min_days FROM ${schema}.retention));
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM set_config('picasso.audit_expiry', 'off', true);
+  RETURN n;
+END $$;
+REVOKE ALL ON FUNCTION ${schema}.expire() FROM PUBLIC;
+DROP TRIGGER IF EXISTS stamp ON ${schema}.records;
+CREATE TRIGGER stamp BEFORE INSERT ON ${schema}.records FOR EACH ROW EXECUTE FUNCTION ${schema}.stamp();
 DROP TRIGGER IF EXISTS no_change ON ${schema}.records;
-CREATE TRIGGER no_change BEFORE UPDATE OR DELETE ON ${schema}.records FOR EACH ROW EXECUTE FUNCTION ${schema}.refuse();
+CREATE TRIGGER no_change BEFORE UPDATE ON ${schema}.records FOR EACH ROW EXECUTE FUNCTION ${schema}.refuse();
+DROP TRIGGER IF EXISTS no_delete ON ${schema}.records;
+CREATE TRIGGER no_delete BEFORE DELETE ON ${schema}.records FOR EACH ROW EXECUTE FUNCTION ${schema}.guard_delete();
 DROP TRIGGER IF EXISTS no_truncate ON ${schema}.records;
 CREATE TRIGGER no_truncate BEFORE TRUNCATE ON ${schema}.records FOR EACH STATEMENT EXECUTE FUNCTION ${schema}.refuse();
+DROP TRIGGER IF EXISTS no_delete ON ${schema}.retention;
+CREATE TRIGGER no_delete BEFORE DELETE ON ${schema}.retention FOR EACH ROW EXECUTE FUNCTION ${schema}.refuse();
+DROP TRIGGER IF EXISTS no_truncate ON ${schema}.retention;
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON ${schema}.retention FOR EACH STATEMENT EXECUTE FUNCTION ${schema}.refuse();
 `);
 }
 

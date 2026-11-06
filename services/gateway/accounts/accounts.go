@@ -143,6 +143,46 @@ func (v *Vault) Secret(user, provider string) (string, error) {
 	return string(plain), nil
 }
 
+// Rekey re-seals every credential under newKey and saves the vault, all or
+// nothing: if any row cannot be opened under the current key, nothing is
+// changed. Afterwards the old key opens nothing in the saved file. It returns
+// how many credentials were re-sealed.
+func (v *Vault) Rekey(newKey []byte) (int, error) {
+	if len(newKey) != 32 {
+		return 0, fmt.Errorf("the vault key must be 32 bytes, not %d", len(newKey))
+	}
+	block, err := aes.NewCipher(newKey)
+	if err != nil {
+		return 0, err
+	}
+	next, err := cipher.NewGCM(block)
+	if err != nil {
+		return 0, err
+	}
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	resealed := make(map[string]record, len(v.records))
+	for k, r := range v.records {
+		plain, err := v.aead.Open(nil, r.Nonce, r.Sealed, []byte(id(r.User, r.Provider)))
+		if err != nil {
+			return 0, fmt.Errorf("the credential for %s/%s cannot be opened under the current key; nothing was re-sealed", r.User, r.Provider)
+		}
+		nonce := make([]byte, next.NonceSize())
+		if _, err := rand.Read(nonce); err != nil {
+			return 0, err
+		}
+		r.Nonce, r.Sealed = nonce, next.Seal(nil, nonce, plain, []byte(id(r.User, r.Provider)))
+		resealed[k] = r
+	}
+	previous, previousAEAD := v.records, v.aead
+	v.records, v.aead = resealed, next
+	if err := v.save(); err != nil {
+		v.records, v.aead = previous, previousAEAD
+		return 0, err
+	}
+	return len(resealed), nil
+}
+
 // Connections lists what a user has connected, without the secrets.
 func (v *Vault) Connections(user string) map[string]Connection {
 	v.mu.Lock()

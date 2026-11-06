@@ -1,9 +1,9 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createLocalJWKSet, createRemoteJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Oidc } from '../src/oidc.js';
 import { SESSION_COOKIE, startAuth } from '../src/server.js';
 import { AUDIENCE, REVOKED_FOR_MS, SessionIssuer } from '../src/sessions.js';
-import { REVOCATION_MAX_STALE_MS, REVOCATION_REFRESH_MS, RevocationList } from '../src/verify.js';
+import { REVOCATION_MAX_STALE_MS, REVOCATION_REFRESH_MS, RevocationList, verifySessionToken } from '../src/verify.js';
 import { startStandIn, type StandInOptions } from '../src/standin.js';
 
 const CLIENT = 'picasso-web';
@@ -133,6 +133,35 @@ describe('signing in', () => {
     const { sids } = (await (await fetch(`${s.url}/auth/revoked`)).json()) as { sids: string[] };
     expect(sids).toContain(gone);
     expect(sids).not.toContain(live);
+  });
+});
+
+describe('rotating the signing key', () => {
+  it('keeps a retired key verifying, signs with the new one, and stops when the old one is dropped', async () => {
+    const keyOf = async () => {
+      const { privateKey } = await generateKeyPair('EdDSA', { crv: 'Ed25519', extractable: true });
+      return exportJWK(privateKey);
+    };
+    const [oldKey, newKey] = [await keyOf(), await keyOf()];
+    const before = await SessionIssuer.create({ issuer: 'https://picasso.example', tenants, privateJwk: oldKey });
+    const { token } = await before.mint('pm', 'desk', { authTime: Date.now(), amr: ['pwd', 'otp'] });
+    const oldKid = before.jwks().keys[0]!.kid;
+
+    const rotating = await SessionIssuer.create({ issuer: 'https://picasso.example', tenants, privateJwk: newKey, retiredJwks: [oldKey] });
+    const published = rotating.jwks().keys;
+    expect(published.map((k) => k.kid)).toEqual([expect.not.stringMatching(oldKid!), oldKid]);
+    expect(published.every((k) => k.d === undefined)).toBe(true);
+    // A token the old key signed still verifies, here and at a service reading the published set.
+    expect((await rotating.verify(token)).sub).toBe('pm');
+    const atService = await verifySessionToken(token, createLocalJWKSet(rotating.jwks()), { issuer: 'https://picasso.example', revoked: new Set() });
+    expect(atService.ok).toBe(true);
+    // Refreshing it signs with the new key.
+    const next = await rotating.refresh(token);
+    expect(JSON.parse(Buffer.from(next.token.split('.')[0]!, 'base64url').toString()).kid).toBe(published[0]!.kid);
+
+    const after = await SessionIssuer.create({ issuer: 'https://picasso.example', tenants, privateJwk: newKey });
+    await expect(after.verify(token)).rejects.toThrow(/no key/);
+    expect((await after.verify(next.token)).sub).toBe('pm');
   });
 });
 

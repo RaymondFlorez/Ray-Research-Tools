@@ -104,7 +104,19 @@ func (m *Memory) Records() []Record {
 
 var identifier = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
 
+// DefaultRetentionDays is the minimum time a record is kept, set when the
+// schema is created: seven years. The PRD asks for "a distinct retention
+// policy" and names no period, so this is a default to change, not a
+// requirement; SetRetention changes it, as the schema's owner.
+const DefaultRetentionDays = 2557
+
 // Migrate creates the audit schema, as its owner.
+//
+// Beyond append-only, three rules live in the schema. The database stamps
+// each record's time, so a writer cannot backdate one into expiry. A record
+// can be deleted only by expire(), only once it is older than the retention
+// period in the schema's own retention table, and expire() is not granted
+// to anyone but the owner. TRUNCATE and UPDATE stay refused for everyone.
 func Migrate(ctx context.Context, pool *pgxpool.Pool, schema string) error {
 	if !identifier.MatchString(schema) {
 		return fmt.Errorf("schema %q is not a plain identifier", schema)
@@ -122,15 +134,74 @@ CREATE TABLE IF NOT EXISTS %[1]s.records (
   trace_id text NOT NULL CHECK (trace_id <> ''),
   outcome text NOT NULL
 );
+CREATE TABLE IF NOT EXISTS %[1]s.retention (
+  one boolean PRIMARY KEY DEFAULT true CHECK (one),
+  min_days integer NOT NULL CHECK (min_days >= 1)
+);
+INSERT INTO %[1]s.retention (min_days) VALUES (%[2]d) ON CONFLICT DO NOTHING;
 CREATE OR REPLACE FUNCTION %[1]s.refuse() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION '%% on the audit trail is refused: it is append-only', TG_OP;
 END $$;
+CREATE OR REPLACE FUNCTION %[1]s.stamp() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.at := now();
+  RETURN NEW;
+END $$;
+CREATE OR REPLACE FUNCTION %[1]s.guard_delete() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF current_setting('picasso.audit_expiry', true) IS DISTINCT FROM 'on' THEN
+    RAISE EXCEPTION 'DELETE on the audit trail is refused: it is append-only';
+  END IF;
+  IF OLD.at > now() - make_interval(days => (SELECT min_days FROM %[1]s.retention)) THEN
+    RAISE EXCEPTION 'record %% is inside the retention period and is kept', OLD.seq;
+  END IF;
+  RETURN OLD;
+END $$;
+CREATE OR REPLACE FUNCTION %[1]s.expire() RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE n bigint;
+BEGIN
+  PERFORM set_config('picasso.audit_expiry', 'on', true);
+  DELETE FROM %[1]s.records WHERE at <= now() - make_interval(days => (SELECT min_days FROM %[1]s.retention));
+  GET DIAGNOSTICS n = ROW_COUNT;
+  PERFORM set_config('picasso.audit_expiry', 'off', true);
+  RETURN n;
+END $$;
+REVOKE ALL ON FUNCTION %[1]s.expire() FROM PUBLIC;
+DROP TRIGGER IF EXISTS stamp ON %[1]s.records;
+CREATE TRIGGER stamp BEFORE INSERT ON %[1]s.records FOR EACH ROW EXECUTE FUNCTION %[1]s.stamp();
 DROP TRIGGER IF EXISTS no_change ON %[1]s.records;
-CREATE TRIGGER no_change BEFORE UPDATE OR DELETE ON %[1]s.records FOR EACH ROW EXECUTE FUNCTION %[1]s.refuse();
+CREATE TRIGGER no_change BEFORE UPDATE ON %[1]s.records FOR EACH ROW EXECUTE FUNCTION %[1]s.refuse();
+DROP TRIGGER IF EXISTS no_delete ON %[1]s.records;
+CREATE TRIGGER no_delete BEFORE DELETE ON %[1]s.records FOR EACH ROW EXECUTE FUNCTION %[1]s.guard_delete();
 DROP TRIGGER IF EXISTS no_truncate ON %[1]s.records;
 CREATE TRIGGER no_truncate BEFORE TRUNCATE ON %[1]s.records FOR EACH STATEMENT EXECUTE FUNCTION %[1]s.refuse();
-`, schema))
+DROP TRIGGER IF EXISTS no_delete ON %[1]s.retention;
+CREATE TRIGGER no_delete BEFORE DELETE ON %[1]s.retention FOR EACH ROW EXECUTE FUNCTION %[1]s.refuse();
+DROP TRIGGER IF EXISTS no_truncate ON %[1]s.retention;
+CREATE TRIGGER no_truncate BEFORE TRUNCATE ON %[1]s.retention FOR EACH STATEMENT EXECUTE FUNCTION %[1]s.refuse();
+`, schema, DefaultRetentionDays))
+	return err
+}
+
+// Expire removes the records older than the retention period, and nothing
+// else. It must run as the schema's owner: the application's role is not
+// granted the function, and has no DELETE on the trail either.
+func Expire(ctx context.Context, pool *pgxpool.Pool, schema string) (int64, error) {
+	if !identifier.MatchString(schema) {
+		return 0, fmt.Errorf("schema %q is not a plain identifier", schema)
+	}
+	var n int64
+	err := pool.QueryRow(ctx, fmt.Sprintf("SELECT %s.expire()", schema)).Scan(&n)
+	return n, err
+}
+
+// SetRetention changes the minimum time a record is kept, as the owner.
+func SetRetention(ctx context.Context, pool *pgxpool.Pool, schema string, days int) error {
+	if !identifier.MatchString(schema) {
+		return fmt.Errorf("schema %q is not a plain identifier", schema)
+	}
+	_, err := pool.Exec(ctx, fmt.Sprintf("UPDATE %s.retention SET min_days = $1", schema), days)
 	return err
 }
 

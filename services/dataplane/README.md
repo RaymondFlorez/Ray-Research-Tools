@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 43 tests, three of them need Postgres
+go test -race ./...                                    # 44 tests, four of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -156,6 +156,19 @@ service accounts".
   `audit.GrantService` gives the application's role `INSERT` and nothing else. The test drops
   the trigger and connects as that role. It may insert, and is refused `DELETE`, `UPDATE` and
   `SELECT`: the service cannot even read back what it wrote.
+- **Retention is the database's, and the owner's alone.** The schema holds its retention
+  period in a table of its own, seven years by default, and the database stamps every
+  record's time, so a writer cannot backdate one into expiry. A record is deleted only inside
+  `expire()`, which the delete trigger checks for, and only once it is past the period. The
+  function is not granted to anyone but the owner. `-audit-expire` runs it and exits. The test
+  covers each rule:
+  - a backdated insert is stamped now;
+  - a plain `DELETE` by the owner is refused;
+  - inside the expiry setting, a record still in its period is refused;
+  - the service role is refused `expire()`;
+  - expiry takes exactly the records past the period;
+  - shortening the period takes effect at the next run;
+  - the policy row cannot be deleted.
 - **Every writer creates the same trail.** The gateway carries this package. The
   collaboration server writes exports to the same table from TypeScript. The schema, as
   Postgres describes it after `Migrate`, and the purposes that pass and fail are in
@@ -209,8 +222,10 @@ with a SYNTHETIC position:
   names, and in development that is the schema's owner, which could drop the triggers.
   `audit.GrantService` makes a role insert-only, and an operator has to run it and connect as
   that role; `main` does not.
-- **No retention policy.** Nothing expires an audit record. "A distinct retention policy" is,
-  so far, "kept until the owner drops a trigger".
+- **The retention period is a default, not the PRD's.** The PRD asks for "a distinct
+  retention policy" and names no period. The schema keeps a record seven years unless its
+  owner sets another (`audit.SetRetention`), and `-audit-expire` must be run, as the owner, for
+  anything to go. Nothing schedules it.
 - **The live stream is not on the trail.** `/v1/stream` checks entitlements per tick, and
   writes no record if the symbology classifies an instrument as positions. There is no export
   endpoint here to audit. canvas-guard's export bundle is built in the browser, and is not

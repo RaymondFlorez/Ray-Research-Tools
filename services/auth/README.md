@@ -8,7 +8,7 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 17 tests
+npm test --workspace @picasso/auth          # 18 tests
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
    --users users.json --tenants config/tenants.json --key session-key.jwk
@@ -110,6 +110,19 @@ logged-out session from a live one does not guess. Both languages are tested the
 Removing the revocation check, or the staleness check, fails those tests. In the Go suite,
 the contract test fails too.
 
+## Rotating the signing key
+
+`--retired-key` keeps a previous signing key published and accepted, and it never signs. The
+test signs a token under one key, then restarts with a new key and the old one retired:
+- the old token still verifies, here and at a service reading the published key set;
+- refreshing it signs with the new key;
+- once the old key is dropped, the old token is refused.
+
+The test found a bug. Each key's id was sixteen characters of base64 over `["Ed25519", x]`,
+which encode only the curve name, so every Ed25519 key got the id `WyJFZDI1NTE5Iiwi`. With
+two keys published, a verifier choosing by id could not tell them apart. The id is now the
+key's RFC 7638 thumbprint.
+
 ## The browser check
 
 `apps/canvas-demo/scripts/signin-shots.mjs` runs everything with no development identity
@@ -142,6 +155,8 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   position reads and AI dispatches. Each record names the user, the tenant and a trace id, but
   not the session id. Sign-in, refresh and logout are not recorded anywhere but this
   process's memory.
-- **One signing key, no rotation.**
+- **Rotation is a restart.** The new key goes in `--key` and the old one in `--retired-key`.
+  Tokens the old key signed keep verifying, and new ones are signed with the new key. Drop
+  `--retired-key` fifteen minutes later. Nothing automates the schedule.
 - **MFA is what the provider says it is.** `amr` is trusted as reported, and `sms` counts as a
   second factor, as canvas-guard's README says.

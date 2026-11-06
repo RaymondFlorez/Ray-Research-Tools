@@ -1,37 +1,53 @@
 {
  "note": "What every writer of the PRD 7.2 audit trail agrees on. The schema part is written by services/dataplane/audit (UPDATE_AUDIT_CONTRACT=1); services/gateway/audit and services/collab are held to it. Do not edit the schema by hand.",
  "queries": {
-  "checks": "SELECT conname || '|' || pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 AND r.relname = 'records' ORDER BY conname",
-  "columns": "SELECT column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '') FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'records' ORDER BY ordinal_position",
+  "checks": "SELECT r.relname || '.' || conname || '|' || pg_get_constraintdef(c.oid) FROM pg_constraint c JOIN pg_class r ON r.oid = c.conrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 ORDER BY r.relname, conname",
+  "columns": "SELECT table_name || '.' || column_name || '|' || data_type || '|' || is_nullable || '|' || coalesce(column_default, '') FROM information_schema.columns WHERE table_schema = $1 ORDER BY table_name, ordinal_position",
   "functions": "SELECT p.proname || '|' || regexp_replace(p.prosrc, '\\s+', ' ', 'g') FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = $1 ORDER BY p.proname",
-  "triggers": "SELECT t.tgname || '|' || pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class r ON r.oid = t.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 AND r.relname = 'records' AND NOT t.tgisinternal ORDER BY t.tgname"
+  "policy": "SELECT 'retention|' || min_days FROM \u003cschema\u003e.retention",
+  "triggers": "SELECT r.relname || '.' || t.tgname || '|' || pg_get_triggerdef(t.oid) FROM pg_trigger t JOIN pg_class r ON r.oid = t.tgrelid JOIN pg_namespace n ON n.oid = r.relnamespace WHERE n.nspname = $1 AND NOT t.tgisinternal ORDER BY r.relname, t.tgname"
  },
  "schema": {
   "checks": [
-   "records_action_check|CHECK ((action \u003c\u003e ''::text))",
-   "records_actor_check|CHECK ((actor \u003c\u003e ''::text))",
-   "records_pkey|PRIMARY KEY (seq)",
-   "records_purpose_check|CHECK ((purpose \u003c\u003e ''::text))",
-   "records_resource_check|CHECK ((resource \u003c\u003e ''::text))",
-   "records_trace_id_check|CHECK ((trace_id \u003c\u003e ''::text))"
+   "records.records_action_check|CHECK ((action \u003c\u003e ''::text))",
+   "records.records_actor_check|CHECK ((actor \u003c\u003e ''::text))",
+   "records.records_pkey|PRIMARY KEY (seq)",
+   "records.records_purpose_check|CHECK ((purpose \u003c\u003e ''::text))",
+   "records.records_resource_check|CHECK ((resource \u003c\u003e ''::text))",
+   "records.records_trace_id_check|CHECK ((trace_id \u003c\u003e ''::text))",
+   "retention.retention_min_days_check|CHECK ((min_days \u003e= 1))",
+   "retention.retention_one_check|CHECK (one)",
+   "retention.retention_pkey|PRIMARY KEY (one)"
   ],
   "columns": [
-   "seq|bigint|NO|nextval('\u003cschema\u003e.records_seq_seq'::regclass)",
-   "at|timestamp with time zone|NO|now()",
-   "actor|text|NO|",
-   "tenant|text|NO|",
-   "action|text|NO|",
-   "resource|text|NO|",
-   "purpose|text|NO|",
-   "trace_id|text|NO|",
-   "outcome|text|NO|"
+   "records.seq|bigint|NO|nextval('\u003cschema\u003e.records_seq_seq'::regclass)",
+   "records.at|timestamp with time zone|NO|now()",
+   "records.actor|text|NO|",
+   "records.tenant|text|NO|",
+   "records.action|text|NO|",
+   "records.resource|text|NO|",
+   "records.purpose|text|NO|",
+   "records.trace_id|text|NO|",
+   "records.outcome|text|NO|",
+   "retention.one|boolean|NO|true",
+   "retention.min_days|integer|NO|"
   ],
   "functions": [
-   "refuse| BEGIN RAISE EXCEPTION '% on the audit trail is refused: it is append-only', TG_OP; END "
+   "expire| DECLARE n bigint; BEGIN PERFORM set_config('picasso.audit_expiry', 'on', true); DELETE FROM \u003cschema\u003e.records WHERE at \u003c= now() - make_interval(days =\u003e (SELECT min_days FROM \u003cschema\u003e.retention)); GET DIAGNOSTICS n = ROW_COUNT; PERFORM set_config('picasso.audit_expiry', 'off', true); RETURN n; END ",
+   "guard_delete| BEGIN IF current_setting('picasso.audit_expiry', true) IS DISTINCT FROM 'on' THEN RAISE EXCEPTION 'DELETE on the audit trail is refused: it is append-only'; END IF; IF OLD.at \u003e now() - make_interval(days =\u003e (SELECT min_days FROM \u003cschema\u003e.retention)) THEN RAISE EXCEPTION 'record % is inside the retention period and is kept', OLD.seq; END IF; RETURN OLD; END ",
+   "refuse| BEGIN RAISE EXCEPTION '% on the audit trail is refused: it is append-only', TG_OP; END ",
+   "stamp| BEGIN NEW.at := now(); RETURN NEW; END "
+  ],
+  "policy": [
+   "retention|2557"
   ],
   "triggers": [
-   "no_change|CREATE TRIGGER no_change BEFORE DELETE OR UPDATE ON \u003cschema\u003e.records FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.refuse()",
-   "no_truncate|CREATE TRIGGER no_truncate BEFORE TRUNCATE ON \u003cschema\u003e.records FOR EACH STATEMENT EXECUTE FUNCTION \u003cschema\u003e.refuse()"
+   "records.no_change|CREATE TRIGGER no_change BEFORE UPDATE ON \u003cschema\u003e.records FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.refuse()",
+   "records.no_delete|CREATE TRIGGER no_delete BEFORE DELETE ON \u003cschema\u003e.records FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.guard_delete()",
+   "records.no_truncate|CREATE TRIGGER no_truncate BEFORE TRUNCATE ON \u003cschema\u003e.records FOR EACH STATEMENT EXECUTE FUNCTION \u003cschema\u003e.refuse()",
+   "records.stamp|CREATE TRIGGER stamp BEFORE INSERT ON \u003cschema\u003e.records FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.stamp()",
+   "retention.no_delete|CREATE TRIGGER no_delete BEFORE DELETE ON \u003cschema\u003e.retention FOR EACH ROW EXECUTE FUNCTION \u003cschema\u003e.refuse()",
+   "retention.no_truncate|CREATE TRIGGER no_truncate BEFORE TRUNCATE ON \u003cschema\u003e.retention FOR EACH STATEMENT EXECUTE FUNCTION \u003cschema\u003e.refuse()"
   ]
  },
  "purposes": {

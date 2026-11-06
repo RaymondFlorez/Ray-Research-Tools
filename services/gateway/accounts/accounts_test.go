@@ -97,3 +97,44 @@ func mustJSON(t *testing.T, v any) string {
 	}
 	return string(raw)
 }
+
+// Rotating the vault key re-seals every credential, and the old key then opens nothing.
+func TestRekeyReSealsEverythingOrNothing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vault.json")
+	oldKey, newKey := key(t), key(t)
+	v, err := Open(oldKey, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = v.Put("pm", "anthropic", APIKey, "sk-ant-api03-secret-value-WXYZ")
+	_ = v.Put("analyst", "openrouter", OAuth, "sk-or-v1-another-secret-ABCD")
+	before, _ := os.ReadFile(path)
+
+	if n, err := v.Rekey(newKey); err != nil || n != 2 {
+		t.Fatalf("rekey: %d (%v)", n, err)
+	}
+	if s, _ := v.Secret("pm", "anthropic"); s != "sk-ant-api03-secret-value-WXYZ" {
+		t.Errorf("after rekey, in this process: %q", s)
+	}
+	after, _ := os.ReadFile(path)
+	if bytes.Equal(before, after) {
+		t.Fatal("the file did not change")
+	}
+	reopened, _ := Open(newKey, path)
+	if s, _ := reopened.Secret("analyst", "openrouter"); s != "sk-or-v1-another-secret-ABCD" {
+		t.Errorf("reopened under the new key: %q", s)
+	}
+	stale, _ := Open(oldKey, path)
+	if _, err := stale.Secret("pm", "anthropic"); err == nil {
+		t.Error("the old key still opens a credential")
+	}
+
+	// A row the current key cannot open: nothing is re-sealed, nothing is written.
+	broken, _ := Open(key(t), path)
+	if _, err := broken.Rekey(key(t)); err == nil || !strings.Contains(err.Error(), "nothing was re-sealed") {
+		t.Errorf("rekey under the wrong key: %v", err)
+	}
+	if now, _ := os.ReadFile(path); !bytes.Equal(now, after) {
+		t.Error("a failed rekey changed the file")
+	}
+}

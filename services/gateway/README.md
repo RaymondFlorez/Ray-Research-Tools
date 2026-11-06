@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 24 tests; one live and two on Postgres, skipped by default
+go test -race ./...                       # 26 tests; one live and three on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
@@ -106,8 +106,11 @@ Anthropic's API is the one provider host this environment reaches. Measured:
   is refused within five seconds.
 - **No revocation upstream.** Disconnecting deletes the gateway's copy; the key stays valid with
   the provider until the user revokes it there.
-- **The vault key is one key.** No rotation, no KMS. The per-user dispatch log is in memory. The
-  trail is in Postgres with `-audit-pg`, under the same limits as the data plane's: the process
-  writes as the role it is given, and nothing expires a record.
+- **The vault key rotates by hand, with no KMS.** `-rekey` re-seals every credential from
+  `GATEWAY_VAULT_KEY` to `GATEWAY_VAULT_NEW_KEY`, all or nothing. The test re-seals two, finds
+  the old key opens neither, and finds that a rekey under the wrong key changes nothing on
+  disk. The per-user dispatch log is in memory. The trail is in Postgres with `-audit-pg`,
+  under the data plane's rules: the process writes as the role it is given, and records
+  expire only when the schema's owner runs expiry.
 - **No budgets or rate limits.** `canvas-router` holds the budget rules and does not yet call
   this gateway; nothing here stops a user spending their own account.

@@ -70,6 +70,7 @@ func main() {
 	schema := flag.String("schema", "pit", "Postgres schema")
 	migrate := flag.Bool("migrate", false, "create the schema first (as the owning role)")
 	auditSchema := flag.String("audit-schema", "audit", "the audit trail's own schema, with -pg")
+	auditExpire := flag.Bool("audit-expire", false, "remove the audit records past the schema's retention period, then exit; run as the schema's owner, with -pg")
 	replay := flag.String("replay", "", "a recording to replay as the feed (NDJSON)")
 	speed := flag.Float64("speed", 1, "replay speed; 0 is as fast as possible")
 	coinbase := flag.String("coinbase", "", "Coinbase Exchange products to stream live, comma-separated (each must be in the symbology under feed \"coinbase\")")
@@ -78,6 +79,22 @@ func main() {
 	devIdentity := flag.Bool("dev-identity", false, "also accept X-Picasso-User as the caller's name, for development; never on a network")
 	staleAfter := flag.Duration("stale-after", 5*time.Second, "a series with no update for this long is stale")
 	flag.Parse()
+	if *auditExpire {
+		if *pgURL == "" {
+			log.Fatal("-audit-expire needs -pg")
+		}
+		pool, err := pgxpool.New(context.Background(), *pgURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+		n, err := audit.Expire(context.Background(), pool, *auditSchema)
+		pool.Close()
+		if err != nil {
+			log.Fatalf("audit expiry: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "audit expiry: %d records past the retention period removed from %s\n", n, *auditSchema)
+		return
+	}
 
 	if *usersPath == "" || *symPath == "" {
 		log.Fatal("-users and -symbology are required")

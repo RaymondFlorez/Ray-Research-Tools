@@ -18,7 +18,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { SESSION_TTL_MS, acceptRefresh, authorizeSession, type TenantProfile, type VerifiedClaims } from '@picasso/canvas-guard';
-import { SignJWT, exportJWK, generateKeyPair, importJWK, jwtVerify, type CryptoKey, type JWK } from 'jose';
+import { SignJWT, calculateJwkThumbprint, exportJWK, generateKeyPair, importJWK, jwtVerify, type CryptoKey, type JWK } from 'jose';
 
 export const AUDIENCE = 'picasso';
 const ALG = 'EdDSA';
@@ -42,6 +42,13 @@ export interface IssuerOptions {
   tenants: Readonly<Record<string, { holdsPositions: boolean }>>;
   /** A signing key as a private JWK, to survive restarts. Absent: a new key, and every session ends at restart. */
   privateJwk?: JWK;
+  /**
+   * Keys this issuer signed with before, kept for a rotation. They are
+   * published and accepted, and never sign. A token lives fifteen minutes, so
+   * a retired key can be dropped once the new one has signed for that long.
+   * Public or private JWKs; only the public part is kept.
+   */
+  retiredJwks?: readonly JWK[];
   now?: () => number;
 }
 
@@ -61,8 +68,9 @@ export class SessionIssuer {
   private constructor(
     private readonly options: IssuerOptions,
     private readonly privateKey: CryptoKey,
-    private readonly publicKey: CryptoKey,
     private readonly publicJwk: JWK,
+    /** Every key a token may be verified with, by kid: the signing key and the retired ones. */
+    private readonly verifying: ReadonlyMap<string, { key: CryptoKey; jwk: JWK }>,
   ) {
     this.now = options.now ?? Date.now;
   }
@@ -72,22 +80,31 @@ export class SessionIssuer {
     let publicJwk: JWK;
     if (options.privateJwk) {
       privateKey = (await importJWK(options.privateJwk, ALG)) as CryptoKey;
-      const { d: _secret, ...pub } = options.privateJwk;
-      publicJwk = pub;
+      publicJwk = options.privateJwk;
     } else {
       const pair = await generateKeyPair(ALG, { crv: 'Ed25519', extractable: true });
       privateKey = pair.privateKey;
       publicJwk = await exportJWK(pair.publicKey);
     }
-    const kid = Buffer.from(JSON.stringify([publicJwk.crv, publicJwk.x])).toString('base64url').slice(0, 16);
-    publicJwk = { ...publicJwk, kid, alg: ALG, use: 'sig' };
-    const publicKey = (await importJWK(publicJwk, ALG)) as CryptoKey;
-    return new SessionIssuer(options, privateKey, publicKey, publicJwk);
+    // The key id is the key's RFC 7638 thumbprint. The first version took
+    // sixteen characters of base64 over ["Ed25519", x], which encode only the
+    // curve name: every Ed25519 key got the same id, so two published keys
+    // could not be told apart. The rotation test found it.
+    const publish = async (jwk: JWK): Promise<JWK> => {
+      const { d: _secret, ...pub } = jwk;
+      return { ...pub, kid: await calculateJwkThumbprint(pub, 'sha256'), alg: ALG, use: 'sig' };
+    };
+    publicJwk = await publish(publicJwk);
+    const verifying = new Map<string, { key: CryptoKey; jwk: JWK }>();
+    for (const jwk of [publicJwk, ...(await Promise.all((options.retiredJwks ?? []).map(publish)))]) {
+      if (!verifying.has(jwk.kid!)) verifying.set(jwk.kid!, { key: (await importJWK(jwk, ALG)) as CryptoKey, jwk });
+    }
+    return new SessionIssuer(options, privateKey, publicJwk, verifying);
   }
 
-  /** The public key set the services verify against. */
+  /** The public key set the services verify against: the signing key first, then any retired ones. */
   jwks(): { keys: JWK[] } {
-    return { keys: [this.publicJwk] };
+    return { keys: [...this.verifying.values()].map((v) => v.jwk) };
   }
 
   private profile(tenant: string): TenantProfile {
@@ -120,7 +137,12 @@ export class SessionIssuer {
   async verify(token: string): Promise<Session> {
     let payload;
     try {
-      ({ payload } = await jwtVerify(token, this.publicKey, { issuer: this.options.issuer, audience: AUDIENCE, algorithms: [ALG], clockTolerance: 30, currentDate: new Date(this.now()) }));
+      const keyFor = (header: { kid?: string }) => {
+        const found = header.kid === undefined ? undefined : this.verifying.get(header.kid);
+        if (!found) throw new Error(`no key ${header.kid ?? '(none named)'} is published here`);
+        return found.key;
+      };
+      ({ payload } = await jwtVerify(token, keyFor, { issuer: this.options.issuer, audience: AUDIENCE, algorithms: [ALG], clockTolerance: 30, currentDate: new Date(this.now()) }));
     } catch (err) {
       throw new SessionRefused('invalid', `the session token does not verify: ${(err as Error).message}`);
     }

@@ -44,6 +44,7 @@ func main() {
 	auditPG := flag.String("audit-pg", "", "Postgres URL for PRD 7.2's audit trail; without it the trail is in memory")
 	auditSchema := flag.String("audit-schema", "audit", "the audit trail's schema, with -audit-pg")
 	migrate := flag.Bool("migrate", false, "create the audit trail's schema, with -audit-pg")
+	rekey := flag.Bool("rekey", false, "re-seal every credential in -vault from GATEWAY_VAULT_KEY to GATEWAY_VAULT_NEW_KEY, then exit")
 	flag.Parse()
 
 	var providers []server.Provider
@@ -86,6 +87,18 @@ func main() {
 	vault, err := accounts.Open(key, path)
 	if err != nil {
 		log.Fatal(err)
+	}
+	if *rekey {
+		next, err := base64.StdEncoding.DecodeString(os.Getenv("GATEWAY_VAULT_NEW_KEY"))
+		if err != nil || len(next) != 32 || *ephemeral {
+			log.Fatal("-rekey needs -vault, GATEWAY_VAULT_KEY and GATEWAY_VAULT_NEW_KEY (32 bytes, base64)")
+		}
+		n, err := vault.Rekey(next)
+		if err != nil {
+			log.Fatalf("rekey: %v", err)
+		}
+		fmt.Fprintf(os.Stderr, "re-sealed %d credentials in %s; start the gateway with GATEWAY_VAULT_NEW_KEY as GATEWAY_VAULT_KEY\n", n, path)
+		return
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
