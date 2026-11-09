@@ -32,6 +32,7 @@ import { REVOCATION_REFRESH_MS, RevocationList, SESSION_COOKIE, verifySessionTok
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
 import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
+import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
 import { buildBundle, bundlePdf, ExportWouldLeak, UnreproducibleExport, type ExportCell, type VendorPolicy } from '@picasso/canvas-guard';
 import { checkPurpose, traceId, type AuditStore } from './audit.js';
 import { CanvasStore, VersionExists } from './store.js';
@@ -135,6 +136,8 @@ export interface Collab {
   snapshots: { interval: number; idle: number };
   /** Updates other instances logged that this one applied to an open canvas. */
   fannedIn: { count: number };
+  /** Times the fan-out listener lost its connection and came back. */
+  reconnects: { count: number };
   destroy(): Promise<void>;
 }
 
@@ -142,12 +145,38 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
   const store = new CanvasStore(o.pool, o.schema);
   const snapshotEveryMs = o.snapshotEveryMs ?? 30_000;
   const idleMs = o.idleMs ?? 2_000;
-  const throughUpdate = new Map<string, number>();
+  /**
+   * Per open canvas: the position through which this instance's copy holds
+   * every logged update with no gap (what a snapshot may claim), and the
+   * positions it holds beyond that. Its own appends, what it hears from other
+   * instances, and what it catches up on all land in `beyond` until the log
+   * shows nothing missing before them.
+   */
+  const watermark = new Map<string, number>();
+  const beyond = new Map<string, Set<number>>();
+  const held = (doc: string, seq: number) => {
+    let set = beyond.get(doc);
+    if (!set) beyond.set(doc, (set = new Set()));
+    if (seq > (watermark.get(doc) ?? 0)) set.add(seq);
+  };
+  /** Moves the watermark past every position this copy holds, stopping at the first it does not. */
+  const advance = async (doc: string): Promise<number> => {
+    let w = watermark.get(doc) ?? 0;
+    const set = beyond.get(doc) ?? new Set<number>();
+    for (const seq of await store.positionsAfter(doc, w)) {
+      if (!set.has(seq)) break;
+      set.delete(seq);
+      w = seq;
+    }
+    watermark.set(doc, w);
+    return w;
+  };
   const lastChange = new Map<string, number>();
   const pending = new Map<string, Promise<unknown>>();
   const counts = { interval: 0, idle: 0 };
   const instanceId = randomUUID();
   const fannedIn = { count: 0 };
+  const reconnects = { count: 0 };
 
   if (!o.authUrl && !o.devIdentity) throw new Error('authUrl is required: callers are identified by picasso-auth\'s session tokens (or devIdentity, for development)');
   const authBase = o.authUrl?.replace(/\/$/, '');
@@ -306,7 +335,10 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     },
     async onLoadDocument({ document, documentName }) {
       const loaded = await store.load(documentName);
-      throughUpdate.set(documentName, loaded.throughUpdate);
+      // Rows commit in position order per canvas, so what the load read is
+      // every row through its last one.
+      watermark.set(documentName, loaded.throughUpdate);
+      beyond.set(documentName, new Set());
       if (loaded.state) Y.applyUpdate(document, loaded.state, LOADED);
       return document;
     },
@@ -316,19 +348,28 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
       // Appends for one canvas are chained, so the log keeps arrival order.
       const write = (pending.get(documentName) ?? Promise.resolve()).then(async () => {
         const seq = await store.append(documentName, context?.user ?? 'server', update, instanceId);
-        throughUpdate.set(documentName, Math.max(throughUpdate.get(documentName) ?? 0, seq));
+        held(documentName, seq);
       });
       pending.set(documentName, write.catch((err) => console.error(`update log for ${documentName}: ${(err as Error).message}`)));
       await write;
     },
     async onStoreDocument({ documentName, document }) {
-      // A snapshot may hold updates whose log rows are still being written;
-      // it is stamped with the last row known written, so a load replays
-      // those on top — Yjs updates are idempotent, and nothing is lost.
+      // A snapshot claims only the rows this copy holds with no gap before
+      // them, checked against the log. It may hold more, rows still being
+      // heard about or written; a load replays from the claim, and Yjs
+      // updates are idempotent, so nothing is lost and nothing doubled.
       await pending.get(documentName);
       const quiet = Date.now() - (lastChange.get(documentName) ?? 0) >= idleMs * 0.9;
       counts[quiet ? 'idle' : 'interval'] += 1;
-      await store.snapshot(documentName, Y.encodeStateAsUpdate(document), throughUpdate.get(documentName) ?? 0, quiet ? 'idle' : 'interval');
+      const state = Y.encodeStateAsUpdate(document);
+      await store.snapshot(documentName, state, await advance(documentName), quiet ? 'idle' : 'interval');
+    },
+    async onAwarenessUpdate({ documentName, transactionOrigin, added, updated, removed, awareness }) {
+      // Presence fans out like edits, and is not logged.
+      if (transactionOrigin === FANNED_IN) return;
+      const changed = [...added, ...updated, ...removed];
+      if (changed.length === 0) return;
+      await store.announcePresence(documentName, encodeAwarenessUpdate(awareness, changed), instanceId).catch((err) => console.error(`presence for ${documentName}: ${(err as Error).message}`));
     },
     async onRequest({ request, response, instance }: onRequestPayload) {
       const url = new URL(request.url ?? '/', 'http://collab');
@@ -437,16 +478,39 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
    * arrive in does not matter. A canvas not open here is not touched: it
    * loads from the log when someone opens it.
    */
-  const stopListening = await store.listen(({ doc, seq, from }) => {
-    if (from === instanceId) return;
+  const apply = (doc: string, seq: number, body: Uint8Array) => {
     const open = server.hocuspocus.documents.get(doc);
     if (!open) return;
-    void store.update(doc, seq).then((body) => {
-      if (!body) return;
-      Y.applyUpdate(open, body, FANNED_IN);
-      throughUpdate.set(doc, Math.max(throughUpdate.get(doc) ?? 0, seq));
-      fannedIn.count += 1;
-    }, (err) => console.error(`fan-out of ${doc}#${seq}: ${(err as Error).message}`));
+    Y.applyUpdate(open, body, FANNED_IN);
+    held(doc, seq);
+    fannedIn.count += 1;
+  };
+  const stopListening = await store.listen({
+    update: ({ doc, seq, from }) => {
+      if (from === instanceId || !server.hocuspocus.documents.has(doc)) return;
+      void store.update(doc, seq).then(
+        (body) => body && apply(doc, seq, body),
+        (err) => console.error(`fan-out of ${doc}#${seq}: ${(err as Error).message}`),
+      );
+    },
+    presence: ({ doc, from, update }) => {
+      const open = server.hocuspocus.documents.get(doc);
+      if (from === instanceId || !open) return;
+      applyAwarenessUpdate(open.awareness, update, FANNED_IN);
+    },
+    // Anything announced while the listener was away is caught up from the
+    // log: every row after the watermark that this copy does not hold.
+    onReconnect: () => {
+      reconnects.count += 1;
+      for (const doc of server.hocuspocus.documents.keys()) {
+        void store.updatesAfter(doc, watermark.get(doc) ?? 0).then(
+          (rows) => {
+            for (const { seq, body } of rows) if (!beyond.get(doc)?.has(seq)) apply(doc, seq, body);
+          },
+          (err) => console.error(`catching up ${doc}: ${(err as Error).message}`),
+        );
+      }
+    },
   });
   const retentionEveryMs = o.retentionEveryMs ?? 6 * 3_600_000;
   const retain = () =>
@@ -467,6 +531,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     url: server.webSocketURL,
     snapshots: counts,
     fannedIn,
+    reconnects,
     destroy: async () => {
       for (const t of timers) clearTimeout(t);
       if (sweeper) clearInterval(sweeper);

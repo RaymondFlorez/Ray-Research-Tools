@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 16 tests; 15 skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 19 tests; 18 skip without a database
 node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -88,6 +88,28 @@ The test runs two servers on one database, with a client on each:
 
 Without the tag that stops re-logging, the receiving server logs every update a second time,
 as `server`, and the test fails.
+
+**A snapshot claims only what its instance holds.** A snapshot says "everything through row
+N", and a load replays the rows after N. With one process that was simply the last row it
+wrote. With two, it is wrong. An instance can hold row 10, its own, before it has heard of row
+9 from the other instance. A snapshot claiming 10 would make row 9 vanish on the next load. So
+each instance tracks the rows it holds, and a snapshot claims only up to the first row the log
+has that this copy does not. That walk is sound only if a canvas's rows commit in order, so an
+append takes a per-canvas lock before it draws its position. The test writes a row straight
+into the log, between two edits, where the instance never hears of it. The snapshot claims the
+first edit and no more, and a third instance opening the canvas has all three. With the old
+rule, the snapshot claimed the second edit and the test fails.
+
+**Presence crosses too.** Cursor and selection changes (Hocuspocus awareness) are announced
+on the same channel and applied on the other instances, but not logged. When a client leaves,
+its state is removed on every instance. The test sets a cursor on one server, sees it on the
+other, and sees it go when the client disconnects.
+
+**The listener reconnects and catches up.** If its connection drops, it reconnects, waiting
+longer each time up to five seconds. Then, for every canvas it has open, it applies each row
+after its claim that it does not already hold. The test terminates every listener on the
+channel, edits while they are down, and sees the edit arrive. With the catch-up removed, it
+never does.
 
 ## Rules the server holds
 
@@ -182,12 +204,12 @@ either side's migration fails that side's test.
   that labels a position `public` gets it past the tenant rule. The rule stops an honest
   client's mistake, and the record says who exported what. A client that wants to leak what
   it was entitled to see does not need this path at all.
-- **Presence stays on its instance.** Edits fan out between instances; cursors and selections
-  (Hocuspocus awareness) do not, so two users on different instances see each other's work but
-  not each other's cursors.
-- **A missed announcement is not replayed.** An instance applies what it hears while it
-  listens. If its listening connection drops, it misses what was announced meanwhile until the
-  canvas is next loaded from the log. Nothing reconnects the listener.
+- **A large presence update is dropped.** One announcement holds about 7,900 bytes. A presence
+  state larger than that is not sent, and the next heartbeat tries again. Presence lost while a
+  listener is down is not caught up; the next heartbeat restores it.
+- **Postgres carries every update twice.** Each update is logged as a row, and then read back
+  by each other instance that has the canvas open. Nothing here measures the load that puts on
+  the database.
 - **The update log's history is not kept past ninety days.** After the job runs, an old
   canvas cannot be replayed edit by edit before that, only opened as its snapshot. Named
   versions are what is meant to keep a past state for good. The `sessions` table has no

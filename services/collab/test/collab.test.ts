@@ -357,6 +357,61 @@ suite('picasso-collab', () => {
     expect(one.fannedIn.count).toBe(by.analyst);
   });
 
+  it('carries presence between processes, and drops it when its client leaves', async () => {
+    const one = await start();
+    const two = await start();
+    const a = await open(one, 'acme/presence', 'pm');
+    const b = await open(two, 'acme/presence', 'analyst');
+    a.provider.setAwarenessField('cursor', { x: 120, y: 40 });
+    const seen = () => [...b.provider.awareness!.getStates().values()].some((st) => st.cursor?.x === 120);
+    await until(seen);
+    a.provider.destroy();
+    await until(() => !seen());
+  });
+
+  it('reconnects a dropped listener and catches up on what was announced while it was away', async () => {
+    const one = await start();
+    const two = await start();
+    const a = await open(one, 'acme/reconnect', 'pm');
+    const b = await open(two, 'acme/reconnect', 'analyst');
+    a.canvas.addNode(node('before'));
+    await until(() => b.canvas.getNode('before') !== undefined);
+    // Cut every listener on this schema's channel, then edit while they are down.
+    await pool.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query LIKE 'LISTEN picasso_collab_${schema}%'`);
+    a.canvas.addNode(node('while-away', 300));
+    await until(() => b.canvas.getNode('while-away') !== undefined, 10_000);
+    expect(two.reconnects.count).toBeGreaterThanOrEqual(1);
+    a.canvas.addNode(node('after', 600));
+    await until(() => b.canvas.getNode('after') !== undefined);
+  });
+
+  it('never lets a snapshot claim a row its instance does not hold', async () => {
+    const one = await start();
+    const a = await open(one, 'acme/watermark', 'pm');
+    const loggedByPm = async () => Number((await pool.query(`SELECT count(*) AS n FROM ${schema}.updates WHERE doc = 'acme/watermark' AND author = 'pm'`)).rows[0].n);
+    a.canvas.addNode(node('first'));
+    for (let i = 0; i < 100 && (await loggedByPm()) < 1; i += 1) await new Promise((r) => setTimeout(r, 20));
+    // A row this instance never hears about: written straight to the log, after `first`, with no announcement.
+    const elsewhere = new SyncedCanvas();
+    elsewhere.addNode(node('unheard', 300));
+    const ghost = Number((await pool.query(`INSERT INTO ${schema}.updates (doc, author, body) VALUES ('acme/watermark', 'elsewhere', $1) RETURNING seq`, [Buffer.from(Y.encodeStateAsUpdate(elsewhere.doc))])).rows[0].seq);
+    a.canvas.addNode(node('second', 600));
+    for (let i = 0; i < 100 && (await loggedByPm()) < 2; i += 1) await new Promise((r) => setTimeout(r, 20));
+    // The next snapshot after the second edit is logged.
+    const before = one.snapshots.idle + one.snapshots.interval;
+    await until(() => one.snapshots.idle + one.snapshots.interval > before);
+    await new Promise((r) => setTimeout(r, 200));
+    const [firstSeq, secondSeq] = (await pool.query(`SELECT seq FROM ${schema}.updates WHERE doc = 'acme/watermark' AND author = 'pm' ORDER BY seq`)).rows.map((r) => Number(r.seq));
+    const claimed = Number((await pool.query(`SELECT through_update FROM ${schema}.snapshots WHERE doc = 'acme/watermark' ORDER BY seq DESC LIMIT 1`)).rows[0].through_update);
+    // The order this test is about: first, then the unheard row, then second.
+    expect(firstSeq! < ghost && ghost < secondSeq!).toBe(true);
+    expect(claimed).toBe(firstSeq);
+    // Opened fresh on another instance, the canvas has everything, the unheard row included.
+    const three = await start();
+    const c = await open(three, 'acme/watermark', 'analyst');
+    expect(['first', 'second', 'unheard'].filter((id) => c.canvas.getNode(id) === undefined)).toEqual([]);
+  });
+
   it('hands every tab of a session the same secret, and never an ended session\'s', async () => {
     const c = await start();
     const session = async (user: string) => {

@@ -144,12 +144,19 @@ export class CanvasStore {
    * statement: an update is never logged without the announcement, or
    * announced without being logged. `from` names the instance that wrote it,
    * so that instance can ignore its own. Returns its position in the log.
+   *
+   * The statement takes a lock on the canvas for its transaction before it
+   * draws a position, so one canvas's rows commit in the order of their
+   * positions. Without it, two instances could commit a canvas's rows 9 and
+   * 10 in the order 10, 9, and a snapshot taken between them could claim to
+   * include everything through 10 while missing 9.
    */
   async append(doc: string, author: string, update: Uint8Array, from = ''): Promise<number> {
     const r = await this.pool.query<{ seq: string }>(
-      `WITH row AS (INSERT INTO ${this.schema}.updates (doc, author, body) VALUES ($1, $2, $3) RETURNING seq)
+      `WITH lock AS (SELECT pg_advisory_xact_lock(hashtextextended($6 || '/' || $1, 0))),
+       row AS (INSERT INTO ${this.schema}.updates (doc, author, body) SELECT $1, $2, $3 FROM lock RETURNING seq)
        SELECT seq, pg_notify($4, json_build_object('doc', $1::text, 'seq', seq, 'from', $5::text)::text) FROM row`,
-      [doc, author, Buffer.from(update), this.channel, from],
+      [doc, author, Buffer.from(update), this.channel, from, this.schema],
     );
     return Number(r.rows[0]!.seq);
   }
@@ -160,27 +167,94 @@ export class CanvasStore {
     return r.rows[0] ? new Uint8Array(r.rows[0].body) : undefined;
   }
 
+  /** A canvas's logged updates after a position, in order. */
+  async updatesAfter(doc: string, after: number): Promise<Array<{ seq: number; body: Uint8Array }>> {
+    const r = await this.pool.query<{ seq: string; body: Buffer }>(`SELECT seq, body FROM ${this.schema}.updates WHERE doc = $1 AND seq > $2 ORDER BY seq`, [doc, after]);
+    return r.rows.map((row) => ({ seq: Number(row.seq), body: new Uint8Array(row.body) }));
+  }
+
+  /** Positions of a canvas's logged updates after a position, in order. */
+  async positionsAfter(doc: string, after: number): Promise<number[]> {
+    const r = await this.pool.query<{ seq: string }>(`SELECT seq FROM ${this.schema}.updates WHERE doc = $1 AND seq > $2 ORDER BY seq`, [doc, after]);
+    return r.rows.map((row) => Number(row.seq));
+  }
+
   /**
-   * Listens for updates other instances append, on a connection of its own
-   * rather than one borrowed from the pool, which it would hold for as long as
-   * it listens. The returned function stops.
+   * Announces a presence change (a Yjs awareness update) to the other
+   * instances. Presence is not logged: it is only for whoever is connected
+   * now. An update too large for one notification is dropped, and the next
+   * heartbeat carries the state again.
    */
-  async listen(onUpdate: (u: { doc: string; seq: number; from: string }) => void): Promise<() => Promise<void>> {
-    const client = new pg.Client(this.pool.options);
-    await client.connect();
-    client.on('notification', (msg) => {
-      if (msg.channel !== this.channel || !msg.payload) return;
+  async announcePresence(doc: string, update: Uint8Array, from: string): Promise<void> {
+    const payload = JSON.stringify({ doc, from, presence: Buffer.from(update).toString('base64') });
+    if (payload.length > 7_900) return;
+    await this.pool.query('SELECT pg_notify($1, $2)', [this.channel, payload]);
+  }
+
+  /**
+   * Listens for what other instances announce: updates they logged and
+   * presence changes. The connection is its own, not one borrowed from the
+   * pool, which it would hold for as long as it listens. If it drops, it
+   * reconnects, waiting longer each time up to five seconds, and calls
+   * `onReconnect`, so the caller can catch up on what was announced while it
+   * was away. The returned function stops.
+   */
+  async listen(handlers: {
+    update: (u: { doc: string; seq: number; from: string }) => void;
+    presence?: (p: { doc: string; from: string; update: Uint8Array }) => void;
+    onReconnect?: () => void;
+  }): Promise<() => Promise<void>> {
+    let stopped = false;
+    let client: pg.Client | undefined;
+    let wait = 250;
+    const connect = async (): Promise<void> => {
+      const c = new pg.Client(this.pool.options);
+      c.on('notification', (msg) => {
+        if (msg.channel !== this.channel || !msg.payload) return;
+        try {
+          const u = JSON.parse(msg.payload) as { doc: string; seq?: number; from: string; presence?: string };
+          if (u.presence !== undefined) handlers.presence?.({ doc: u.doc, from: u.from, update: new Uint8Array(Buffer.from(u.presence, 'base64')) });
+          else handlers.update({ doc: u.doc, seq: Number(u.seq), from: u.from });
+        } catch {
+          // Not one of ours.
+        }
+      });
+      let lost = false;
+      const reconnect = () => {
+        if (stopped || lost) return;
+        lost = true;
+        setTimeout(() => {
+          connect().then(
+            () => handlers.onReconnect?.(),
+            (err) => console.error(`update fan-out: reconnecting failed: ${(err as Error).message}`),
+          );
+        }, wait).unref();
+        wait = Math.min(wait * 2, 5_000);
+      };
+      c.on('error', (err) => {
+        console.error(`update fan-out: ${err.message}`);
+        reconnect();
+      });
+      c.on('end', reconnect);
       try {
-        const u = JSON.parse(msg.payload) as { doc: string; seq: number; from: string };
-        onUpdate({ doc: u.doc, seq: Number(u.seq), from: u.from });
-      } catch {
-        // Not one of ours.
+        await c.connect();
+        await c.query(`LISTEN ${this.channel}`);
+      } catch (err) {
+        reconnect();
+        throw err;
       }
-    });
-    await client.query(`LISTEN ${this.channel}`);
-    client.on('error', (err) => console.error(`update fan-out: ${err.message}`));
+      client = c;
+      wait = 250;
+    };
+    try {
+      await connect();
+    } catch (err) {
+      stopped = true;
+      throw err;
+    }
     return async () => {
-      await client.end().catch(() => {});
+      stopped = true;
+      await client?.end().catch(() => {});
     };
   }
 
