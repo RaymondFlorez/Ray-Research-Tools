@@ -11,10 +11,14 @@ and does not measure anything itself. Re-audit it when a README's figure changes
 | **Infra** | Needs a system this repository does not contain (a datastore, a feed, a cluster, a model) — the seam it would plug into is built |
 | **Refused** | The PRD names it and defines nothing to build; inventing it would misrepresent a real methodology |
 
-Last audited at the commit that added this file, from a fresh clone: build, typecheck, 1,686
-TypeScript tests, 228 Rust tests, 5,379-value WASM parity and eight headless-browser demo
-checks, all green. CI (`.github/workflows/ci.yml`) repeats that on every push; its first
-run (GitHub Actions run 37340683867) passed all three jobs.
+Last audited on 9 November 2026 at commit 7b98c0b, from a fresh clone with no build output:
+build, typecheck, 1,845 TypeScript tests (plus 18 collaboration tests on Postgres, 19 with the
+one that needs none), 247 Rust tests, 5,797-value WASM parity, 44 data plane and 26 gateway Go
+tests on Postgres (one, a live call to api.anthropic.com, skipped by default), the 30-check
+historical-morning script through the Go service, and fourteen headless-browser demo scripts,
+all green. CI (`.github/workflows/ci.yml`) repeats that on every push, in five jobs. When this
+file was added, the same audit measured 1,686 TypeScript tests, 228 Rust tests, 5,379-value
+parity and eight browser checks.
 
 ## Appendix B exit criteria
 

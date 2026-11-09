@@ -8,7 +8,7 @@ multi-asset portfolio simulator with copula dependence, and Heston in closed for
 surface calibration by differential evolution.
 
 ```bash
-cargo test --release                              # 235 tests
+cargo test --release                              # 247 tests
 cargo run --release --example grid_bench          # the Phase 2 exit criterion
 cargo run --release --example curve_bench         # the sub-millisecond claim, checked
 cargo run --release --example al_scan             # what the reference turned out to be
