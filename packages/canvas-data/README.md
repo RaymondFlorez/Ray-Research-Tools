@@ -22,7 +22,7 @@ npm test --workspace @picasso/canvas-data
 | `remote.ts` | 2.3, 3.8, 7.2 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live; with a `purpose`, which the data plane requires before it serves position data |
 | `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded. `classifiedSource` is the data plane's entitled read in process, held to the Go service's answers |
 | `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane in one batch, a withheld or stale field counted apart from missing data, and the age of what was screened |
-| `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls |
+| `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls; `chartExportCells` turns what it drew into export cells, each with the class and vendor its read carried, and an unclassified figure as licensed |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale, recovering or ended |
 
 ## Scope: what this is and is not

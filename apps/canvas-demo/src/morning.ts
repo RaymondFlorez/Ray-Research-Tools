@@ -12,7 +12,7 @@
  * restatements of the June quarter.
  */
 
-import { classifiedSource, createSeriesChart, evaluateSeriesChart, type CanvasTime, type ClassifiedFact, type Entitlements } from '@picasso/canvas-data';
+import { chartExportCells, classifiedSource, createSeriesChart, evaluateSeriesChart, type CanvasTime, type ClassifiedFact, type Entitlements, type SeriesChartValue } from '@picasso/canvas-data';
 import { seriesFigure, seriesSvg } from '@picasso/canvas-render';
 
 const FACTS: ClassifiedFact[] = [
@@ -35,15 +35,14 @@ const timePicker = $('time') as HTMLSelectElement;
 const userPicker = $('user') as HTMLSelectElement;
 const exportStatus = $('export-status');
 
-type Drawn = { asof: string; points: Array<{ validTime: string; value?: number; withheld?: string; knownAt?: string }> };
-let drawn: Drawn | undefined;
+let drawn: SeriesChartValue & { kind: 'series' } | undefined;
 
 async function draw(): Promise<void> {
   const time: CanvasTime = timePicker.value === 'morning' ? { mode: 'pinned', asof: MORNING } : { mode: 'live' };
   const node = createSeriesChart({ id: 'nvda-revenue', key: 'NVDA.revenue' });
   const v = await evaluateSeriesChart(node, classifiedSource(FACTS, READERS[userPicker.value]!), time, () => new Date().toISOString());
   if (v.kind !== 'series') return;
-  drawn = { asof: v.asof, points: v.points };
+  drawn = v;
   const width = Math.min(700, Math.max(320, $('chart').clientWidth - 16));
   $('chart').innerHTML = seriesSvg(seriesFigure(v.points, { width, height: 260 }), `NVDA revenue as of ${v.asof}`);
   $('rows').innerHTML = v.points
@@ -53,18 +52,9 @@ async function draw(): Promise<void> {
     .join('');
 }
 
-/** The figures on screen, as export cells: each carries its class, vendor and the read it came from. */
-function cells(d: Drawn) {
-  return d.points.flatMap((p) => {
-    if (p.value === undefined) return [];
-    const fact = [...FACTS].reverse().find((f) => f.validTime === p.validTime && f.knowledgeTime === p.knownAt)!;
-    return [{
-      id: `NVDA.revenue@${p.validTime}`, label: `NVDA revenue ${p.validTime}`, value: p.value, unit: 'USD bn',
-      classification: fact.dataClass, ...(fact.vendor ? { vendor: fact.vendor } : {}),
-      datasetSnapshots: { 'nvda-revenue sample': `as of ${d.asof}` }, traceIds: [], asof: d.asof,
-    }];
-  });
-}
+/** The figures on screen, as export cells, each with the class and vendor its read carried. */
+const cells = (d: SeriesChartValue & { kind: 'series' }) =>
+  chartExportCells(d, { label: 'NVDA revenue', unit: 'USD bn', datasetSnapshots: { 'nvda-revenue sample': `as of ${d.asof}` } });
 
 $('export').addEventListener('click', async () => {
   if (!drawn) return;
@@ -100,7 +90,7 @@ void draw().then(() => {
     markers: () => document.querySelectorAll('#chart circle.marker').length,
     gaps: () => Array.from(document.querySelectorAll('#chart rect.gap title'), (t) => t.textContent),
     segments: () => document.querySelectorAll('#chart polyline.line').length,
-    values: () => drawn?.points.map((p) => p.value ?? null),
+    values: () => drawn?.points.map((p) => ('value' in p ? p.value : null)),
     redraw: () => draw(),
   };
 });

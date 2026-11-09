@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart, classifiedSource } =
+const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart, classifiedSource, chartExportCells } =
   await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
 const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
 const { backtest, History, IncompleteHistory, loadHistory } = await import(join(ROOT, 'packages/canvas-sim/dist/index.js'));
@@ -141,16 +141,22 @@ try {
     const v = await evaluateSeriesChart(createSeriesChart({ id: 'c', key: 'NVDA.revenue' }), source, time, now);
     return { ...v, source: undefined };
   };
+  // The bare in-process store holds no classes, so the line is compared without them.
+  const line = (v) => ({ ...v, points: v.points.map(({ dataClass: _c, vendor: _v, ...p }) => p) });
   for (const [label, time] of [['the morning', pinned], ['today', live]]) {
     const remote = await chartAt(remoteSource(as('pm')), time);
     check(`a chart at ${label} draws the same line through the service as in-process`,
-      JSON.stringify(remote) === JSON.stringify(await chartAt(localSource(local), time)), remote.points.map((p) => p.value).join(', '));
+      JSON.stringify(line(remote)) === JSON.stringify(await chartAt(localSource(local), time)), remote.points.map((p) => p.value).join(', '));
   }
+  const exported = chartExportCells(await evaluateSeriesChart(createSeriesChart({ id: 'c', key: 'NVDA.revenue' }), remoteSource(as('pm')), live, now), { label: 'NVDA revenue', datasetSnapshots: {} });
+  check('the service\'s classes reach the export cells: the restated quarter goes out licensed to vendor-b, the others public',
+    JSON.stringify(exported.map((c) => [c.classification, c.vendor ?? null])) === JSON.stringify([['licensed', 'vendor-b'], ['public', null]]),
+    JSON.stringify(exported.map((c) => [c.id, c.classification, c.vendor])));
   const chartAnalyst = await chartAt(remoteSource(as('analyst')), live);
   check('live, the unlicensed reader\'s chart has Q2 as a gap where it falls, then Q3',
     JSON.stringify(chartAnalyst.points) === JSON.stringify([
       { validTime: '2024-06-30', withheld: 'Requires a vendor-b licence.' },
-      { validTime: '2024-09-30', value: 35.08, knownAt: '2024-11-20' },
+      { validTime: '2024-09-30', value: 35.08, knownAt: '2024-11-20', dataClass: 'public' },
     ]), JSON.stringify(chartAnalyst.points));
 
   // canvas-data's in-process entitled read against the service's, for both readers.

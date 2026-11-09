@@ -18,6 +18,7 @@
 
 import { createNode, type NodeID, type PicassoNode, type Vec2 } from '@picasso/canvas-core';
 import type { Instant } from './bitemporal.js';
+import type { DataClass } from './entitlements.js';
 import type { PointInTimeSource } from './factTile.js';
 import { knowledgeTimeFor, type CanvasTime } from './timescrub.js';
 
@@ -38,13 +39,60 @@ export function createSeriesChart(input: { id: NodeID; key: string; from?: Insta
 }
 
 export type ChartPoint =
-  | { validTime: Instant; value: number; knownAt: Instant }
+  | { validTime: Instant; value: number; knownAt: Instant; dataClass?: DataClass; vendor?: string }
   | { validTime: Instant; withheld: string };
 
 export type SeriesChartValue =
   | { kind: 'series'; key: string; points: ChartPoint[]; asof: Instant; source: string }
   /** The canvas moved while the read was in flight; nothing was written. */
   | { kind: 'superseded'; key: string; asof: Instant };
+
+/**
+ * A cell for an export bundle: canvas-guard's `ExportCell`, by shape, so this
+ * package does not depend on that one.
+ */
+export interface ChartExportCell {
+  id: string;
+  label: string;
+  value: number;
+  unit?: string;
+  vendor?: string;
+  classification: DataClass;
+  datasetSnapshots: Record<string, string>;
+  traceIds: string[];
+  asof: Instant;
+}
+
+/**
+ * What a chart on screen exports: one cell per period drawn with a value,
+ * each with the class and vendor its read carried, so the export service can
+ * apply the vendor rules to exactly what was shown. A withheld period exports
+ * nothing, since nothing was shown.
+ *
+ * **A figure whose class the source did not report is exported as licensed
+ * with no vendor**, which the export service withholds for want of a policy.
+ * Defaulting it to public would send a licensed figure out unredacted the
+ * moment a source forgot to say what it was.
+ */
+export function chartExportCells(
+  chart: Extract<SeriesChartValue, { kind: 'series' }>,
+  options: { label: string; unit?: string; datasetSnapshots: Record<string, string>; traceIds?: string[] },
+): ChartExportCell[] {
+  return chart.points.flatMap((p) => {
+    if ('withheld' in p) return [];
+    return [{
+      id: `${chart.key}@${p.validTime}`,
+      label: `${options.label} ${p.validTime}`,
+      value: p.value,
+      ...(options.unit !== undefined ? { unit: options.unit } : {}),
+      classification: p.dataClass ?? 'licensed',
+      ...(p.vendor !== undefined ? { vendor: p.vendor } : {}),
+      datasetSnapshots: options.datasetSnapshots,
+      traceIds: options.traceIds ?? [],
+      asof: chart.asof,
+    }];
+  });
+}
 
 /** Reads the chart's series at the canvas's time and settles the node. */
 export async function evaluateSeriesChart(
@@ -66,7 +114,10 @@ export async function evaluateSeriesChart(
   if (node.provenance.asof !== asof) return { kind: 'superseded', key, asof };
 
   const points: ChartPoint[] = [
-    ...read.observations.map((o) => ({ validTime: o.validTime, value: o.value, knownAt: o.knownAt })),
+    ...read.observations.map((o) => ({
+      validTime: o.validTime, value: o.value, knownAt: o.knownAt,
+      ...(o.dataClass !== undefined ? { dataClass: o.dataClass } : {}), ...(o.vendor !== undefined ? { vendor: o.vendor } : {}),
+    })),
     ...read.blocked.map((b) => ({ validTime: b.validTime, withheld: b.message })),
   ].sort((a, b) => (a.validTime < b.validTime ? -1 : a.validTime > b.validTime ? 1 : 0));
   node.state = { status: 'ready', lastComputedAt: Date.now() };

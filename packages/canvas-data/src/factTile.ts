@@ -29,7 +29,14 @@ import type { RemotePointInTime, RemoteRead } from './remote.js';
 import { knowledgeTimeFor, type CanvasTime } from './timescrub.js';
 
 export interface SourceRead {
-  observations: Array<{ validTime: Instant; value: number; knownAt: Instant; source?: string }>;
+  /**
+   * `dataClass` and `vendor` are the figure's classification, where the source
+   * knows it: the data plane and `classifiedSource` do, the bare in-process
+   * store does not. They travel so an export can apply the vendor rules to
+   * what is on screen; a figure with no class is exported as unknown, which
+   * withholds it.
+   */
+  observations: Array<{ validTime: Instant; value: number; knownAt: Instant; source?: string; dataClass?: DataClass; vendor?: string }>;
   blocked: Array<{ validTime: Instant; message: string }>;
 }
 
@@ -93,7 +100,10 @@ export function classifiedSource(facts: readonly ClassifiedFact[], entitlements:
         const f = o.value;
         const decision = checkEntitlement({ id: f.key, dataClass: f.dataClass, ...(f.vendor !== undefined ? { vendor: f.vendor } : {}) }, entitlements);
         if (decision.allowed) {
-          out.observations.push({ validTime: f.validTime, value: f.value, knownAt: f.knowledgeTime, ...(f.source !== undefined ? { source: f.source } : {}) });
+          out.observations.push({
+            validTime: f.validTime, value: f.value, knownAt: f.knowledgeTime, ...(f.source !== undefined ? { source: f.source } : {}),
+            dataClass: f.dataClass, ...(f.vendor !== undefined ? { vendor: f.vendor } : {}),
+          });
         } else {
           out.blocked.push({ validTime: f.validTime, message: decision.message ?? 'Not entitled.' });
         }
@@ -111,6 +121,8 @@ export function remoteSource(remote: RemotePointInTime, name = 'data plane'): Po
       value: o.value,
       knownAt: o.knownAt,
       ...(o.source !== undefined ? { source: o.source } : {}),
+      dataClass: o.dataClass as DataClass,
+      ...(o.vendor ? { vendor: o.vendor } : {}),
     })),
     blocked: r.blocked.map((b) => ({ validTime: b.validTime, message: b.decision.message })),
   });

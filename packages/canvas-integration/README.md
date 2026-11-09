@@ -58,6 +58,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `surface.test.ts` | `canvas-pricing` → `canvas-render`: a StrategyNode wired into a SurfaceNode; every heatmap cell and every visible 3D point reads back the engine's P&L, and break-even lies between cells of opposite sign. |
 | `hypothesis-ledger.test.ts` | `canvas-hypothesis` → `canvas-agents`: the HypothesisNode shows the status the ledger scores, and the Critic's "three times, right once" is read off the ledger, filtered to the analyst. |
 | `backtest-history.test.ts` | `canvas-data` → `canvas-sim`: a backtest's history loaded from the point-in-time store, and every read its strategy can make held to the store's answer for that instant. |
+| `export-chart.test.ts` | `canvas-data` → `canvas-render` → `canvas-guard`: a chart on screen exported, one cell per marker and none for a gap, each figure's class carried from the read to the vendor rule and the PDF. |
 
 ## The second bug, found the same way
 
@@ -172,6 +173,20 @@ reads wrong and 58 of 390 settlement prices. `window` agreed, but only because t
 versions in knowledge order. Its own rule was to keep whichever version was added last, and a unit
 test that adds them the other way round now holds it. All three go through one rule in
 `pointInTime.ts`.
+
+## A sixth disagreement, found writing the test
+
+`export-chart.test.ts` was written to hold a chart's export to what it draws, and the first
+assertion that needed a figure's class found it gone. The export service applies the vendor
+rules by each cell's class and vendor. The data plane sends both. canvas-data's `SourceRead`
+kept a figure's period, value and knowledge time and dropped the rest. A chart read through the
+data plane had nothing to tell the export service. The demo page only exported correctly because
+it looked each class up again in its own copy of the facts, and a client that defaulted the class
+to `public` would have sent a licensed figure out unredacted. Class and vendor now travel from
+the read through the chart's points to `chartExportCells`. A figure whose source never said its
+class is exported as licensed with no vendor, which the export service withholds. The suite
+checks this from the data plane's answer and from the in-process read, and through the vendor
+rule to the PDF. Dropping the class in `remoteSource` again fails two of its four tests.
 
 ## Phase 5's third exit number
 
