@@ -94,6 +94,22 @@ export function chartExportCells(
   });
 }
 
+/**
+ * The chart as the export service draws it: each period names the cell
+ * `chartExportCells` made for it, or was a gap, with why. The service draws
+ * from its redacted cells, so a figure the vendor rule withholds is a gap in
+ * the exported chart too.
+ */
+export function chartExportSpec(chart: Extract<SeriesChartValue, { kind: 'series' }>, title: string): {
+  title: string;
+  points: Array<{ validTime: Instant; cellId: string } | { validTime: Instant; withheld: string }>;
+} {
+  return {
+    title,
+    points: chart.points.map((p) => ('withheld' in p ? { validTime: p.validTime, withheld: p.withheld } : { validTime: p.validTime, cellId: `${chart.key}@${p.validTime}` })),
+  };
+}
+
 /** Reads the chart's series at the canvas's time and settles the node. */
 export async function evaluateSeriesChart(
   node: PicassoNode,

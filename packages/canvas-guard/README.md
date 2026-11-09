@@ -14,7 +14,7 @@ PRD 7's hardening layer.
 | `slo.ts` | SLO burn, per-node-kind paging, canary promotion, and the automatic-rollback rule. |
 | `audit.ts` | Append-only with no delete path, expressed in the interface rather than in a policy document. |
 | `exportBundle.ts` | Audit appendix, vendor licence redaction, and the refusal to export a figure that cannot be reproduced. |
-| `exportPdf.ts` | The bundle as a PDF: figures with their redaction notes, notices, and the audit appendix on its own page, deterministic bytes. |
+| `exportPdf.ts` | The bundle as a PDF: figures with their redaction notes, notices, charts drawn as vectors from the redacted cells, and the audit appendix, deterministic bytes. |
 | `latency.ts` | PRD 7.1's budget table as data, with the evidence behind each row and the check against an observed distribution. |
 | `redteam.ts` | The suite phase 7 exits on. |
 | `keyring.ts` | PRD 4.4's per-tenant vendor keys: references only, no platform fallback, no way to reach another tenant's. |
@@ -235,6 +235,21 @@ object. It then reads the file back with `pdftotext`, which shares no code with 
 each figure, each redaction note, the notices, an escaped `( ) \`, a long bundle running to
 several numbered pages, and the appendix. CI installs poppler and sets
 `PICASSO_REQUIRE_PDFTOTEXT=1`, so the read-back cannot be skipped there.
+
+**A chart is the same numbers drawn.** `chartPoints` takes the client's description of a chart
+(each period names an export cell, or was a gap on screen) and resolves it against the bundle's
+*redacted* cells:
+- a figure the vendor rule withheld becomes a gap, with the redaction's note;
+- a rounded figure is drawn at its rounded value;
+- a period that was a gap on screen stays one;
+- a chart naming a cell the bundle does not hold is refused.
+
+`bundlePdf` draws each chart on a page of its own, as PDF vector operations: the line, its
+markers, the gaps as shaded bands, grid and tick labels, and a note under the chart for each
+gap. The test rasterises that page with `pdftoppm` at 72 dpi, where one PDF unit is one pixel,
+and reads the colour at the positions the geometry gives. It finds the line at both markers and
+along a step, the gap colour inside the gap, no line through the gap, and white elsewhere.
+Flipping the page's y axis fails it.
 
 ## What is not here
 

@@ -145,6 +145,10 @@ PRD 7.2: "every export ... writes an append-only audit record", and "exports str
 non-redistributable vendor data according to per-vendor rules encoded in the export service".
 `POST /v1/exports?doc=` is that service. With `&format=pdf` it returns the bundle as a PDF
 (canvas-guard's `bundlePdf`), whose appendix prints the trace the export was recorded under.
+A request may describe charts (`chartExportSpec` in canvas-data). The service rebuilds each one
+from its own redacted cells with `chartPoints`, lays it out with canvas-render's `seriesFigure`,
+and draws it into the PDF, so a figure the vendor rule withholds is a gap in the chart as well.
+A chart naming a cell the export does not hold is a 400, and nothing is recorded.
 
 The figures are computed in the browser, since computation does not sync, so the client sends
 the cells: each one's value, class, vendor, dataset snapshots and traces. canvas-guard's
@@ -197,9 +201,9 @@ either side's migration fails that side's test.
   failed four times in four. With the per-message check, it passed three in three. When the
   list cannot be read, open connections are closed too. That follows from the same check, and
   is tested at the list, not end to end.
-- **The PDF is plain text pages.** PRD 2.3's WeasyPrint pipeline is not here. canvas-guard
-  writes the PDF itself: figures and notes, no charts, no house layout. One demo page,
-  `morning.html`, has an export button.
+- **The PDF is canvas-guard's own, not WeasyPrint's.** PRD 2.3's pipeline is not here. The
+  PDF holds figures, notes, step-line charts and the appendix, in Helvetica, with no house
+  layout. One demo page, `morning.html`, has an export button.
 - **The export service trusts the cells' classes.** It cannot recompute a figure, so a client
   that labels a position `public` gets it past the tenant rule. The rule stops an honest
   client's mistake, and the record says who exported what. A client that wants to leak what

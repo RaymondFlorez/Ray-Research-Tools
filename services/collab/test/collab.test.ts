@@ -297,6 +297,24 @@ suite('picasso-collab', () => {
     expect(bytes.toString('latin1')).toContain('Withheld: vendor-b: not redistributable)');
     expect(trail.records().at(-1)!.outcome).toBe('exported 4 cells, 3 redacted, within the tenant, as PDF');
 
+    // A chart in the PDF is drawn from the redacted cells: the stripped figure is a gap with its note.
+    const charted = { ...memo, charts: [{ title: 'Four figures', points: [
+      { validTime: '2024-03-31', cellId: 'rev' }, { validTime: '2024-06-30', cellId: 'cap' }, { validTime: '2024-09-30', cellId: 'px' },
+    ] }] };
+    const withChart = Buffer.from(await (await fetch(`${c.server.httpURL}/v1/exports?doc=acme%2Fexport&format=pdf`, {
+      method: 'POST', headers: { 'X-Picasso-User': 'pm', 'content-type': 'application/json', ...purpose }, body: JSON.stringify(charted),
+    })).arrayBuffer()).toString('latin1');
+    expect(withChart).toContain('(Four figures)');
+    expect(withChart).toContain('(Gap 1: vendor-b: not redistributable)');
+    // A chart naming a cell the export does not hold: refused, and nothing recorded.
+    const before = trail.records().length;
+    const bad = await fetch(`${c.server.httpURL}/v1/exports?doc=acme%2Fexport&format=pdf`, {
+      method: 'POST', headers: { 'X-Picasso-User': 'pm', 'content-type': 'application/json', ...purpose },
+      body: JSON.stringify({ ...memo, charts: [{ title: 'x', points: [{ validTime: '2024-03-31', cellId: 'not-exported' }] }] }),
+    });
+    expect(bad.status).toBe(400);
+    expect(trail.records().length).toBe(before);
+
     // Position data leaving the tenant: refused, and the attempt recorded.
     const leak = await exportAs('pm', 'acme/export', { ...memo, leavesTenant: true, cells: [cell('book', { classification: 'positions' })] }, purpose);
     expect(leak.status).toBe(403);

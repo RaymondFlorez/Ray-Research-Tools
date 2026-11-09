@@ -123,11 +123,111 @@ function contentOf(page: Line[], number: number, total: number): string {
 }
 
 /**
+ * A chart's geometry, as canvas-render's `seriesFigure` lays it out (y grows
+ * downward, as on screen). Declared here by shape, so this package does not
+ * depend on that one. The caller must build it from the bundle's redacted
+ * cells, never from the raw figures: a chart is the same numbers drawn.
+ */
+export interface PdfChart {
+  title: string;
+  figure: {
+    width: number;
+    height: number;
+    plot: { left: number; right: number; top: number; bottom: number };
+    segments: Array<Array<[number, number]>>;
+    markers: Array<{ x: number; y: number }>;
+    gaps: Array<{ x0: number; x1: number; reason: string }>;
+    xTicks: Array<{ x: number; label: string }>;
+    yTicks: Array<{ y: number; label: string }>;
+  };
+}
+
+/**
+ * A chart as the client saw it: each period either names the export cell it
+ * drew, or was a gap on screen, with why.
+ */
+export interface ChartSpec {
+  title: string;
+  points: Array<{ validTime: string; cellId: string } | { validTime: string; withheld: string }>;
+}
+
+/**
+ * The points a chart in an export may draw, taken from the bundle's
+ * redacted cells and never from the client: a cell the vendor rule withheld
+ * becomes a gap with the redaction's note, a rounded one is drawn at its
+ * rounded value, and a period that was a gap on screen stays one. A spec
+ * naming a cell the bundle does not hold is refused.
+ */
+export function chartPoints(bundle: Bundle, spec: ChartSpec): Array<{ validTime: string; value?: number; withheld?: string }> {
+  const cells = new Map(bundle.cells.map((c) => [c.id, c]));
+  return spec.points.map((p) => {
+    if ('withheld' in p) return { validTime: p.validTime, withheld: p.withheld };
+    const cell = cells.get(p.cellId);
+    if (!cell) throw new Error(`the chart "${spec.title}" names a cell the export does not hold: ${p.cellId}`);
+    if (typeof cell.value === 'number') return { validTime: p.validTime, value: cell.value };
+    return { validTime: p.validTime, withheld: cell.redaction?.note ?? `not a number: ${cell.value}` };
+  });
+}
+
+/** The colours a chart is drawn in, as PDF RGB fractions. */
+export const PDF_CHART_COLORS = { line: [0.12, 0.37, 0.55], gap: [0.96, 0.9, 0.8], grid: [0.82, 0.82, 0.82], text: [0.25, 0.25, 0.25] } as const;
+
+const n = (v: number) => (Math.round(v * 100) / 100).toString();
+
+/**
+ * One chart on a page of its own: the title, then the figure placed under it
+ * and scaled to the text width. Coordinates convert from the figure's
+ * downward y to PDF's upward y.
+ */
+function chartContent(chart: PdfChart, number: number, total: number): string {
+  const f = chart.figure;
+  const scale = Math.min(1, (PAGE.width - 2 * PAGE.margin) / f.width);
+  const top = PAGE.height - PAGE.margin - 34;
+  const X = (x: number) => n(PAGE.margin + x * scale);
+  const Y = (y: number) => n(top - y * scale);
+  const rgb = (c: readonly number[], op: 'rg' | 'RG') => `${c.join(' ')} ${op}`;
+  const text = (x: string, y: string, size: number, s: string) => `BT /F1 ${size} Tf 1 0 0 1 ${x} ${y} Tm ${pdfString(printable(s))} Tj ET`;
+  const ops: string[] = [
+    `BT /F2 13 Tf 1 0 0 1 ${PAGE.margin} ${PAGE.height - PAGE.margin - 13} Tm ${pdfString(printable(chart.title))} Tj ET`,
+  ];
+  for (const g of f.gaps) {
+    ops.push(rgb(PDF_CHART_COLORS.gap, 'rg'), `${X(g.x0)} ${Y(f.plot.bottom)} ${n((g.x1 - g.x0) * scale)} ${n((f.plot.bottom - f.plot.top) * scale)} re f`);
+  }
+  ops.push(rgb(PDF_CHART_COLORS.grid, 'RG'), '0.5 w');
+  for (const t of f.yTicks) ops.push(`${X(f.plot.left)} ${Y(t.y)} m ${X(f.plot.right)} ${Y(t.y)} l S`);
+  ops.push(rgb(PDF_CHART_COLORS.text, 'rg'));
+  for (const t of f.yTicks) ops.push(text(n(PAGE.margin + (f.plot.left - 6) * scale - t.label.length * 4.4), n(top - t.y * scale - 3), 8, t.label));
+  for (const t of f.xTicks) ops.push(text(n(PAGE.margin + t.x * scale - t.label.length * 2.2), n(top - (f.plot.bottom + 14) * scale), 8, t.label));
+  ops.push(rgb(PDF_CHART_COLORS.line, 'RG'), '1.6 w');
+  for (const seg of f.segments) {
+    if (seg.length < 2) continue;
+    ops.push(seg.map(([x, y], i) => `${X(x)} ${Y(y)} ${i ? 'l' : 'm'}`).join(' ') + ' S');
+  }
+  ops.push(rgb(PDF_CHART_COLORS.line, 'rg'));
+  for (const m of f.markers) ops.push(`${n(PAGE.margin + m.x * scale - 2.5)} ${n(top - m.y * scale - 2.5)} 5 5 re f`);
+  // Each gap says why, under the chart, so the page reads without the colour.
+  const notes = f.gaps.map((g, i) => text(String(PAGE.margin), n(top - f.height * scale - 16 - i * 12), 9, `Gap ${i + 1}: ${g.reason}`));
+  ops.push(rgb(PDF_CHART_COLORS.text, 'rg'), ...notes);
+  ops.push(`BT /F1 9 Tf 1 0 0 1 ${PAGE.margin} ${PAGE.margin / 2} Tm ${pdfString(`Page ${number} of ${total}`)} Tj ET`);
+  return ops.join('\n');
+}
+
+/**
  * The bundle as PDF bytes. `traceId` is the audit trail's record of this
  * export, printed in the appendix so the document points at its own record.
+ * `charts` go on pages of their own between the figures and the appendix.
  */
-export function bundlePdf(bundle: Bundle, options: { traceId?: string } = {}): Uint8Array {
-  const pages = [...paginate(linesOf(bundle)), ...paginate(appendixOf(bundle, options.traceId))];
+export function bundlePdf(bundle: Bundle, options: { traceId?: string; charts?: readonly PdfChart[] } = {}): Uint8Array {
+  const text = paginate(linesOf(bundle));
+  const appendix = paginate(appendixOf(bundle, options.traceId));
+  const charts = options.charts ?? [];
+  const total = text.length + charts.length + appendix.length;
+  const contents = [
+    ...text.map((page, i) => contentOf(page, i + 1, total)),
+    ...charts.map((chart, i) => chartContent(chart, text.length + i + 1, total)),
+    ...appendix.map((page, i) => contentOf(page, text.length + charts.length + i + 1, total)),
+  ];
+  const pages = contents;
   // Objects: 1 catalog, 2 pages, 3-4 fonts, then a page and its content per page.
   const objects: string[] = [];
   const kids = pages.map((_, i) => `${5 + i * 2} 0 R`).join(' ');
@@ -135,8 +235,7 @@ export function bundlePdf(bundle: Bundle, options: { traceId?: string } = {}): U
   objects.push(`<< /Type /Pages /Kids [${kids}] /Count ${pages.length} >>`);
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   objects.push('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
-  pages.forEach((page, i) => {
-    const content = contentOf(page, i + 1, pages.length);
+  pages.forEach((content, i) => {
     objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${PAGE.width} ${PAGE.height}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${6 + i * 2} 0 R >>`);
     objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
   });

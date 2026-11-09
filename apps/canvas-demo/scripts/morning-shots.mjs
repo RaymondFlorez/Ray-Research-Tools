@@ -112,6 +112,8 @@ try {
   check('Export PDF downloads a PDF whose text has the figures, June withheld under the vendor rule, and the appendix',
     text.includes('NVDA revenue 2024-03-31: 26.04 USD bn') && text.includes('NVDA revenue 2024-06-30: withheld') && text.includes('vendor-b: no redistribution policy on file')
       && text.includes('Appendix: audit bundle') && trace !== undefined && text.includes(`export recorded under trace ${trace}`), status);
+  check('and the PDF draws the chart from the export, June a gap under the same vendor rule',
+    text.includes('NVDA revenue, USD bn') && text.includes('Gap 1: vendor-b: no redistribution policy on file') && text.includes('2025-03-31'));
   const row = execFileSync('psql', [PG, '-tAc', `SELECT actor || '|' || action || '|' || resource || '|' || purpose || '|' || trace_id || '|' || outcome FROM ${SCHEMA}_audit.records`], { encoding: 'utf8' }).trim();
   check('and the export is on the Postgres audit trail, under the trace the PDF prints',
     row === `pm|export|dev/morning|export.pdf|${trace}|exported 5 cells, 1 redacted, within the tenant, as PDF`, row);

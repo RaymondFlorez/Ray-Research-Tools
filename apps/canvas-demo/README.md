@@ -243,6 +243,7 @@ rules, behind the demo server. It checks in Chromium:
 - live, an unlicensed reader sees June as a gap with its reason, and the line broken there;
 - Export PDF downloads a PDF that `pdftotext` reads back with the figures, June withheld
   under the vendor rule, and the appendix;
+- the PDF's chart is drawn from the export, with June a gap under the same rule;
 - the export is on the Postgres audit trail, under the trace the PDF prints;
 - no console errors.
 

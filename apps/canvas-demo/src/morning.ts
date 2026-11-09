@@ -12,7 +12,7 @@
  * restatements of the June quarter.
  */
 
-import { chartExportCells, classifiedSource, createSeriesChart, evaluateSeriesChart, type CanvasTime, type ClassifiedFact, type Entitlements, type SeriesChartValue } from '@picasso/canvas-data';
+import { chartExportCells, chartExportSpec, classifiedSource, createSeriesChart, evaluateSeriesChart, type CanvasTime, type ClassifiedFact, type Entitlements, type SeriesChartValue } from '@picasso/canvas-data';
 import { seriesFigure, seriesSvg } from '@picasso/canvas-render';
 
 const FACTS: ClassifiedFact[] = [
@@ -63,7 +63,7 @@ $('export').addEventListener('click', async () => {
     const res = await fetch('/collab/v1/exports?doc=dev%2Fmorning&format=pdf', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'X-Picasso-User': userPicker.value, 'X-Picasso-Purpose': 'export.pdf' },
-      body: JSON.stringify({ title: `NVDA revenue as of ${drawn.asof}`, leavesTenant: false, cells: cells(drawn) }),
+      body: JSON.stringify({ title: `NVDA revenue as of ${drawn.asof}`, leavesTenant: false, cells: cells(drawn), charts: [chartExportSpec(drawn, 'NVDA revenue, USD bn')] }),
     });
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: string };

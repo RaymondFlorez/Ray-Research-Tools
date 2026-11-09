@@ -23,7 +23,8 @@
     "@picasso/auth": "*",
     "@picasso/canvas-guard": "*",
     "jose": "6.2.12",
-    "y-protocols": "1.0.7"
+    "y-protocols": "1.0.7",
+    "@picasso/canvas-render": "*"
   },
   "devDependencies": {
     "@hocuspocus/provider": "4.7.1",

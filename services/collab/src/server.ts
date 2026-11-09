@@ -33,7 +33,8 @@ import { metaOf, nodesOf } from '@picasso/canvas-sync';
 import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
 import { applyAwarenessUpdate, encodeAwarenessUpdate } from 'y-protocols/awareness';
-import { buildBundle, bundlePdf, ExportWouldLeak, UnreproducibleExport, type ExportCell, type VendorPolicy } from '@picasso/canvas-guard';
+import { buildBundle, bundlePdf, chartPoints, ExportWouldLeak, UnreproducibleExport, type ChartSpec, type ExportCell, type PdfChart, type VendorPolicy } from '@picasso/canvas-guard';
+import { seriesFigure } from '@picasso/canvas-render';
 import { checkPurpose, traceId, type AuditStore } from './audit.js';
 import { CanvasStore, VersionExists } from './store.js';
 
@@ -271,7 +272,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     const bad = checkPurpose(purpose);
     if (bad) return send(400, { error: bad });
     if (!o.audit) return send(503, { error: 'no audit trail is configured, so nothing is exported' });
-    let body: { title?: unknown; leavesTenant?: unknown; cells?: unknown };
+    let body: { title?: unknown; leavesTenant?: unknown; cells?: unknown; charts?: unknown };
     try {
       body = JSON.parse(await readBody(request, 4 << 20)) as typeof body;
     } catch (err) {
@@ -298,6 +299,15 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
       }
       return send(refusal, { error: (err as Error).message, traceId: trace });
     }
+    // Charts are drawn from the redacted bundle, not from the request, so a
+    // withheld figure cannot reach the page as a point on a line.
+    let charts: PdfChart[];
+    try {
+      const specs = (Array.isArray(body.charts) ? body.charts : []) as ChartSpec[];
+      charts = specs.map((spec) => ({ title: String(spec.title), figure: seriesFigure(chartPoints(bundle, spec), { width: 500, height: 260 }) }));
+    } catch (err) {
+      return send(400, { error: (err as Error).message });
+    }
     const redacted = bundle.cells.filter((c) => c.redaction).length;
     try {
       await o.audit.append({
@@ -307,7 +317,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     } catch (aerr) {
       return send(503, { error: `the audit trail could not be written, so nothing is exported: ${(aerr as Error).message}` });
     }
-    if (pdf) pdf(bundlePdf(bundle, { traceId: trace }), trace);
+    if (pdf) pdf(bundlePdf(bundle, { traceId: trace, charts }), trace);
     else send(200, { bundle, traceId: trace });
   };
 

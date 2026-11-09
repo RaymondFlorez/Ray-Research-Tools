@@ -11,6 +11,7 @@ export default defineConfig({
       '@picasso/canvas-sync': pkg('canvas-sync'),
       '@picasso/auth': fileURLToPath(new URL('../auth/src/index.ts', import.meta.url)),
       '@picasso/canvas-guard': pkg('canvas-guard'),
+      '@picasso/canvas-render': pkg('canvas-render'),
       '@picasso/canvas-router': pkg('canvas-router'),
       '@picasso/canvas-agents': pkg('canvas-agents'),
     },

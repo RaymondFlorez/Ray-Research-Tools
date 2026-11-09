@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BitemporalStore,
   chartExportCells,
+  chartExportSpec,
   classifiedSource,
   createSeriesChart,
   evaluateSeriesChart,
@@ -27,7 +28,7 @@ import {
   type PointInTimeSource,
 } from '@picasso/canvas-data';
 import { seriesFigure } from '@picasso/canvas-render';
-import { buildBundle, bundlePdf, type ExportCell } from '@picasso/canvas-guard';
+import { buildBundle, bundlePdf, chartPoints, type ExportCell } from '@picasso/canvas-guard';
 
 const FACTS: ClassifiedFact[] = [
   { key: 'NVDA.revenue', validTime: '2024-03-31', knowledgeTime: '2024-05-22', value: 26.04, dataClass: 'public' },
@@ -97,5 +98,22 @@ describe('a chart on screen, exported', () => {
     const cells = cellsOf(await chartFrom(localSource(bare)));
     expect(cells.every((c) => c.classification === 'licensed' && c.vendor === undefined)).toBe(true);
     expect(exportOf(cells, [{ vendor: 'vendor-b', rule: 'redistributable' }]).cells.every((c) => c.value === 'withheld')).toBe(true);
+  });
+
+  it('draws the exported chart from what the export allows: the screen\'s gaps, and the vendor rule\'s', async () => {
+    const chart = await chartFrom(classifiedSource(FACTS, PM));
+    const bundle = exportOf(cellsOf(chart), [{ vendor: 'vendor-b', rule: 'strip' }]);
+    const points = chartPoints(bundle, chartExportSpec(chart, 'NVDA revenue'));
+    expect(points).toEqual([
+      { validTime: '2024-03-31', value: 26.04 },
+      { validTime: '2024-06-30', withheld: 'vendor-b: not redistributable' },
+      { validTime: '2024-09-30', value: 35.08 },
+    ]);
+    const figure = seriesFigure(points, { width: 500, height: 260 });
+    expect(figure.markers.map((m) => m.value)).toEqual([26.04, 35.08]);
+    // The analyst's own gap on screen stays a gap in the export.
+    const analyst = await chartFrom(classifiedSource(FACTS, ANALYST));
+    const theirs = chartPoints(exportOf(cellsOf(analyst), []), chartExportSpec(analyst, 'NVDA revenue'));
+    expect(theirs[1]).toEqual({ validTime: '2024-06-30', withheld: 'Requires a vendor-b licence.' });
   });
 });
