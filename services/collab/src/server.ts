@@ -496,8 +496,9 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     fannedIn.count += 1;
   };
   const stopListening = await store.listen({
-    update: ({ doc, seq, from }) => {
+    update: ({ doc, seq, from, body }) => {
       if (from === instanceId || !server.hocuspocus.documents.has(doc)) return;
+      if (body) return apply(doc, seq, body);
       void store.update(doc, seq).then(
         (body) => body && apply(doc, seq, body),
         (err) => console.error(`fan-out of ${doc}#${seq}: ${(err as Error).message}`),

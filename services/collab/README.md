@@ -8,7 +8,7 @@ and kept in Postgres the way PRD 3.9 says.
 > snapshots referencing dataset snapshot IDs.
 
 ```bash
-COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 19 tests; 18 skip without a database
+COLLAB_PG_URL=postgres://... npm test --workspace @picasso/collab    # 21 tests; 20 skip without a database
 node services/collab/dist/main.js --auth-url https://picasso.example.com --pg postgres://... --users services/dataplane/config/users.json --migrate
 ```
 
@@ -99,6 +99,27 @@ append takes a per-canvas lock before it draws its position. The test writes a r
 into the log, between two edits, where the instance never hears of it. The snapshot claims the
 first edit and no more, and a third instance opening the canvas has all three. With the old
 rule, the snapshot claimed the second edit and the test fails.
+
+**What it costs, measured.** `test/fanout-measure.test.ts` runs one, two and three instances on
+one database. One client makes 300 edits, 15ms apart, another times each edit's arrival, and
+every query each instance sends to Postgres is counted, with snapshots held off. On this
+machine, against a local Postgres, over three runs:
+
+| Set-up | Arrival p50 | p95 | Queries per update |
+|---|---|---|---|
+| both clients on one instance | 0.9–1.0ms | 1.3–1.7ms | 1 |
+| two instances | 2.1–2.2ms | 2.8–3.4ms | 1 |
+| three instances | 2.1–2.2ms | 3.4–3.9ms | 1 |
+
+p99 stayed under 10ms. Crossing an instance adds about a millisecond: an edit reaches a client
+on its own instance before it is logged, and one on another instance only after.
+
+The first version announced only an update's position, and each other instance then read the
+row. The same test measured 2 queries per update with two instances and 3 with three, and p50s
+of 2.5–2.7ms. An update of up to 5,000 bytes now travels in its announcement, so a canvas
+costs the database one query per edit however many instances hold it. A larger update is
+still read from the log, one query per other instance; the test checks that with a 20,000
+character insertion.
 
 **Presence crosses too.** Cursor and selection changes (Hocuspocus awareness) are announced
 on the same channel and applied on the other instances, but not logged. When a client leaves,
@@ -211,9 +232,10 @@ either side's migration fails that side's test.
 - **A large presence update is dropped.** One announcement holds about 7,900 bytes. A presence
   state larger than that is not sent, and the next heartbeat tries again. Presence lost while a
   listener is down is not caught up; the next heartbeat restores it.
-- **Postgres carries every update twice.** Each update is logged as a row, and then read back
-  by each other instance that has the canvas open. Nothing here measures the load that puts on
-  the database.
+- **The cost was measured on one machine.** The figures above are a local Postgres on the
+  same host. Over a network, each edit that crosses instances also pays the round trip to the
+  database and back out to the listener. No figure here covers many canvases at once, or the
+  notification queue under load.
 - **The update log's history is not kept past ninety days.** After the job runs, an old
   canvas cannot be replayed edit by edit before that, only opened as its snapshot. Named
   versions are what is meant to keep a past state for good. The `sessions` table has no

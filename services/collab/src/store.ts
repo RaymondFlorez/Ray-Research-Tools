@@ -27,6 +27,14 @@ import * as Y from 'yjs';
 
 const IDENT = /^[a-z_][a-z0-9_]{0,62}$/;
 
+/**
+ * An update up to this size travels in its announcement, so the other
+ * instances apply it without reading the log. Postgres caps a notification
+ * at 8,000 bytes; base64 makes 5,000 bytes about 6,700, with room for the
+ * rest of the payload. Larger updates are read from the log.
+ */
+export const INLINE_BODY_BYTES = 5_000;
+
 export async function migrate(pool: pg.Pool, schema: string): Promise<void> {
   if (!IDENT.test(schema)) throw new Error(`schema name ${JSON.stringify(schema)}`);
   await pool.query(`
@@ -155,7 +163,8 @@ export class CanvasStore {
     const r = await this.pool.query<{ seq: string }>(
       `WITH lock AS (SELECT pg_advisory_xact_lock(hashtextextended($6 || '/' || $1, 0))),
        row AS (INSERT INTO ${this.schema}.updates (doc, author, body) SELECT $1, $2, $3 FROM lock RETURNING seq)
-       SELECT seq, pg_notify($4, json_build_object('doc', $1::text, 'seq', seq, 'from', $5::text)::text) FROM row`,
+       SELECT seq, pg_notify($4, json_build_object('doc', $1::text, 'seq', seq, 'from', $5::text,
+         'body', CASE WHEN octet_length($3) <= ${INLINE_BODY_BYTES} THEN encode($3, 'base64') END)::text) FROM row`,
       [doc, author, Buffer.from(update), this.channel, from, this.schema],
     );
     return Number(r.rows[0]!.seq);
@@ -200,7 +209,8 @@ export class CanvasStore {
    * was away. The returned function stops.
    */
   async listen(handlers: {
-    update: (u: { doc: string; seq: number; from: string }) => void;
+    /** `body` is the update itself when it fitted in the announcement; otherwise read it with `update()`. */
+    update: (u: { doc: string; seq: number; from: string; body?: Uint8Array }) => void;
     presence?: (p: { doc: string; from: string; update: Uint8Array }) => void;
     onReconnect?: () => void;
   }): Promise<() => Promise<void>> {
@@ -212,9 +222,9 @@ export class CanvasStore {
       c.on('notification', (msg) => {
         if (msg.channel !== this.channel || !msg.payload) return;
         try {
-          const u = JSON.parse(msg.payload) as { doc: string; seq?: number; from: string; presence?: string };
+          const u = JSON.parse(msg.payload) as { doc: string; seq?: number; from: string; presence?: string; body?: string | null };
           if (u.presence !== undefined) handlers.presence?.({ doc: u.doc, from: u.from, update: new Uint8Array(Buffer.from(u.presence, 'base64')) });
-          else handlers.update({ doc: u.doc, seq: Number(u.seq), from: u.from });
+          else handlers.update({ doc: u.doc, seq: Number(u.seq), from: u.from, ...(u.body ? { body: new Uint8Array(Buffer.from(u.body, 'base64')) } : {}) });
         } catch {
           // Not one of ours.
         }
