@@ -33,7 +33,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart, classifiedSource, chartExportCells } =
+const { BitemporalStore, RemotePointInTime, DataPlaneError, SnapshotCatalog, setCanvasAsOf, createFactTile, evaluateFactTile, evaluateFactTiles, localSource, remoteSource, createUniverseNode, evaluateUniverseNode, createSeriesChart, evaluateSeriesChart, classifiedSource, chartExportCells } =
   await import(join(ROOT, 'packages/canvas-data/dist/index.js'));
 const { addNode, createDocument } = await import(join(ROOT, 'packages/canvas-core/dist/index.js'));
 const { backtest, History, IncompleteHistory, loadHistory } = await import(join(ROOT, 'packages/canvas-sim/dist/index.js'));
@@ -135,6 +135,20 @@ try {
   const tileAnalyst = await tileAt(remoteSource(as('analyst')), live);
   check('live, the unlicensed reader\'s tile shows Q3: a blocked older quarter does not hide a newer visible one',
     tileAnalyst.kind === 'value' && tileAnalyst.validTime === '2024-09-30' && tileAnalyst.value === 35.08);
+  // Every tile on a canvas at once: one request, each tile as it would be alone.
+  let batchedAgree = 0;
+  for (const user of ['pm', 'analyst']) {
+    for (const time of [pinned, live]) {
+      const requests = [];
+      const counted = remoteSource(new RemotePointInTime({ baseUrl: BASE, user, fetch: (url, init) => (requests.push(String(url)), fetch(url, init)) }));
+      const tiles = () => ['NVDA.revenue', 'NVDA.revenue', 'AMD.revenue'].map((key, i) => createFactTile({ id: `t${i}`, key }));
+      const together = await evaluateFactTiles(tiles(), counted, time, now);
+      const oneRequest = requests.length === 1 && requests[0].endsWith('/v1/asof/batch');
+      const alone = await Promise.all(tiles().map((t) => evaluateFactTile(t, remoteSource(as(user)), time, now)));
+      if (oneRequest && JSON.stringify(together) === JSON.stringify(alone)) batchedAgree += 1;
+    }
+  }
+  check('every tile on a canvas reads in one request through the service, each as it would alone, for both readers', batchedAgree === 4, `${batchedAgree} of 4`);
 
   // A ChartNode of the same series.
   const chartAt = async (source, time) => {

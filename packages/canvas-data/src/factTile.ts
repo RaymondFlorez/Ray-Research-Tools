@@ -212,8 +212,12 @@ export async function evaluateFactTile(
   node.state = { ...node.state, status: 'computing' };
 
   const read = await source.read({ key, knowledgeTime: asof });
-  if (node.provenance.asof !== asof) return { kind: 'superseded', key, asof };
+  return settle(node, key, asof, read, source.name);
+}
 
+/** What one tile shows from its read, unless the canvas moved while it was in flight. */
+function settle(node: PicassoNode, key: string, asof: Instant, read: SourceRead, sourceName: string): FactTileValue {
+  if (node.provenance.asof !== asof) return { kind: 'superseded', key, asof };
   const latest = latestKnown(read);
   node.state = { status: 'ready', lastComputedAt: Date.now() };
 
@@ -227,6 +231,37 @@ export async function evaluateFactTile(
     value: latestShown.value,
     knownAt: latestShown.knownAt,
     asof,
-    source: latestShown.source ? `${source.name} · ${latestShown.source}` : source.name,
+    source: latestShown.source ? `${sourceName} · ${latestShown.source}` : sourceName,
   };
+}
+
+/**
+ * Every fact tile on a canvas, at one canvas time, in one read where the
+ * source can batch (`readMany`; the data plane's `/v1/asof/batch`), and one
+ * read per distinct key where it cannot. Each tile settles exactly as
+ * `evaluateFactTile` would settle it alone, superseded included: a tile
+ * whose own knowledge time moved while the batch was in flight writes
+ * nothing, and the others still settle.
+ */
+export async function evaluateFactTiles(
+  nodes: readonly PicassoNode[],
+  source: PointInTimeSource,
+  time: CanvasTime,
+  now: () => Instant,
+): Promise<FactTileValue[]> {
+  const asof = knowledgeTimeFor(time, now);
+  const keys = nodes.map((node) => String(node.params.key ?? ''));
+  for (const node of nodes) {
+    node.provenance = { ...node.provenance, asof };
+    node.state = { ...node.state, status: 'computing' };
+  }
+  const distinct = [...new Set(keys)];
+  const reads: ReadonlyMap<string, SourceRead> = source.readMany && distinct.length > 0
+    ? await source.readMany(distinct, asof)
+    : new Map(await Promise.all(distinct.map(async (key) => [key, await source.read({ key, knowledgeTime: asof })] as const)));
+  return nodes.map((node, i) => {
+    const read = reads.get(keys[i]!);
+    if (!read) throw new Error(`the source returned no read for ${keys[i]}`);
+    return settle(node, keys[i]!, asof, read, source.name);
+  });
 }

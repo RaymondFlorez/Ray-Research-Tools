@@ -20,7 +20,7 @@ npm test --workspace @picasso/canvas-data
 | `skewHistory.ts` | 5.4 | Skew kept bitemporally, one series per delta, with today ranked against the days before it |
 | `anomaly.ts` | 3.6 | The alert engine's three detector families: rolling-MAD robust z, BOCPD, and the STL remainder |
 | `remote.ts` | 2.3, 3.8, 7.2 | `RemotePointInTime`: the data plane's point-in-time reads over HTTP, read at the canvas's time — the pin when scrubbed, now when live; with a `purpose`, which the data plane requires before it serves position data |
-| `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded. `classifiedSource` is the data plane's entitled read in process, held to the Go service's answers |
+| `factTile.ts` | 3.3, 3.8 | A DataTile showing one fact at the canvas's time, through the in-process store or the data plane: the latest period, blocked when that period is, and a read that lands after a scrub discarded. `classifiedSource` is the data plane's entitled read in process, held to the Go service's answers; `evaluateFactTiles` settles every tile on a canvas from one batched read, each as it would settle alone |
 | `universeSource.ts` | 3.3, 3.8, 5.8 | A `UniverseNode` evaluated at the canvas's time: each numeric field read point-in-time through the store or the data plane in one batch, a withheld or stale field counted apart from missing data, and the age of what was screened |
 | `seriesChart.ts` | 3.3, 3.8 | A `ChartNode` of one fact series at the canvas's time, with a withheld period as a gap where it falls; `chartExportCells` turns what it drew into export cells, each with the class and vendor its read carried, and an unclassified figure as licensed; `chartExportSpec` describes the chart for the export service to redraw |
 | `live.ts` | 3.6, 7.2, 7.4 | Live tiles over the data plane's stream: a chunk-safe event-stream parser, and per-instrument state — value, blocked, waiting, stale, recovering or ended |
@@ -412,8 +412,9 @@ reads on a third, so most of the reads written down were empty. They now come fr
 - **Four readers go through the data plane, one request per key.** The fact tile, the series
   chart and the screen evaluate through either source, and canvas-sim's `loadHistory` loads a
   backtest's history through `RemotePointInTime.versions`; `scripts/historical-morning-remote.mjs`
-  holds each to the in-process answer. A screen is one request and one SQL statement. The fact
-  tile and the series chart still read key by key.
+  holds each to the in-process answer. A screen, and every fact tile on a canvas
+  (`evaluateFactTiles`), is one request and one SQL statement. A series chart reads its one key.
+  Tiles in different canvas times are separate batches.
 - **Value age is per screen, not per field.** `maxAgeDays` applies to every point-in-time field
   the expression names, and it is measured from the end of the period, by its valid time, not
   from when the value became known. Without it, nothing is stale.
