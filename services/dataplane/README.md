@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 44 tests, four of them need Postgres
+go test -race ./...                                    # 45 tests, four of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -217,7 +217,9 @@ with a SYNTHETIC position:
   be read for thirty seconds, every token is refused (`identity` in this module). An open
   `/v1/stream` is re-checked at each health report. A logged-out session's stream ends with
   an `ended` event, giving the reason, and closes, and canvas-data's live tiles stop showing
-  values. The test logs out mid-stream; without the check, the stream runs on.
+  values. The test logs out mid-stream; without the check, the stream runs on. A stream also
+  ends, with reason `expired`, once the token that opened it is past expiry and the
+  thirty-second leeway; a second test opens one inside the leeway and sees it end.
 - **The binary does not drop its own privileges.** It writes the trail as whatever role `-pg`
   names, and in development that is the schema's owner, which could drop the triggers.
   `audit.GrantService` makes a role insert-only, and an operator has to run it and connect as

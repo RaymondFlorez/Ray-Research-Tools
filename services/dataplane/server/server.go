@@ -460,6 +460,14 @@ func (s *Server) stream(w http.ResponseWriter, r *http.Request, e entitle.Entitl
 			// is checked again here: logged out, or no longer checkable, and
 			// the stream ends with the reason rather than running on.
 			if session, ok := sessionOf(r); ok && s.Identity != nil {
+				// No longer than the token that opened it, either: a browser
+				// reconnects with its refreshed cookie, and a session that can
+				// no longer refresh stays out.
+				if s.now().After(session.Expires.Add(identity.Leeway)) {
+					send(w, "ended", map[string]string{"reason": "expired", "message": "the session token expired: reconnect with a fresh one"})
+					flusher.Flush()
+					return
+				}
 				if refusal := s.Identity.StillLive(r.Context(), session.SID); refusal != nil {
 					send(w, "ended", map[string]string{"reason": refusal.Reason, "message": refusal.Message})
 					flusher.Flush()

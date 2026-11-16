@@ -221,7 +221,11 @@ either side's migration fails that side's test.
   the next sweep was still up to five seconds away. Run again with only the sweep, the check
   failed four times in four. With the per-message check, it passed three in three. When the
   list cannot be read, open connections are closed too. That follows from the same check, and
-  is tested at the list, not end to end.
+  is tested at the list, not end to end. A connection also lives no longer than the token that
+  opened it: past expiry and the verifiers' thirty-second leeway, the sweep or the next
+  message closes it, with the reason, and the same token cannot open it again. The test opens
+  a canvas with a token inside its last second of leeway and sees it closed. With both checks
+  removed, it never is.
 - **The PDF is canvas-guard's own, not WeasyPrint's.** PRD 2.3's pipeline is not here. The
   PDF holds figures, notes, step-line charts and the appendix, in Helvetica, with no house
   layout. One demo page, `morning.html`, has an export button.

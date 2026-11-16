@@ -457,7 +457,10 @@ suite('picasso-collab', () => {
     await new Promise<void>((r) => keyServer.listen(0, '127.0.0.1', () => r()));
     const authUrl = `http://127.0.0.1:${(keyServer.address() as { port: number }).port}`;
     const issuer = await SessionIssuer.create({ issuer: authUrl, tenants: { acme: { holdsPositions: true }, globex: { holdsPositions: false } } });
-    jwks = issuer.jwks();
+    // A second key, whose clock is fifteen minutes and 29 seconds behind: its tokens open a
+    // connection inside the verifiers' thirty-second leeway, and expire for good a second later.
+    const behind = await SessionIssuer.create({ issuer: authUrl, tenants: { acme: { holdsPositions: true } }, now: () => Date.now() - 15 * 60_000 - 29_000 });
+    jwks = { keys: [...issuer.jwks().keys, ...behind.jwks().keys] };
     const c = await startCollab({ pool, schema, users, authUrl, idleMs: 300, snapshotEveryMs: 1_000, revocationRefreshMs: 200 });
     servers.push(c);
     const token = async (user: string, tenant: string) => (await issuer.mint(user, tenant, { authTime: Date.now(), amr: ['pwd', 'otp'] })).token;
@@ -517,6 +520,19 @@ suite('picasso-collab', () => {
     writer.canvas.addNode(node('refused', 300));
     await new Promise((r) => setTimeout(r, 600));
     expect(reader.canvas.getNode('refused')).toBeUndefined();
+
+    // A connection lives no longer than its token: past expiry and the leeway it is closed,
+    // with the reason, and the same token cannot open it again.
+    const expiring = await behind.mint('pm', 'acme', { authTime: Date.now() - 15 * 60_000 - 29_000, amr: ['pwd', 'otp'] });
+    const short = await open(c, 'acme/expiry', expiring.token);
+    expect(short.failed).toBeUndefined();
+    let closedFor: string | undefined;
+    short.provider.on('close', ({ event }: { event: { reason: string } }) => {
+      closedFor ??= event.reason;
+    });
+    await until(() => closedFor !== undefined, 5_000);
+    expect(closedFor).toBe('the session token expired: reconnect with a fresh one');
+    expect((await open(c, 'acme/expiry', expiring.token)).failed).toBeDefined();
     keyServer.close();
   });
 });

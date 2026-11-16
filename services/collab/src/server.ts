@@ -28,7 +28,7 @@ import { Server, type Connection, type Extension, type onRequestPayload } from '
 import type pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http';
-import { REVOCATION_REFRESH_MS, RevocationList, SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
+import { LEEWAY_S, REVOCATION_REFRESH_MS, RevocationList, SESSION_COOKIE, verifySessionToken } from '@picasso/auth';
 import { metaOf, nodesOf } from '@picasso/canvas-sync';
 import { createRemoteJWKSet } from 'jose';
 import * as Y from 'yjs';
@@ -103,6 +103,8 @@ interface Context {
   tenant: string;
   /** The session the connection was opened under, when it came with a token. */
   sid?: string;
+  /** When that token expires (epoch ms). The connection lives no longer than it, plus the verifiers' leeway. */
+  exp?: number;
 }
 
 const LOADED = Symbol('loaded from the store');
@@ -191,21 +193,21 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
    * bearer header, or the session cookie a browser sends with its WebSocket —
    * or, only with devIdentity and no token, a user's name.
    */
-  const identify = async (token: string | undefined, devName: string | undefined): Promise<{ user: string; tenant?: string; sid?: string }> => {
+  const identify = async (token: string | undefined, devName: string | undefined): Promise<{ user: string; tenant?: string; sid?: string; exp?: number }> => {
     if (token && token.split('.').length === 3 && keys && authBase && revocations) {
       const v = await verifySessionToken(token, keys, { issuer: authBase, revoked: await revocations.current() });
       if (!v.ok) throw new Error(`session: ${v.reason}: ${v.message}`);
-      return { user: v.session.user, tenant: v.session.tenant, sid: v.session.sid };
+      return { user: v.session.user, tenant: v.session.tenant, sid: v.session.sid, exp: v.session.exp };
     }
     if (o.devIdentity && devName) return { user: devName };
     throw new Error('sign in: no session token');
   };
-  const authenticate = (who: { user: string; tenant?: string; sid?: string }, docName: string): Context => {
+  const authenticate = (who: { user: string; tenant?: string; sid?: string; exp?: number }, docName: string): Context => {
     const entry = o.users[who.user];
     if (!entry) throw new Error('unknown user');
     if (who.tenant !== undefined && who.tenant !== entry.tenant) throw new Error('the session is for another tenant');
     if (parseDocName(docName).tenant !== entry.tenant) throw new Error(`${who.user} may not open another tenant's canvas`);
-    return { user: who.user, tenant: entry.tenant, ...(who.sid ? { sid: who.sid } : {}) };
+    return { user: who.user, tenant: entry.tenant, ...(who.sid ? { sid: who.sid } : {}), ...(who.exp !== undefined ? { exp: who.exp } : {}) };
   };
 
   /**
@@ -217,7 +219,11 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
    * list's interval, so an idle one is closed too, and stops receiving.
    * A list that cannot be read closes them all.
    */
-  const ended = async (sid: string | undefined): Promise<string | undefined> => {
+  const ended = async (sid: string | undefined, exp?: number): Promise<string | undefined> => {
+    // A connection lives no longer than the token that opened it. A browser
+    // reconnects at once with its refreshed cookie; a session that can no
+    // longer refresh, past its twelve hours, stays out.
+    if (exp !== undefined && Date.now() > exp + LEEWAY_S * 1000) return 'the session token expired: reconnect with a fresh one';
     if (!sid || !revocations) return undefined;
     const revoked = await revocations.current();
     if (revoked === 'unknown') return 'the session cannot be checked: picasso-auth is unreachable';
@@ -231,8 +237,14 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
     sweeping = true;
     try {
       const revoked = await revocations.current();
+      const expiredBy = Date.now() - LEEWAY_S * 1000;
       for (const [sid, connections] of open) {
-        if (revoked !== 'unknown' && !revoked.has(sid)) continue;
+        if (revoked !== 'unknown' && !revoked.has(sid)) {
+          for (const c of connections) {
+            if (c.context?.exp !== undefined && c.context.exp < expiredBy) c.close({ code: 4401, reason: 'the session token expired: reconnect with a fresh one' });
+          }
+          continue;
+        }
         const reason = revoked === 'unknown' ? 'the session cannot be checked: picasso-auth is unreachable' : 'the session was logged out';
         for (const c of connections) c.close({ code: 4401, reason });
         open.delete(sid);
@@ -339,7 +351,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
       });
     },
     async beforeHandleMessage({ context }) {
-      const reason = await ended(context?.sid);
+      const reason = await ended(context?.sid, context?.exp);
       // Hocuspocus closes the connection on a throw, and the message is not applied.
       if (reason) throw Object.assign(new Error(reason), { code: 4401, reason });
     },
