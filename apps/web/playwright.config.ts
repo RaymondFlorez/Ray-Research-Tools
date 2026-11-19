@@ -32,6 +32,9 @@ export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
   fullyParallel: false,
+  // The globe renders with software WebGL in CI/sandboxes; parallel browsers starve each
+  // other's render loop and make picking timing-dependent.
+  workers: 1,
   retries: process.env.CI ? 1 : 0,
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,

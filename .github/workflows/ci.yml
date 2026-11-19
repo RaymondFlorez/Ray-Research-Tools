@@ -82,3 +82,40 @@ jobs:
       - name: E2E
         working-directory: apps/web
         run: pnpm test:e2e
+
+  # Build all three images and run the production compose stack end to end (demo LLM,
+  # so no Anthropic key is needed): migrations, seed, API, nginx proxy, agent WebSocket.
+  deploy-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare .env (generated secrets, demo LLM)
+        run: |
+          sed -e "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" \
+              -e "s/^GEOGLOBE_JWT_SECRET=$/GEOGLOBE_JWT_SECRET=$(openssl rand -hex 32)/" \
+              -e "s/^GEOGLOBE_AGENT_LLM=anthropic/GEOGLOBE_AGENT_LLM=demo/" \
+              .env.example > .env
+
+      - name: Build and smoke test the production stack
+        run: ./scripts/smoke-test.sh --down
+
+  k8s-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: false
+
+      - name: Install kustomize + kubeconform
+        run: |
+          go install sigs.k8s.io/kustomize/kustomize/v5@v5.4.3
+          go install github.com/yannh/kubeconform/cmd/kubeconform@v0.6.7
+
+      - name: Render and validate
+        run: |
+          cp infra/k8s/secrets.env.example infra/k8s/secrets.env
+          kustomize build infra/k8s | kubeconform -strict -summary -kubernetes-version 1.30.0

@@ -25,8 +25,13 @@ test('clicking a country selects it and opens the Inspector', async ({ page }) =
   const inspector = page.getByTestId('inspector');
   for (const [dx, dy] of offsets) {
     await page.mouse.click(cx + dx, cy + dy);
-    await page.waitForTimeout(400);
-    if (await inspector.isVisible()) break;
+    // Picking needs a render pass; under software WebGL that can take a while, so wait
+    // for the Inspector rather than sleeping a fixed amount.
+    const opened = await inspector
+      .waitFor({ state: 'visible', timeout: 2000 })
+      .then(() => true)
+      .catch(() => false);
+    if (opened) break;
   }
 
   await expect(inspector).toBeVisible();
