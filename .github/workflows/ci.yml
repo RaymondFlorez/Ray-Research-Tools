@@ -38,6 +38,9 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      - name: Bundle size budget
+        run: pnpm --filter @geoglobe/web size
+
   api:
     runs-on: ubuntu-latest
     steps:

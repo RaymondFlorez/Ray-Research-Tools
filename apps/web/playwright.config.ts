@@ -1,17 +1,27 @@
-import { readdirSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { defineConfig } from '@playwright/test';
 
 // Prefer a pre-installed Chromium (PLAYWRIGHT_BROWSERS_PATH, e.g. this sandbox); on CI
 // runners that dir won't exist, so fall back to Playwright's own installed browser.
+// Install layouts vary by Playwright version, so probe the known shapes.
 function findChromium(): string | undefined {
   const base = process.env.PLAYWRIGHT_BROWSERS_PATH;
   if (!base) return undefined;
+  const candidates = [`${base}/chromium`];
   try {
-    const dir = readdirSync(base).find((d) => d.startsWith('chromium-'));
-    return dir ? `${base}/${dir}/chrome-linux/chrome` : undefined;
+    for (const dir of readdirSync(base).filter((d) => /^chromium-\d+$/.test(d))) {
+      candidates.push(`${base}/${dir}/chrome-linux64/chrome`, `${base}/${dir}/chrome-linux/chrome`);
+    }
   } catch {
     return undefined;
   }
+  return candidates.find((p) => {
+    try {
+      return statSync(p).isFile(); // follows symlinks; skips the `chromium` dir layout
+    } catch {
+      return false;
+    }
+  });
 }
 
 const executablePath = findChromium();

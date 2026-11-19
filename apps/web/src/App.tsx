@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { SCENE_SCHEMA_VERSION, type PatchOp } from '@geoglobe/scene-schema';
-import { GlobeCanvas } from './globe';
 import { LayerPanel } from './ui/LayerPanel';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
@@ -8,6 +7,12 @@ import { ChatPanel } from './ui/ChatPanel';
 import { CommandPalette } from './ui/CommandPalette';
 import { useSceneStore } from './store/sceneStore';
 import { useUiStore } from './store/uiStore';
+
+// The globe (deck.gl + luma.gl) is the heaviest part of the app; load it lazily so the
+// panels and chat render immediately while the GL chunks stream in.
+const GlobeCanvas = lazy(() =>
+  import('./globe/GlobeCanvas').then((m) => ({ default: m.GlobeCanvas })),
+);
 
 // `?test=1` disables auto-rotation so E2E can click a stable feature.
 const TEST_MODE =
@@ -31,7 +36,9 @@ export function App() {
   return (
     <div className="app">
       <div className="globe">
-        <GlobeCanvas autoRotate={!TEST_MODE} />
+        <Suspense fallback={<div className="globe-loading">Loading globe…</div>}>
+          <GlobeCanvas autoRotate={!TEST_MODE} />
+        </Suspense>
       </div>
 
       <header className="overlay">

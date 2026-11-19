@@ -94,6 +94,15 @@ body,
   inset: 0;
 }
 
+.globe-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  color: var(--text-faint);
+}
+
 .globe canvas {
   outline: none;
 }
