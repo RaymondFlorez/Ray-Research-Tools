@@ -6,9 +6,10 @@ from fastapi import Depends, FastAPI, HTTPException, Response, WebSocket, WebSoc
 from fastapi.middleware.cors import CORSMiddleware
 
 from .agent.gateway import build_gateway
+from .agent.llm import LLMClient
 from .agent.orchestrator import Orchestrator
 from .cache import CacheBackend, build_cache, cache_key
-from .config import Settings, get_settings
+from .config import VERSION, Settings, get_settings
 from .models import (
     Catalog,
     GeoQueryRequest,
@@ -70,8 +71,18 @@ def get_repository() -> DataRepository:
     return _repo_singleton
 
 
+def build_llm(settings: Settings) -> LLMClient:
+    if settings.agent_llm == "demo":
+        from .agent.demo import DemoLLMClient
+
+        return DemoLLMClient()
+    from .agent.llm import AnthropicLLMClient
+
+    return AnthropicLLMClient(api_key=settings.anthropic_api_key)
+
+
 def create_app(repository: DataRepository | None = None) -> FastAPI:
-    app = FastAPI(title="GeoGlobe Data Service", version="0.1.0")
+    app = FastAPI(title="GeoGlobe Data Service", version=VERSION)
     settings = get_settings()
 
     app.add_middleware(
@@ -88,7 +99,18 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
 
     @app.get("/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        """Liveness: the process is up. Cheap; never touches dependencies."""
+        return {"status": "ok", "version": VERSION, "environment": settings.environment}
+
+    @app.get("/ready")
+    def ready(response: Response) -> dict[str, str]:
+        """Readiness: the repository answers (DB reachable, schema present)."""
+        try:
+            get_repository().catalog()
+        except Exception as exc:  # any dependency failure → not ready
+            response.status_code = 503
+            return {"status": "unavailable", "detail": type(exc).__name__}
+        return {"status": "ready"}
 
     @app.get("/layers/catalog", response_model=Catalog)
     def catalog(repo: DataRepository = Depends(get_repository)) -> Catalog:
@@ -189,9 +211,7 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
         await ws.accept()
         repo = get_repository()
         try:
-            from .agent.llm import AnthropicLLMClient
-
-            llm = AnthropicLLMClient(api_key=settings.anthropic_api_key)
+            llm = build_llm(settings)
         except Exception as exc:  # SDK missing or no credentials
             await ws.send_json({"type": "error", "data": {"message": f"agent unavailable: {exc}"}})
             await ws.close()

@@ -4,7 +4,9 @@ from fastapi.testclient import TestClient
 
 
 def test_health(client: TestClient) -> None:
-    assert client.get("/health").json() == {"status": "ok"}
+    body = client.get("/health").json()
+    assert body["status"] == "ok"
+    assert body["version"] == "0.1.0"
 
 
 def test_catalog_lists_earthquakes(client: TestClient) -> None:
