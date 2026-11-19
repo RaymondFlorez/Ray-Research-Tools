@@ -1,6 +1,10 @@
 import type { Layer } from '@geoglobe/scene-schema';
+import { authHeaders } from './auth';
 
-/** Base URL of the Data Service (Step 5). Overridable via VITE_API_URL. */
+/**
+ * Base URL of the Data Service. Overridable at build time via VITE_API_URL; production
+ * images build with `/api` so the web server proxies same-origin (no CORS).
+ */
 export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 interface GeoQueryBody {
@@ -42,7 +46,7 @@ export async function fetchGeoQuery(
   };
   const res = await fetch(`${API_URL}/query/geo`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
     signal,
   });

@@ -1,0 +1,53 @@
+# Rendered at container start: ${API_UPSTREAM} comes from the environment.
+
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+server {
+  listen 8080;
+  server_name _;
+  root /usr/share/nginx/html;
+
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+  gzip_min_length 1024;
+
+  add_header X-Content-Type-Options nosniff always;
+  add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+  location = /healthz {
+    access_log off;
+    default_type text/plain;
+    return 200 "ok\n";
+  }
+
+  # API + agent WebSocket. The trailing slash strips the /api prefix.
+  location /api/ {
+    proxy_pass ${API_UPSTREAM}/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # Agent turns can think for a while between streamed events.
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+  }
+
+  # Content-hashed bundles: cache forever.
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable" always;
+    add_header X-Content-Type-Options nosniff always;
+    try_files $uri =404;
+  }
+
+  # The app shell must revalidate so deploys take effect immediately.
+  location / {
+    expires -1;
+    try_files $uri $uri/ /index.html;
+  }
+}

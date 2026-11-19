@@ -63,3 +63,27 @@ def test_demo_llm_runs_an_nl_query_end_to_end(monkeypatch):
                 assert "patch" in types
     finally:
         get_settings.cache_clear()
+
+
+def test_blank_env_values_are_unset(monkeypatch):
+    monkeypatch.setenv("GEOGLOBE_JWT_SECRET", "")
+    monkeypatch.setenv("GEOGLOBE_REDIS_URL", "  ")
+    s = Settings()
+    assert s.jwt_secret is None and s.redis_url is None
+
+
+def test_issued_token_is_accepted(monkeypatch):
+    from geoglobe_api.issue_token import issue
+    from geoglobe_api.security import scopes_from_claims, verify_jwt
+
+    secret = "k" * 32
+    monkeypatch.setenv("GEOGLOBE_JWT_SECRET", secret)
+    get_settings.cache_clear()
+    try:
+        claims = verify_jwt(issue("alice", ["scene", "data"], 60), secret)
+        assert claims["sub"] == "alice"
+        assert scopes_from_claims(claims) == {"scene", "data"}
+        with pytest.raises(SystemExit, match="unknown scopes"):
+            issue("bob", ["root"], 60)
+    finally:
+        get_settings.cache_clear()

@@ -1,0 +1,94 @@
+# GeoGlobe production stack (single host).
+#
+#   cp .env.example .env        # then fill in secrets — see docs/DEPLOYMENT.md
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   ./scripts/smoke-test.sh     # end-to-end check, including one NL query
+#
+# Only the web container publishes a port; it serves the static app and proxies /api
+# (HTTP + the agent WebSocket) to the API, so the browser talks to a single origin.
+
+name: geoglobe
+
+x-api-image: &api-image
+  build:
+    context: .
+    dockerfile: apps/api/Dockerfile
+  image: geoglobe/api:${GEOGLOBE_VERSION:-0.1.0}
+  env_file: .env
+  environment: &api-env
+    GEOGLOBE_ENVIRONMENT: production
+    GEOGLOBE_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    GEOGLOBE_REDIS_URL: redis://redis:6379/0
+
+services:
+  db:
+    build: ./infra/db
+    image: geoglobe/db:${GEOGLOBE_VERSION:-0.1.0}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Pure cache: no persistence, bounded memory, evict least-recently-used keys.
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot: apply pending SQL migrations, then (optionally) load the demo dataset.
+  migrate:
+    <<: *api-image
+    restart: 'no'
+    command:
+      - sh
+      - -c
+      - python -m geoglobe_api.migrate && if [ "$${GEOGLOBE_SEED_DEMO_DATA:-true}" = "true" ]; then python -m geoglobe_api.seed; fi
+    healthcheck:
+      disable: true
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *api-image
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: geoglobe/web:${GEOGLOBE_VERSION:-0.1.0}
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: http://api:8000
+    ports:
+      - '${WEB_PORT:-8080}:8080'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8080/healthz']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  db-data:

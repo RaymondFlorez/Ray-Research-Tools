@@ -1,7 +1,16 @@
 import type { PatchOp } from '@geoglobe/scene-schema';
 import { API_URL } from './api';
+import { getAuthToken } from './auth';
 
-const WS_URL = `${API_URL.replace(/^http/, 'ws')}/ws/agent`;
+/** Agent socket URL; resolves a relative API_URL (e.g. `/api`) against the page. */
+function agentSocketUrl(): string {
+  const url = new URL(`${API_URL}/ws/agent`, window.location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Browsers can't set headers on a WebSocket handshake, so the token rides as a param.
+  const token = getAuthToken();
+  if (token) url.searchParams.set('token', token);
+  return url.toString();
+}
 
 export interface AgentEvent {
   type: 'text' | 'tool_use' | 'patch' | 'tool_result' | 'usage' | 'done' | 'error';
@@ -27,7 +36,7 @@ export function runAgentQuery(query: string, onEvent: (e: AgentEvent) => void): 
   return new Promise((resolve) => {
     let ws: WebSocket;
     try {
-      ws = new WebSocket(WS_URL);
+      ws = new WebSocket(agentSocketUrl());
     } catch {
       onEvent({ type: 'error', data: { message: 'could not open agent connection' } });
       resolve();

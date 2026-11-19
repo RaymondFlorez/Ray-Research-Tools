@@ -1,0 +1,14 @@
+# Keep build contexts small and free of local state/secrets.
+.git
+**/node_modules
+**/dist
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.egg-info
+**/test-results
+**/playwright-report
+.env
+.env.*
+!.env.example
+docs

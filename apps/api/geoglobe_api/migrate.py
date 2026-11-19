@@ -23,6 +23,7 @@ from .config import get_settings
 
 _REPO_DIR = Path(__file__).resolve().parents[3] / "infra" / "db" / "init"
 _IMAGE_DIR = Path("/app/migrations")
+_LOCK_KEY = 0x6E06_10BE  # arbitrary, stable advisory-lock id for this app
 
 
 @dataclass(frozen=True)
@@ -69,27 +70,38 @@ def run(dry_run: bool = False) -> list[str]:  # pragma: no cover - needs Postgre
     if not settings.database_url:
         raise SystemExit("GEOGLOBE_DATABASE_URL must be set to run migrations")
     engine = create_engine(settings.database_url)
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                "CREATE TABLE IF NOT EXISTS schema_migrations ("
-                " name TEXT PRIMARY KEY, checksum TEXT NOT NULL,"
-                " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
-            )
-        )
-        applied = dict(conn.execute(text("SELECT name, checksum FROM schema_migrations")).all())
+    migrations = load_migrations(migrations_dir())
 
-    todo = pending(load_migrations(migrations_dir()), applied)
-    for m in todo:
-        if dry_run:
-            continue
-        # One transaction per migration: the DDL and its bookkeeping row commit together.
-        with engine.begin() as conn:
-            conn.exec_driver_sql(m.sql)
-            conn.execute(
-                text("INSERT INTO schema_migrations (name, checksum) VALUES (:n, :c)"),
-                {"n": m.name, "c": m.checksum},
-            )
+    # A session-level advisory lock serializes concurrent runners (e.g. an init container
+    # in every API replica): the first applies, the rest wait and then find nothing to do.
+    # Everything — even creating the bookkeeping table — happens under the lock, since
+    # concurrent CREATE TABLE IF NOT EXISTS can itself race in Postgres.
+    with engine.connect() as lock_conn:
+        lock_conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": _LOCK_KEY})
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                        " name TEXT PRIMARY KEY, checksum TEXT NOT NULL,"
+                        " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+                    )
+                )
+                applied = dict(
+                    conn.execute(text("SELECT name, checksum FROM schema_migrations")).all()
+                )
+            todo = pending(migrations, applied)
+            for m in todo if not dry_run else []:
+                # One transaction per migration: DDL and bookkeeping commit together.
+                with engine.begin() as conn:
+                    conn.exec_driver_sql(m.sql)
+                    conn.execute(
+                        text("INSERT INTO schema_migrations (name, checksum) VALUES (:n, :c)"),
+                        {"n": m.name, "c": m.checksum},
+                    )
+        finally:
+            lock_conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": _LOCK_KEY})
+            lock_conn.commit()
     return [m.name for m in todo]
 
 

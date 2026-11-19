@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 VERSION = "0.1.0"
@@ -55,6 +55,20 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5173",
         "http://127.0.0.1:4173",
     ]
+
+    @field_validator(
+        "database_url",
+        "anthropic_api_key",
+        "jwt_secret",
+        "jwt_audience",
+        "redis_url",
+        "migrations_dir",
+        mode="before",
+    )
+    @classmethod
+    def _blank_is_unset(cls, value: object) -> object:
+        # `GEOGLOBE_JWT_SECRET=` in an env file means "not set", not "empty secret".
+        return None if isinstance(value, str) and not value.strip() else value
 
     @model_validator(mode="after")
     def _check_production(self) -> "Settings":

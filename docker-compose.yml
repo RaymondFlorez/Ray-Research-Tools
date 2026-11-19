@@ -1,4 +1,4 @@
-# GeoGlobe local dev stack.
+# GeoGlobe local DEV stack (for production see docker-compose.prod.yml).
 #
 # `docker compose up` brings up PostGIS + Redis + the FastAPI Data Service.
 # Then seed the sample data:
@@ -31,7 +31,9 @@ services:
       - '6379:6379'
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     environment:
       GEOGLOBE_DATABASE_URL: postgresql+psycopg://geoglobe:geoglobe@db:5432/geoglobe
       GEOGLOBE_CORS_ORIGINS: '["http://localhost:5173","http://localhost:4173"]'
