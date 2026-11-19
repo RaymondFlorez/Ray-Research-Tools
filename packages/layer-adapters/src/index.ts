@@ -10,3 +10,4 @@ export * from './scales';
 export * from './time';
 export * from './spec';
 export * from './instantiate';
+export * from './lod';

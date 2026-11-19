@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .agent.gateway import build_gateway
 from .agent.orchestrator import Orchestrator
+from .cache import CacheBackend, build_cache, cache_key
 from .config import Settings, get_settings
 from .models import (
     Catalog,
@@ -21,10 +22,20 @@ from .models import (
 from .rag import RagService, build_seeded_service
 from .repository import DataRepository, InMemoryRepository, UnsupportedOperation
 from .security import AuthContext, JwtError, authenticate_ws, require_auth
+from .sql_guard import SqlNotAllowed, validate_read_only_sql
+from .tiles import InvalidTile, validate_tile
 from .tracing import TraceRecorder, TraceStore
 
 _rag_singleton: RagService | None = None
 _trace_store: TraceStore | None = None
+_cache: CacheBackend | None = None
+
+
+def get_cache() -> CacheBackend:
+    global _cache
+    if _cache is None:
+        _cache = build_cache(get_settings().redis_url)
+    return _cache
 
 
 def get_rag() -> RagService:
@@ -39,8 +50,7 @@ def get_trace_store() -> TraceStore:
     if _trace_store is None:
         _trace_store = TraceStore(get_settings().trace_buffer_size)
     return _trace_store
-from .sql_guard import SqlNotAllowed, validate_read_only_sql
-from .tiles import InvalidTile, validate_tile
+
 
 _repo_singleton: DataRepository | None = None
 
@@ -72,8 +82,9 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
     )
 
     if repository is not None:
-        global _repo_singleton
+        global _repo_singleton, _cache
         _repo_singleton = repository
+        _cache = None  # cached results belong to the previous repository
 
     @app.get("/health")
     def health() -> dict[str, str]:
@@ -92,10 +103,17 @@ def create_app(repository: DataRepository | None = None) -> FastAPI:
     ) -> GeoQueryResponse:
         if req.limit > settings.max_rows:
             req.limit = settings.max_rows
+        cache = get_cache()
+        key = cache_key("geo", req.model_dump())
+        cached = cache.get(key)
+        if cached is not None:
+            return GeoQueryResponse.model_validate_json(cached)
         try:
-            return repo.query_geo(req)
+            resp = repo.query_geo(req)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        cache.set(key, resp.model_dump_json(), settings.query_cache_ttl_s)
+        return resp
 
     @app.post("/query/sql", response_model=SqlQueryResponse)
     def query_sql(

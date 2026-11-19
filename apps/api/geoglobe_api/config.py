@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     # Observability (Step 10).
     trace_buffer_size: int = 200
 
+    # Caching (Step 11). Unset → per-process in-memory TTL cache.
+    redis_url: str | None = None
+    query_cache_ttl_s: int = 300
+
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://localhost:4173",
