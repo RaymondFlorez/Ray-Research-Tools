@@ -27,3 +27,6 @@ venv/
 # editor
 .vscode/
 .idea/
+
+# k8s secrets (infra/k8s/secrets.env.example is the template)
+infra/k8s/secrets.env

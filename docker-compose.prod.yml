@@ -41,7 +41,18 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     # Pure cache: no persistence, bounded memory, evict least-recently-used keys.
-    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '256mb', '--maxmemory-policy', 'allkeys-lru']
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '256mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s

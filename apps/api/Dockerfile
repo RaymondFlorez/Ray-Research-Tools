@@ -10,11 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# libpq for psycopg; nothing else is needed at runtime.
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends libpq5 \
-    && rm -rf /var/lib/apt/lists/*
-
+# No system packages needed: psycopg[binary] bundles libpq.
 # Dependencies first (cached across code-only changes), then the package itself.
 COPY apps/api/pyproject.toml ./
 COPY apps/api/geoglobe_api ./geoglobe_api

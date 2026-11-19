@@ -45,6 +45,13 @@ SCENE_TOOLS: list[dict[str, Any]] = [
                 },
                 "color_field": {"type": "string"},
                 "color_scale": {"type": "string", "enum": ["viridis", "plasma", "magma", "blues", "warm"]},
+                "color_domain": {
+                    "type": "array",
+                    "items": {"type": "number"},
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "description": "[min, max] for the color ramp. Omit to use the data's range.",
+                },
                 "radius_field": {"type": "string"},
             },
             "required": ["id", "type", "dataset"],

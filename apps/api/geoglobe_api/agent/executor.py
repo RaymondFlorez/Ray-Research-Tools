@@ -132,14 +132,19 @@ class ToolExecutor:
         ]
         return ToolOutcome(result="Retrieved passages:\n" + "\n".join(lines))
 
-    @staticmethod
-    def _build_layer(args: dict[str, Any]) -> dict[str, Any]:
+    def _build_layer(self, args: dict[str, Any]) -> dict[str, Any]:
         encoding: dict[str, Any] = {"position": ["lng", "lat"]}
         if args.get("color_field"):
-            encoding["color"] = {
+            color: dict[str, Any] = {
                 "field": args["color_field"],
                 "scale": args.get("color_scale", "viridis"),
             }
+            domain = args.get("color_domain") or self._field_domain(
+                args["dataset"], args.get("filter") or {}, args["color_field"]
+            )
+            if domain:
+                color["domain"] = [float(domain[0]), float(domain[1])]
+            encoding["color"] = color
         if args.get("radius_field"):
             encoding["radius"] = args["radius_field"]
             encoding["radiusScale"] = 1.6
@@ -153,6 +158,25 @@ class ToolExecutor:
             "visible": True,
             "opacity": 0.9,
         }
+
+    def _field_domain(
+        self, dataset: str, filter_: dict[str, Any], field_name: str
+    ) -> tuple[float, float] | None:
+        """[min, max] of a numeric field over the layer's rows, so a color ramp spans the
+        real data instead of the renderer's [0, 1] default. None if not computable."""
+        try:
+            resp = self._repo.query_geo(self._to_geo_request({"dataset": dataset, "filters": filter_}))
+        except Exception:
+            return None
+        values = [
+            float(v)
+            for row in resp.features
+            if isinstance(v := row.get(field_name), (int, float)) and not isinstance(v, bool)
+        ]
+        if not values:
+            return None
+        lo, hi = min(values), max(values)
+        return (lo, hi) if hi > lo else (lo, lo + 1)
 
     # ---- DATA tools ------------------------------------------------------------------
 

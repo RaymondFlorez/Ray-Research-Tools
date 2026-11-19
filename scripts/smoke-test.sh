@@ -30,15 +30,24 @@ if $DOWN; then
   trap '"${COMPOSE[@]}" down -v --remove-orphans >/dev/null 2>&1 || true' EXIT
 fi
 
+show_logs() {
+  echo "==> Recent logs:" >&2
+  "${COMPOSE[@]}" logs --tail 40 >&2 || true
+}
+
 echo "==> Starting stack"
-"${COMPOSE[@]}" up -d "${BUILD[@]}"
+if ! "${COMPOSE[@]}" up -d "${BUILD[@]}"; then
+  echo "==> Stack failed to start" >&2
+  show_logs
+  exit 1
+fi
 
 echo "==> Running smoke test through the web proxy"
 # Runs inside the api container (it has the client deps and, when auth is on, the JWT
 # secret to mint a short-lived token) but goes through nginx, so the proxy and the
 # WebSocket upgrade are exercised too.
 if ! "${COMPOSE[@]}" exec -T api python -m geoglobe_api.smoke --base-url http://web:8080/api; then
-  echo "==> Smoke test FAILED; recent logs:" >&2
-  "${COMPOSE[@]}" logs --tail 40 >&2
+  echo "==> Smoke test FAILED" >&2
+  show_logs
   exit 1
 fi

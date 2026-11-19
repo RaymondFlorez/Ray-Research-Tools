@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoglobe-api
+spec:
+  selector:
+    app.kubernetes.io/name: geoglobe-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: geoglobe-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: geoglobe-api
+  strategy:
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: geoglobe-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile: { type: RuntimeDefault }
+      # Every pod applies pending migrations before starting. The runner takes a Postgres
+      # advisory lock, so concurrent replicas serialize and all but the first no-op.
+      initContainers:
+        - name: migrate
+          image: geoglobe/api
+          command: ['python', '-m', 'geoglobe_api.migrate']
+          envFrom:
+            - configMapRef: { name: geoglobe-config }
+            - secretRef: { name: geoglobe-secrets }
+          securityContext: &hardened
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ['ALL'] }
+      containers:
+        - name: api
+          image: geoglobe/api
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: { name: geoglobe-config }
+            - secretRef: { name: geoglobe-secrets }
+          # Liveness never touches dependencies (a DB blip must not restart pods);
+          # readiness does, so traffic drains from pods that can't serve.
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /ready, port: 8000 }
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          securityContext: *hardened
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: geoglobe-api
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: geoglobe-api
+---
+# Optional: load the bundled demo dataset (truncates `earthquakes`). Re-run with
+#   kubectl -n geoglobe delete job geoglobe-seed && kubectl apply -k infra/k8s
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: geoglobe-seed
+spec:
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: seed
+          image: geoglobe/api
+          # Waits for the API's migrations before seeding.
+          command: ['sh', '-c', 'python -m geoglobe_api.migrate && python -m geoglobe_api.seed']
+          envFrom:
+            - configMapRef: { name: geoglobe-config }
+            - secretRef: { name: geoglobe-secrets }

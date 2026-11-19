@@ -21,7 +21,6 @@ from pathlib import Path
 
 from .config import get_settings
 
-_REPO_DIR = Path(__file__).resolve().parents[3] / "infra" / "db" / "init"
 _IMAGE_DIR = Path("/app/migrations")
 _LOCK_KEY = 0x6E06_10BE  # arbitrary, stable advisory-lock id for this app
 
@@ -44,7 +43,13 @@ def migrations_dir() -> Path:
     configured = get_settings().migrations_dir
     if configured:
         return Path(configured)
-    return _IMAGE_DIR if _IMAGE_DIR.is_dir() else _REPO_DIR
+    if _IMAGE_DIR.is_dir():
+        return _IMAGE_DIR
+    # In a checkout: apps/api/geoglobe_api/migrate.py → <repo>/infra/db/init.
+    parents = Path(__file__).resolve().parents
+    if len(parents) > 3:
+        return parents[3] / "infra" / "db" / "init"
+    raise MigrationError("no migrations directory found; set GEOGLOBE_MIGRATIONS_DIR")
 
 
 def load_migrations(directory: Path) -> list[Migration]:

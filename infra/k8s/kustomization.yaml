@@ -1,0 +1,48 @@
+# GeoGlobe starter manifests (Step 12). Render/apply with:
+#   cp secrets.env.example secrets.env   # fill in — never commit secrets.env
+#   kubectl apply -k infra/k8s
+# Then issue a sign-in link (see docs/DEPLOYMENT.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: geoglobe
+
+resources:
+  - namespace.yaml
+  - postgres.yaml
+  - redis.yaml
+  - api.yaml
+  - web.yaml
+  - ingress.yaml
+
+configMapGenerator:
+  - name: geoglobe-config
+    literals:
+      - GEOGLOBE_ENVIRONMENT=production
+      - GEOGLOBE_AUTH_REQUIRED=true
+      - GEOGLOBE_AGENT_LLM=anthropic
+      - GEOGLOBE_REDIS_URL=redis://geoglobe-redis:6379/0
+      - GEOGLOBE_MAX_ROWS=5000
+      - GEOGLOBE_QUERY_CACHE_TTL_S=300
+      - GEOGLOBE_SEED_DEMO_DATA=true
+
+# secrets.env holds POSTGRES_PASSWORD, GEOGLOBE_DATABASE_URL, GEOGLOBE_JWT_SECRET and
+# GEOGLOBE_ANTHROPIC_API_KEY. In a real cluster prefer an external secret store
+# (External Secrets Operator, Sealed Secrets, or your cloud's secret manager).
+secretGenerator:
+  - name: geoglobe-secrets
+    envs:
+      - secrets.env
+
+# Point these at your registry, e.g. ghcr.io/<owner>/geoglobe-api.
+images:
+  - name: geoglobe/api
+    newTag: 0.1.0
+  - name: geoglobe/web
+    newTag: 0.1.0
+  - name: geoglobe/db
+    newTag: 0.1.0
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: geoglobe
+      app.kubernetes.io/version: 0.1.0

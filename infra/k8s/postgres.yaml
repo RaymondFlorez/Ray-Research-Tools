@@ -1,0 +1,70 @@
+# Single-instance PostGIS + pgvector. Fine to start with; for production consider a
+# managed Postgres (RDS / Cloud SQL / Azure) with the postgis + vector extensions, and
+# point GEOGLOBE_DATABASE_URL at it instead of applying this file.
+apiVersion: v1
+kind: Service
+metadata:
+  name: geoglobe-db
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: geoglobe-db
+  ports:
+    - name: postgres
+      port: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: geoglobe-db
+spec:
+  serviceName: geoglobe-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: geoglobe-db
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: geoglobe-db
+    spec:
+      containers:
+        - name: postgres
+          image: geoglobe/db
+          env:
+            - name: POSTGRES_USER
+              value: geoglobe
+            - name: POSTGRES_DB
+              value: geoglobe
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: geoglobe-secrets
+                  key: POSTGRES_PASSWORD
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'geoglobe', '-d', 'geoglobe']
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'geoglobe', '-d', 'geoglobe']
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources:
+            requests: { cpu: 250m, memory: 512Mi }
+            limits: { memory: 2Gi }
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 10Gi

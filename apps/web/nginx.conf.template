@@ -39,8 +39,7 @@ server {
 
   # Content-hashed bundles: cache forever.
   location /assets/ {
-    expires 1y;
-    add_header Cache-Control "public, immutable" always;
+    add_header Cache-Control "public, max-age=31536000, immutable" always;
     add_header X-Content-Type-Options nosniff always;
     try_files $uri =404;
   }

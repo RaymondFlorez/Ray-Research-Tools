@@ -75,7 +75,10 @@ def test_golden_trace_earthquakes_pacific():
         "dataset": "earthquakes",
         "filter": {"mag": {"gte": 5}},
     }
-    assert layer["encoding"]["color"] == {"field": "depth", "scale": "magma"}
+    color = layer["encoding"]["color"]
+    assert (color["field"], color["scale"]) == ("depth", "magma")
+    # Domain is derived from the filtered rows so the ramp spans real depths.
+    assert color["domain"][0] < color["domain"][1] and color["domain"][1] > 100
 
     # And a fly_to patch replacing the viewport toward the Pacific.
     viewport_ops = [op for e in patch_events for op in e.data["ops"] if op["path"] == "/viewport"]
@@ -129,3 +132,25 @@ def test_data_tool_result_fed_back():
         if isinstance(c, dict) and c.get("type") == "tool_result"
     ]
     assert any("earthquakes" in tr["content"] for tr in tool_results)
+
+
+def test_add_layer_color_domain_defaults_to_data_range():
+    from geoglobe_api.agent.executor import ToolExecutor
+
+    executor = ToolExecutor(InMemoryRepository())
+    layer = executor._build_layer(
+        {"id": "q", "type": "scatterplot", "dataset": "earthquakes", "color_field": "depth"}
+    )
+    lo, hi = layer["encoding"]["color"]["domain"]
+    assert lo >= 0 and hi > 100  # depths span tens to hundreds of km, not [0, 1]
+
+    explicit = executor._build_layer(
+        {
+            "id": "q",
+            "type": "scatterplot",
+            "dataset": "earthquakes",
+            "color_field": "depth",
+            "color_domain": [0, 700],
+        }
+    )
+    assert explicit["encoding"]["color"]["domain"] == [0.0, 700.0]

@@ -39,11 +39,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       });
     };
 
+    // Text that follows a "· tool" line starts on its own line instead of running into it.
+    let afterToolLine = false;
     await runAgentQuery(query, (event) => {
       if (event.type === 'text' && event.data.text) {
-        updateAssistant(assistant.text + event.data.text);
+        updateAssistant(assistant.text + (afterToolLine ? '\n' : '') + event.data.text);
+        afterToolLine = false;
       } else if (event.type === 'tool_use' && event.data.name) {
         updateAssistant(`${assistant.text}\n· ${event.data.name}`.trimStart());
+        afterToolLine = true;
       } else if (event.type === 'patch' && event.data.ops) {
         try {
           const scene = useSceneStore.getState().scene;
