@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react';
+import type { Layer } from '@geoglobe/scene-schema';
+import {
+  coarseViewportBbox,
+  decimatePoints,
+  pointBudgetForZoom,
+  type LngLat,
+} from '@geoglobe/layer-adapters';
 import { useSceneStore } from '../store/sceneStore';
 import { useInspectorStore } from '../store/inspectorStore';
+import { useLayerStatusStore } from '../store/layerStatusStore';
 import { useResolvedData } from '../data/useResolvedData';
 import { DeckGlobeRenderer } from './DeckGlobeRenderer';
 import { viewportToViewState } from './sceneAdapter';
@@ -25,8 +33,26 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
   const setViewport = useSceneStore((s) => s.setViewport);
   const select = useSceneStore((s) => s.select);
   const setPicked = useInspectorStore((s) => s.setPicked);
+  const setStatus = useLayerStatusStore((s) => s.setStatus);
   const interacting = useRef(false);
-  const resolvedData = useResolvedData(scene.layers);
+
+  // Viewport culling (Step 11): a coarse, snapped bbox once zoomed in, null for the whole
+  // globe. Memoized by its string form so the 60 fps camera updates don't create new
+  // arrays (and refetches) unless the snapped box actually changes.
+  const rawBbox = coarseViewportBbox(scene.viewport);
+  const bboxKey = rawBbox ? rawBbox.join(',') : '';
+  const bbox = useMemo(() => rawBbox, [bboxKey]); // keyed on the string form on purpose
+  const { data, status } = useResolvedData(scene.layers, bbox);
+
+  useEffect(() => setStatus(status), [status, setStatus]);
+
+  // Level of detail: cap point counts per zoom band, keeping the most significant point
+  // in each grid cell. Recomputed only when the data or the integer zoom band changes.
+  const zoomBand = Math.floor(scene.viewport.zoom);
+  const resolvedData = useMemo(
+    () => decimateResolved(data, scene.layers, pointBudgetForZoom(zoomBand)),
+    [data, scene.layers, zoomBand],
+  );
 
   const viewState = useMemo(() => viewportToViewState(scene.viewport), [scene.viewport]);
 
@@ -74,4 +100,26 @@ export function GlobeCanvas({ Renderer = DeckGlobeRenderer, autoRotate = true }:
       }}
     />
   );
+}
+
+function decimateResolved(
+  data: Record<string, Record<string, unknown>[]>,
+  layers: Layer[],
+  budget: number,
+): Record<string, Record<string, unknown>[]> {
+  const out: Record<string, Record<string, unknown>[]> = {};
+  for (const [id, rows] of Object.entries(data)) {
+    const layer = layers.find((l) => l.id === id);
+    if (!layer || rows.length <= budget) {
+      out[id] = rows;
+      continue;
+    }
+    const [lngField, latField] = layer.encoding.position ?? ['lng', 'lat'];
+    const radius = layer.encoding.radius;
+    out[id] = decimatePoints(rows, budget, {
+      getPosition: (d) => [Number(d[lngField]), Number(d[latField])] as LngLat,
+      priorityField: typeof radius === 'string' ? radius : layer.encoding.color?.field,
+    });
+  }
+  return out;
 }

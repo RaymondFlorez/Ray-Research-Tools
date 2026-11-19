@@ -22,11 +22,12 @@ interface GeoQueryResponse {
 /**
  * Resolve a `geo-query` layer against POST /query/geo, returning flat records ready to
  * hand to deck.gl as `resolvedData`. The layer's `source.filter` is translated into the
- * API's filter shape.
+ * API's filter shape; an optional viewport `bbox` limits the query to what is visible.
  */
 export async function fetchGeoQuery(
   layer: Layer,
   signal?: AbortSignal,
+  bbox?: [number, number, number, number] | null,
 ): Promise<Record<string, unknown>[]> {
   if (layer.source.kind !== 'geo-query') {
     throw new Error(`fetchGeoQuery called on a non geo-query layer: ${layer.id}`);
@@ -35,6 +36,9 @@ export async function fetchGeoQuery(
     dataset: layer.source.dataset,
     filters: normalizeFilters(layer.source.filter),
     limit: 5000,
+    // Viewport culling (Step 11): only when zoomed in; the bbox is snapped so small camera
+    // moves reuse the same request (and hit the server-side cache).
+    ...(bbox ? { bbox } : {}),
   };
   const res = await fetch(`${API_URL}/query/geo`, {
     method: 'POST',

@@ -5,7 +5,9 @@ import { LayerPanel } from './ui/LayerPanel';
 import { Inspector } from './ui/Inspector';
 import { Timeline } from './ui/Timeline';
 import { ChatPanel } from './ui/ChatPanel';
+import { CommandPalette } from './ui/CommandPalette';
 import { useSceneStore } from './store/sceneStore';
+import { useUiStore } from './store/uiStore';
 
 // `?test=1` disables auto-rotation so E2E can click a stable feature.
 const TEST_MODE =
@@ -13,6 +15,9 @@ const TEST_MODE =
 
 export function App() {
   const layerCount = useSceneStore((s) => s.scene.layers.length);
+  const theme = useUiStore((s) => s.theme);
+  const toggleTheme = useUiStore((s) => s.toggleTheme);
+  const setPaletteOpen = useUiStore((s) => s.setPaletteOpen);
 
   // In test mode, expose the store so E2E/verification can drive the scene directly
   // (e.g. apply the same patches the agent would emit) without a live backend.
@@ -36,6 +41,18 @@ export function App() {
           scene-schema v{SCENE_SCHEMA_VERSION} · {layerCount} data layer
           {layerCount === 1 ? '' : 's'}
         </span>
+        <div className="overlay-actions">
+          <button onClick={() => setPaletteOpen(true)} data-testid="open-palette">
+            Commands <kbd>⌘K</kbd>
+          </button>
+          <button
+            onClick={toggleTheme}
+            data-testid="toggle-theme"
+            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+          >
+            {theme === 'dark' ? '☀ Light' : '☾ Dark'}
+          </button>
+        </div>
       </header>
 
       <aside className="sidebar">
@@ -46,6 +63,8 @@ export function App() {
       <aside className="sidebar-left">
         <ChatPanel />
       </aside>
+
+      <CommandPalette />
 
       <footer className="dock">
         <Timeline />

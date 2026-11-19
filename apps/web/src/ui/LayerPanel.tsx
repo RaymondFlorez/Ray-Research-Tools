@@ -1,5 +1,15 @@
 import type { Layer, PatchOp } from '@geoglobe/scene-schema';
 import { useSceneStore } from '../store/sceneStore';
+import { useLayerStatusStore } from '../store/layerStatusStore';
+import type { LoadStatus } from '../data/useResolvedData';
+import { Legend } from './Legend';
+
+const STATUS_HINT: Record<LoadStatus, string> = {
+  loading: 'Loading data from the Data Service…',
+  ready: '',
+  empty: 'The query returned no features for this view.',
+  error: 'Data Service unreachable — start apps/api to load this layer.',
+};
 
 /**
  * Layer Control panel. Lists the Scene State layers and edits them exclusively by
@@ -10,6 +20,7 @@ import { useSceneStore } from '../store/sceneStore';
 export function LayerPanel() {
   const layers = useSceneStore((s) => s.scene.layers);
   const applyPatch = useSceneStore((s) => s.applyPatch);
+  const status = useLayerStatusStore((s) => s.status);
 
   const patch = (ops: PatchOp[]) => {
     try {
@@ -55,6 +66,15 @@ export function LayerPanel() {
                 />
                 <span>{layer.id}</span>
               </label>
+              {status[layer.id] && status[layer.id] !== 'ready' && (
+                <span
+                  className={`layer-status layer-status-${status[layer.id]}`}
+                  title={STATUS_HINT[status[layer.id]]}
+                  data-testid={`status-${layer.id}`}
+                >
+                  {status[layer.id]}
+                </span>
+              )}
               <span className="layer-type">{layer.type}</span>
               <div className="layer-move">
                 <button aria-label="Move up" disabled={i === 0} onClick={() => move(i, -1)}>
@@ -69,6 +89,8 @@ export function LayerPanel() {
                 </button>
               </div>
             </div>
+
+            <Legend layer={layer} />
 
             <div className="layer-control">
               <span className="ctrl-label">opacity</span>
