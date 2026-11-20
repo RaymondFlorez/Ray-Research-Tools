@@ -8,7 +8,7 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 18 tests
+npm test --workspace @picasso/auth          # 23 tests
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
    --users users.json --tenants config/tenants.json --key session-key.jwk
@@ -21,6 +21,12 @@ OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://pica
 | `verify.ts` | What a service does with a token, held to the Go services' verdicts |
 | `server.ts` | `/auth/login`, `/auth/callback`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/revoked`, `/.well-known/jwks.json` |
 | `standin.ts` | A **stand-in** OpenID provider for tests and the browser check; `main.ts` never loads it |
+
+`test/certified-provider.test.ts` signs in against `oidc-provider` 9.13.3 instead, an OpenID
+Certified provider implementation, run in-process with a hosted provider's defaults: a
+confidential client on `client_secret_basic`, opaque subject identifiers, RS256 ID tokens, a
+consent step, and profile claims released from UserInfo rather than in the ID token. Only its
+login and consent pages are the test's.
 
 ## Any provider
 
@@ -38,6 +44,12 @@ adds is what the libraries leave to the caller.
   that, and fails with the check removed.
 - **The return address is a path on this site**, so `/login` is not an open redirect.
 - **A discovery document naming another issuer is refused** (OIDC Discovery 1.0, 4.3).
+- **The person's name comes from UserInfo when the ID token has none**, and counts only if
+  UserInfo names the ID token's subject (OIDC Core 5.3.2). The stand-in put the name in the
+  ID token, so the first version read only that; the certified provider, like Google and
+  many Okta set-ups, releases profile claims from UserInfo once it issues an access token
+  (OIDC Core 5.4), and every sign-in against it was refused as an unknown opaque id. How the
+  person authenticated is still read from the ID token alone.
 
 ## Two tokens, two jobs
 
@@ -140,10 +152,12 @@ anywhere: the stand-in provider, this service, and the collaboration server with
 
 ## What is not covered
 
-- **No real provider has been signed in against.** The stand-in implements the parts of
-  OIDC this uses, and approves whoever `login_hint` names with no password. Nothing here has
-  met Okta, Entra or Google, and none can be reached from here. The first real sign-in is
-  the first test of that.
+- **No hosted provider has been signed in against.** The certified implementation is the
+  provider side of the protocol as the OpenID Foundation tests it, not Okta, Entra or Google
+  with their own settings, and its login page is the test's, approving whoever `login_hint`
+  names. A hosted provider's first sign-in is still its first test. Whether `amr` is in the ID
+  token is each provider's setting: with none, no one gets into a tenant that holds positions,
+  which the test checks.
 - **Logout takes up to five seconds to reach a service.** Connections already open are closed
   on the same schedule: a collaboration canvas connection, and a data plane stream at its
   next health report. A connection also lives no longer than the token that opened it, plus

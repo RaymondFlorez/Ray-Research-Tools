@@ -22,6 +22,7 @@ export interface ProviderMetadata {
   authorization_endpoint: string;
   token_endpoint: string;
   jwks_uri: string;
+  userinfo_endpoint?: string;
 }
 
 export interface OidcConfig {
@@ -107,13 +108,35 @@ export class Oidc {
       headers.authorization = `Basic ${Buffer.from(`${encodeURIComponent(this.config.clientId)}:${encodeURIComponent(this.config.clientSecret)}`).toString('base64')}`;
     }
     const res = await this.fetcher(meta.token_endpoint, { method: 'POST', headers, body });
-    const tokens = (await res.json().catch(() => ({}))) as { id_token?: string; error?: string; error_description?: string };
+    const tokens = (await res.json().catch(() => ({}))) as { id_token?: string; access_token?: string; error?: string; error_description?: string };
     if (!res.ok || !tokens.id_token) {
       throw new Error(`the provider refused the code: ${tokens.error ?? res.status}${tokens.error_description ? ` (${tokens.error_description})` : ''}`);
     }
     const { payload } = await jwtVerify(tokens.id_token, this.jwks!, { issuer: meta.issuer, audience: this.config.clientId });
     if (payload.nonce !== nonce) throw new Error('the ID token does not carry the nonce this sign-in sent: it was not issued for this browser');
+    if (payload.preferred_username === undefined && payload.email === undefined && tokens.access_token && meta.userinfo_endpoint) {
+      return identityOf({ ...payload, ...(await this.userinfo(meta.userinfo_endpoint, tokens.access_token, String(payload.sub ?? ''))) });
+    }
     return identityOf(payload);
+  }
+
+  /**
+   * The person's name, where the ID token does not carry it. A provider that
+   * issues an access token releases profile claims from its UserInfo endpoint
+   * rather than in the ID token (OIDC Core 5.4), as the certified
+   * implementation does by default. The answer counts only for the subject
+   * the verified ID token names (OIDC Core 5.3.2), and only its name claims
+   * are taken: what MFA was used is the ID token's to say.
+   */
+  private async userinfo(endpoint: string, accessToken: string, sub: string): Promise<{ preferred_username?: string; email?: string }> {
+    const res = await this.fetcher(endpoint, { headers: { authorization: `Bearer ${accessToken}`, accept: 'application/json' } });
+    if (!res.ok) throw new Error(`the provider's UserInfo endpoint answered ${res.status}`);
+    const info = (await res.json().catch(() => ({}))) as { sub?: unknown; preferred_username?: unknown; email?: unknown };
+    if (info.sub !== sub) throw new Error('the UserInfo response names another subject than the ID token');
+    const out: { preferred_username?: string; email?: string } = {};
+    if (typeof info.preferred_username === 'string') out.preferred_username = info.preferred_username;
+    if (typeof info.email === 'string') out.email = info.email;
+    return out;
   }
 }
 

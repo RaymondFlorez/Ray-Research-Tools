@@ -5,6 +5,7 @@ import { SESSION_COOKIE, startAuth } from '../src/server.js';
 import { AUDIENCE, REVOKED_FOR_MS, SessionIssuer } from '../src/sessions.js';
 import { REVOCATION_MAX_STALE_MS, REVOCATION_REFRESH_MS, RevocationList, verifySessionToken } from '../src/verify.js';
 import { startStandIn, type StandInOptions } from '../src/standin.js';
+import { Browser } from './browser.js';
 
 const CLIENT = 'picasso-web';
 const users = { pm: { tenant: 'desk' }, analyst: { tenant: 'desk' }, researcher: { tenant: 'lab' } };
@@ -15,31 +16,6 @@ const standInUsers: StandInOptions['users'] = {
   researcher: { amr: ['pwd'] },
   intern: { amr: ['pwd', 'otp'] },
 };
-
-/** A browser, as far as cookies and redirects go. */
-class Browser {
-  jar = new Map<string, string>();
-  async go(url: string, init: RequestInit = {}): Promise<Response> {
-    const res = await fetch(url, { ...init, redirect: 'manual', headers: { ...(init.headers ?? {}), cookie: [...this.jar].map(([k, v]) => `${k}=${v}`).join('; ') } });
-    for (const c of res.headers.getSetCookie()) {
-      const [pair, ...attrs] = c.split(';');
-      const [k, v] = pair!.split('=');
-      if (attrs.some((a) => a.trim() === 'Max-Age=0')) this.jar.delete(k!.trim());
-      else this.jar.set(k!.trim(), v!.trim());
-    }
-    return res;
-  }
-  /** Follows redirects through the provider and back; returns where it landed. */
-  async signIn(auth: string, user: string, returnTo = '/apps/canvas-demo/shared.html'): Promise<URL> {
-    let res = await this.go(`${auth}/auth/login?return=${encodeURIComponent(returnTo)}&login_hint=${user}`);
-    for (let i = 0; i < 5 && res.status === 302; i += 1) {
-      const loc = new URL(res.headers.get('location')!, auth);
-      if (loc.pathname.startsWith('/apps/') || loc.pathname === '/') return loc;
-      res = await this.go(loc.toString());
-    }
-    throw new Error(`sign-in ended at ${res.status}`);
-  }
-}
 
 async function setup(misbehave?: StandInOptions['misbehave'], now?: () => number) {
   // The relying party's redirect URI is known before its port is; reserve it via a fixed port.
