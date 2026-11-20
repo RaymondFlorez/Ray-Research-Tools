@@ -184,19 +184,33 @@ with a SYNTHETIC position:
 
 ## What is not covered
 
-- **No source has been reached.** This environment's network policy refuses every one of
-  them: data.sec.gov, www.sec.gov, home.treasury.gov, api.stlouisfed.org, stooq.com and
-  ws-feed.exchange.coinbase.com. The decoders are written to each source's documented format
-  and tested on hand-written samples in that format, for a made-up company, labelled
-  synthetic. Nothing here has decoded a real response, and the first real load is the first
-  test of that.
+- **Two sources have been reached; three have not loaded.** The environment's network policy
+  refused every source until 20 November 2026, when its hosts were allowed. That day:
+  - **Treasury** loaded the 2025 par curve: 3,455 facts over 249 trading days, every tenor.
+    The 6-week bill appears from 18 February 2025, when the Treasury added it, and the
+    10-year reads 4.57 on 2 January 2025. Each is known at 05:00 UTC the next day.
+  - **Coinbase** streamed BTC-USD and ETH-USD live, with no account. Over one minute, 1,250
+    ticks were accepted, with no sequence gaps, duplicates or rejections. The conflated stream
+    delivered 2.66 updates a second for BTC and 1.31 for ETH, each in its own 250ms window.
+    The server's time ran 21–22ms behind the exchange's at p50, and 43–47ms at p95.
+  - **Stooq** answers an automated request with a JavaScript proof-of-work page, not CSV
+    (`sources/testdata/stooq-browser-check-2026-11-20.html`). That is a gate for browsers,
+    and solving it in code would be getting round it. The loader now reports it as such.
+    Stooq is not a usable free source for an automated loader.
+  - **SEC EDGAR** refuses requests without a User-Agent that names a real contact, as its fair
+    access policy requires. Naming one is the operator's decision, so it has not been loaded.
+  - **FRED/ALFRED** needs a free API key, which the API takes in the query string, so it
+    cannot be supplied by the environment's credential proxy. It has not been loaded.
+
+  The other decoders are still tested only on hand-written samples in each source's documented
+  format, labelled synthetic.
 - **EDGAR knowledge times are filing dates, not acceptance times.** The submissions API has the
   acceptance time to the second, which would make a filing known up to a day sooner; it is
   not read. A fiscal fourth quarter is usually reported only inside the annual figure, so a `3M`
   series has no Q4 unless the company filed one.
 - **No live equities.** Coinbase covers crypto, with no account. No live equity feed is
   built, and every one considered needs an account with its provider.
-- **Stooq's adjustments are unknown.** Stooq does not document whether, or how, its bars are
+- **Stooq's adjustments were never learned.** Stooq now refuses automated downloads (above). Stooq does not document whether, or how, its bars are
   adjusted for splits and dividends, so they are not to be mixed with `canvas-data`'s
   corporate actions until that is known. A backtest on them sees each close one bar later
   than one built with `History.addSeries`, because canvas-sim's date clock reads bar D as D at

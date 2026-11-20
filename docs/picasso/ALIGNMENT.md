@@ -42,7 +42,7 @@ parity and eight browser checks.
 
 | Requirement | Status | Where |
 |---|---|---|
-| 2.3 `stream-ingest`: adapters, normalization, sequence gaps, staleness, partitioning, subjects | Partial | `services/dataplane` ingest, stream, sources: free sources chosen (SEC EDGAR, Treasury, FRED/ALFRED, Stooq; Coinbase live) and decoded to their documented formats, with a loader that never rewrites the past; none yet reached, since the network policy refuses every market data host; no live equities |
+| 2.3 `stream-ingest`: adapters, normalization, sequence gaps, staleness, partitioning, subjects | Partial | `services/dataplane` ingest, stream, sources: free sources chosen (SEC EDGAR, Treasury, FRED/ALFRED, Stooq; Coinbase live) and decoded to their documented formats, with a loader that never rewrites the past. First real contact on 20 November 2026: the Treasury curve loaded (3,455 facts for 2025) and Coinbase streamed live; Stooq now refuses automated downloads with a browser check; EDGAR waits on a contact for its User-Agent and FRED on a key; no live equities |
 | 2.3 `data-access`: point-in-time, entitlement-filtered reads | Built, on Postgres | `services/dataplane` pit, access, server; held to `canvas-data`'s answers by a shared conformance file |
 | 3.6 / 7.4 live tiles: stale with elapsed time, recovering after a gap, entitlement-blocked | Built | `canvas-data` live, `live.html` through `present()`; `live-shots.mjs` against the Go service |
 | 2.3 Redpanda, ClickHouse, Iceberg, NATS, WebTransport | Infra | Not in this environment; SSE stands in for WebTransport |

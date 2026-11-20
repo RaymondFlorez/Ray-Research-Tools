@@ -33,6 +33,14 @@ func StooqDaily(body []byte, instrument string, class entitle.Class, vendor stri
 	if text == "" || strings.EqualFold(text, "No data") {
 		return nil, fmt.Errorf("stooq has no data for %s", instrument)
 	}
+	// Measured on 2026-11-20, the first time a request reached stooq.com from
+	// here: an automated download gets a JavaScript proof-of-work page, not
+	// CSV (testdata/stooq-browser-check-2026-11-20.html). That is a gate for
+	// browsers, and solving it in code would be getting round it, so the
+	// loader says what happened instead of reporting a CSV parse error.
+	if strings.HasPrefix(text, "<") {
+		return nil, fmt.Errorf("stooq %s: stooq.com answered with an HTML page (a browser check), not CSV; it does not serve automated downloads", instrument)
+	}
 	rows, err := csv.NewReader(strings.NewReader(text)).ReadAll()
 	if err != nil {
 		return nil, fmt.Errorf("stooq %s: %w", instrument, err)
