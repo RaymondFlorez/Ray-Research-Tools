@@ -8,7 +8,6 @@ import (
 	"github.com/raymondflorez/ray-research-tools/services/dataplane/entitle"
 )
 
-
 // The real answer to an automated request, captured 2026-11-20.
 func TestStooqsBrowserCheckIsReportedAsSuch(t *testing.T) {
 	body, err := os.ReadFile("testdata/stooq-browser-check-2026-11-20.html")
