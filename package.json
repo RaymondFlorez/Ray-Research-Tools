@@ -16,5 +16,9 @@
   },
   "devDependencies": {
     "playwright": "^1.63.0"
+  },
+  "overrides": {
+    "vite": "8.2.4",
+    "source-map-js": "1.2.2"
   }
 }
