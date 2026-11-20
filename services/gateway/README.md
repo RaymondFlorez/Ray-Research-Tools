@@ -6,8 +6,10 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 26 tests; one live and three on Postgres, skipped by default
+go test -race ./...                       # 27 tests; two live and three on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
+GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
+  go test ./server/ -run LocalModel -v    # a real open-weight model, behind any Chat Completions server
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
    -auth-url https://picasso.example.com -providers config/providers.json -users ../dataplane/config/users.json -vault vault.json \
@@ -85,7 +87,24 @@ Self-hosted servers (`auth: none`) need nothing and are shared.
 
 ## Measured against the real thing
 
-Anthropic's API is the one provider host this environment reaches. Measured:
+**A real model, on 20 November 2026.** SmolLM2-360M-Instruct (Apache-2.0; the Q8_0 GGUF from
+Hugging Face, SHA-256 `48ab3034…7750201`, as published), served on CPU by llama.cpp's
+OpenAI-compatible server (llama-cpp-python 0.3.16), configured as a `self_hosted` provider
+with `auth: none`. No account and no key. Through the gateway binary, with the trail on
+Postgres:
+- Positions-class requests went to it and came back: 20 calls, 0.88s at p50 and 1.55s at p95
+  end to end on four CPU cores. Each wrote its two records, `sent: positions` before the call
+  and `returned: end, 57 in, N out` after it, with no message text on the trail.
+- The same request to OpenRouter, a vendor, was refused with 403 and nothing was sent.
+- **It answered none of them correctly.** Asked for the unrealized profit on 1,000 shares
+  bought at $120 and priced at $135, it said $35, $10, $119,000 or $875; 0 of 20 said $15,000.
+  This checks the path, not the model. It is also why the numeric checks in `canvas-agents`
+  exist, and why a router should not send arithmetic to a model this small.
+
+The test above makes the same call against whatever model the two variables name, and checks
+the answer arrived, the trail's two records, and that the vendor stand-in received nothing.
+
+Anthropic's API is the other provider host this environment reaches. Measured:
 - Anthropic's Go SDK v2.4.0 sends an API key as `Authorization: Bearer`, not as `x-api-key`.
   The first stand-in test assumed the latter, and the SDK is the authority on what it sends.
 - `api.anthropic.com` reads a bearer token as an API key. An invalid one comes back as 401
@@ -94,11 +113,12 @@ Anthropic's API is the one provider host this environment reaches. Measured:
 
 ## What is not covered
 
-- **No successful model call has been made.** There is no key for any provider here. The
-  Anthropic adapter has reached the real API only to be refused, and the Chat Completions,
+- **No vendor's model has answered.** The one real model called is a 360M open-weight model on
+  the gateway's own machine, through the Chat Completions adapter. There is no key for any
+  vendor here: the Anthropic adapter has reached the real API only to be refused, and the
   Gemini and OpenRouter-exchange code is tested against stand-ins written to each one's
-  documented API. openrouter.ai, api.openai.com and generativelanguage.googleapis.com either
-  refuse connections here or answer only without a key.
+  documented API. CI does not run the local-model test; it needs the model server and the
+  weights, which it does not download.
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
   No sampling parameters are sent, since current Claude models reject them.
 - **Identity is picasso-auth's session token**, as at the data plane, with the same

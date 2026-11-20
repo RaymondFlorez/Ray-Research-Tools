@@ -92,7 +92,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 |---|---|---|
 | 4.2 routing table, 4.3 hard rules then expected utility | Built | `canvas-router` policy, router |
 | 4.3 cascade with verification | Built | `canvas-router` cascade |
-| 4.4 fleet as manifests | Built | `canvas-router` manifest; `services/gateway` reaches any provider (Anthropic SDK, Chat Completions, Gemini) on each user's own account; no successful call yet, for want of a key |
+| 4.4 fleet as manifests | Built | `canvas-router` manifest; `services/gateway` reaches any provider (Anthropic SDK, Chat Completions, Gemini) on each user's own account; a real open-weight model (SmolLM2-360M on llama.cpp, self-hosted, no key) answered positions-class calls through it on 20 Nov 2026, 0.88s p50, and got the arithmetic wrong 20 times in 20; no vendor model yet, for want of a key |
 | 4.5 blackboard, Coordinator, Critic, Reconciler | Built | `canvas-agents` |
 | 4.6 context assembly with priorities and floors | Built | `canvas-agents` context |
 | 4.7 trace store, eval harness, canary, determinism | Built | `canvas-router` trace/evals/canary; `fingerprintOf` → `canvas-core` `explainKeyChange` |
@@ -171,17 +171,17 @@ needs it in both solvers.
 Set aside at the user's request on 2026-10-30. Each one is built as far as it can be without the decision, and waits on it.
 
 - **Sign-in provider.** `services/auth` signs in against any OpenID provider and has only met a stand-in. Needs: which provider (Okta, Entra ID, Google, Auth0, Keycloak or another), a client registered with `<public-url>/auth/callback`, and its client id and secret.
-- **Live market data.** `services/dataplane/sources` and `cmd/load` are written to each free source's documented format and have reached none. Needs: data.sec.gov, www.sec.gov, home.treasury.gov, api.stlouisfed.org, stooq.com and ws-feed.exchange.coinbase.com allowed in the environment's network settings, a SEC contact for the User-Agent, and a free FRED key as `FRED_API_KEY`.
-- **Models.** `services/gateway` has made no successful model call. Needs: openrouter.ai allowed and a user signed in there, or any provider's API key pasted on the models page.
+- **Live market data.** The hosts were allowed on 20 Nov 2026; the Treasury curve and Coinbase's live feed load, and Stooq answers automated requests with a browser check. Needs: a SEC contact for the User-Agent, a free FRED key as `FRED_API_KEY`, and a daily-bar source in place of Stooq.
+- **Models.** `services/gateway` has called a real open-weight model on its own machine (no key), and no vendor's. Needs, for a vendor model: a user signed in to OpenRouter on the models page, or any provider's API key pasted there.
 - **The pull request into `main`.** The branch has not been proposed for merge.
 
 ## Critical path to production
 
 Everything left is integration with real systems, in roughly this order of leverage:
 market data plane — the service and the free sources' loaders are built
-(`services/dataplane`); what remains is to allow those sources' hosts in the network policy and
-run the first real loads, which are the first test of the decoders against real responses
-(unblocks CodeNode's SQL, real backtests); model fleet — the gateway is built (`services/gateway`: any provider, each user on their own
-account, positions never to a vendor); what remains is a user's first sign-in or key, and the
-router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); the collaboration server is built (`services/collab`): two browsers sync through it, and each keeps a sealed copy on the device; identity is picasso-auth's (`services/auth`), and what remains is a real provider to sign in against; the code
+(`services/dataplane`), and the first real loads ran on 20 Nov 2026 (Treasury, Coinbase); what
+remains is SEC and FRED, which wait on a contact and a key, and a daily-bar source to replace
+Stooq (unblocks CodeNode's SQL, real backtests); model fleet — the gateway is built (`services/gateway`: any provider, each user on their own
+account, positions never to a vendor); a local open-weight model has answered through it; what remains is a user's first sign-in or
+key for a vendor model, and the router dispatching through it (unblocks the semantic and text ink passes, QueryNode end to end); the collaboration server is built (`services/collab`): two browsers sync through it, and each keeps a sealed copy on the device; identity is picasso-auth's (`services/auth`), and what remains is a real provider to sign in against; the code
 sandbox; GPU verification of Phase 0's frame budget on real hardware.
