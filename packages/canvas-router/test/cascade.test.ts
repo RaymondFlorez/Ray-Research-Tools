@@ -215,3 +215,35 @@ describe("Phase 3's exit criterion", () => {
     expect(saving).toBeGreaterThan(2);
   });
 });
+
+/**
+ * Found by running the cascade over real models through the gateway
+ * (`scripts/cascade-live.mjs`): it started on a fallback whose score beat
+ * the primary's, never tried the primary, and then went back and forth
+ * between two fallbacks because each escalation forgot all but the last
+ * failure.
+ */
+describe('the ladder, as a real run found it', () => {
+  const local = (id: string, quality: number, centsPerKiloToken: number): Model => ({
+    id, version: '1', modalities: ['text'], tools: false, structuredOutput: false, vendor: 'open', placement: 'self_hosted',
+    centsPerKiloToken, latencyMsP50: 1_000, latencyMsP95: 4_000, quality: { 'doc.extract': quality }, deterministic: true, contextTokens: 8_192,
+  });
+  const policy = {
+    ...DEFAULT_POLICY,
+    models: [local('small', 0.5, 0.001), local('mid', 0.6, 0.004), local('large', 0.7, 0.004), { ...local('frontier', 0.96, 1.5), vendor: 'v', placement: 'vendor' as const }],
+    entries: [{ taskClass: 'doc.extract' as const, slo: { kind: 'p95' as const, ms: 30_000 }, primary: ['small'], fallback: ['mid', 'large', 'frontier'], escalateAfterFailures: 1 }],
+  };
+  const extract = features({ taskClass: 'doc.extract', dataSensitivity: 'positions', latencyBudgetMs: 30_000 });
+  const reject = (): Verdict => ({ accepted: false, confidence: 1, deterministic: true, reason: 'does not reconcile' });
+
+  it('starts on the primary even when a fallback scores higher', async () => {
+    const r = await cascade(policy, extract, async (m) => m.id, () => ({ accepted: true, confidence: 1, deterministic: true, reason: 'ok' }));
+    expect(r.steps.map((s) => s.decision.model.id)).toEqual(['small']);
+    expect(r.terminatedAtCheapTier).toBe(true);
+  });
+
+  it('tries each model once, upward, and never offers positions to the vendor', async () => {
+    const r = await cascade(policy, extract, async (m) => m.id, reject, { maxTiers: 6 });
+    expect(r.steps.map((s) => s.decision.model.id)).toEqual(['small', 'large', 'mid']);
+  });
+});

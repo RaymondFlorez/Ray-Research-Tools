@@ -17,7 +17,7 @@
  * requests at cheap tier with <1 percent quality delta."
  */
 
-import { escalate, route, type RoutingDecision, type RoutingFeatures, type RouterOptions } from './router.js';
+import { escalate, NoEligibleModel, route, type RoutingDecision, type RoutingFeatures, type RouterOptions } from './router.js';
 import type { Model, RoutingPolicy } from './policy.js';
 import { entryFor } from './policy.js';
 
@@ -81,16 +81,22 @@ export async function cascade<T>(
   const maxTiers = options.maxTiers ?? 3;
   const steps: Array<CascadeStep<T>> = [];
 
-  let decision: RoutingDecision | undefined = route(policy, features, options);
+  let decision: RoutingDecision | undefined = firstTier(policy, features, options);
+  // Every model this request has failed on, not only the last: without it,
+  // escalating from the second tier excluded only the second, and the ladder
+  // went back down to the first.
+  let tried: RoutingFeatures = features;
   let attempt = 0;
   let failures = 0;
 
   // What the same request would cost sent straight to the best model the rules
-  // allow — the denominator for the cascade's saving.
+  // allow — the denominator for the cascade's saving. Scored over the whole
+  // fleet, not the tier the cascade starts on.
+  const fleet = route(policy, features, options);
   const frontierCostCents =
-    decision.candidates
+    fleet.candidates
       .slice()
-      .sort((a, b) => b.quality - a.quality)[0]?.costCents ?? decision.estimatedCostCents;
+      .sort((a, b) => b.quality - a.quality)[0]?.costCents ?? fleet.estimatedCostCents;
 
   while (decision && attempt < maxTiers) {
     const answer = await dispatch(decision.model, attempt);
@@ -110,7 +116,8 @@ export async function cascade<T>(
       continue;
     }
 
-    const next: RoutingDecision | undefined = escalate(policy, features, decision.model, options);
+    const next: RoutingDecision | undefined = escalate(policy, tried, decision.model, options);
+    tried = { ...tried, priorFailures: [...tried.priorFailures, { modelId: decision.model.id, reason: 'verification', at: 0 }] };
     if (!next) break;
     decision = next;
     failures = 0;
@@ -127,6 +134,27 @@ export async function cascade<T>(
     frontierCostCents,
     escalations: Math.max(0, steps.length - 1),
   };
+}
+
+/**
+ * Where a cascade starts: the table's primary tier, the score choosing within
+ * it. `route` alone scores the whole fleet, which is right for a single
+ * dispatch and wrong for a cascade, whose saving is that the cheap model goes
+ * first. Run over real models, a cascade starting from `route` began on a
+ * fallback, never tried the primary, and then "escalated" to a weaker model.
+ * When no primary may serve the request (a vendor primary for positions
+ * data), the whole fleet is scored, as before.
+ */
+function firstTier(policy: RoutingPolicy, features: RoutingFeatures, options: RouterOptions): RoutingDecision {
+  const entry = entryFor(policy, features.taskClass);
+  const signalled = (entry?.escalateOn ?? []).some((s) => features.signals?.includes(s));
+  if (!entry || entry.primary.length === 0 || signalled) return route(policy, features, options);
+  try {
+    return route({ ...policy, models: policy.models.filter((m) => entry.primary.includes(m.id)) }, features, options);
+  } catch (error) {
+    if (!(error instanceof NoEligibleModel)) throw error;
+    return route(policy, features, options);
+  }
 }
 
 // ---------------------------------------------------------------------------

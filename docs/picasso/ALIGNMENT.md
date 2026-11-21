@@ -91,7 +91,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | Requirement | Status | Where |
 |---|---|---|
 | 4.2 routing table, 4.3 hard rules then expected utility | Built | `canvas-router` policy, router |
-| 4.3 cascade with verification | Built | `canvas-router` cascade |
+| 4.3 cascade with verification | Built | `canvas-router` cascade; run over three real open-weight models through the gateway on 20 Nov 2026 (`scripts/cascade-live.mjs`), which found it starting off the primary tier and escalating back down, both fixed; 10 of 20 synthetic positions extractions accepted, all right, none sent to the vendor tier |
 | 4.4 fleet as manifests | Built | `canvas-router` manifest; `services/gateway` reaches any provider (Anthropic SDK, Chat Completions, Gemini) on each user's own account; a real open-weight model (SmolLM2-360M on llama.cpp, self-hosted, no key) answered positions-class calls through it on 20 Nov 2026, 0.88s p50, and got the arithmetic wrong 20 times in 20; no vendor model yet, for want of a key |
 | 4.5 blackboard, Coordinator, Critic, Reconciler | Built | `canvas-agents` |
 | 4.6 context assembly with priorities and floors | Built | `canvas-agents` context |

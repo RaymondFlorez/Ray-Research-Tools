@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 113 tests
+npm test --workspace @picasso/canvas-router    # 115 tests
 ```
 
 ## Phase 3's exit criterion
@@ -235,6 +235,47 @@ task's position gets worse whenever an interactive one arrives, and the number r
 the true one rather than its place at arrival. `drain` releases, in that order, whatever a
 recovering fleet can now serve and keeps the rest.
 
+## The cascade over real models
+
+`scripts/cascade-live.mjs` runs `doc.extract` on positions data through `services/gateway`:
+read a position statement, return each holding's market value and the stated total, and
+`reconciliationVerifier` (exact) decides whether to escalate. The statements are SYNTHETIC,
+from a fixed seed, so every accepted answer can also be checked against the truth, which the
+cascade never sees. The ladder is three open-weight models on the gateway's machine, served by
+llama.cpp on four CPU cores, then a vendor model:
+
+| Tier | Model | Tried | Accepted |
+|---|---|---|---|
+| primary | SmolLM2-360M-Instruct, Q8_0 | 20 | 0 |
+| fallback | Qwen2.5-1.5B-Instruct, Q4_K_M | 20 | 10 |
+| fallback | SmolLM2-1.7B-Instruct, Q4_K_M | 10 | 0 |
+| fallback | a vendor model | 0 | — |
+
+Measured on 20 November 2026, 20 statements: 10 accepted, all 10 right; 10 unverified, all
+10 wrong; none accepted wrong; 14.2s end to end at p50, 18.0s at most. The vendor tier was
+never offered the statements, and the gateway's trail holds 96 records, two per call, for the
+three local providers only.
+
+The first run found two bugs, both now covered by tests that fail without the fix:
+- **The cascade did not start on the primary.** It began from `route`, which scores the
+  whole fleet: right for one dispatch, wrong for a cascade, whose saving is that the cheap
+  model goes first. Qwen outscored the 360M, so the 360M was never tried. The cascade now
+  starts on the table's primary tier and scores the whole fleet only when no primary may
+  serve the request.
+- **Escalation went back down.** Each step passed `escalate` only the model that had just
+  failed, so from the second tier it returned to the first. The run went Qwen, 1.7B, Qwen,
+  1.7B. The cascade now carries every failure forward.
+
+Fixing the second cost acceptance on this run: 15 of 20 before (14 right, one consistent
+but wrong), 10 after. The going back down had given Qwen a second sample, and the gateway sends
+no temperature, so a second sample is a second chance. A policy that wants that asks for it with
+`escalateAfterFailures`; the ladder should not do it by accident. The measured figures above
+for the simulated fleet are unchanged by both fixes (86.8%, 0.00%, 5.5×).
+
+What this says about the table: the primary tier accepted nothing in 20, so on this task it
+only adds latency. On the simulated fleet the cheap tier ended 86.8% of requests; on these
+models, 0%. Those are the numbers the eval harness exists to replace.
+
 ## What is not here
 
 - **No preemption of running work.** 7.3 says batch work "is preempted". The queue orders
@@ -247,8 +288,8 @@ recovering fleet can now serve and keeps the rest.
   gateway writes to PRD 7.2's audit trail before dispatching and refuses to go
   without. Its tests run against a stand-in gateway in-process, and
   `apps/canvas-demo/scripts/models-shots.mjs` drives the client against the real
-  one. The cascade's measured figures above are still over a simulated fleet:
-  no model's output has been through it.
+  one. `scripts/cascade-live.mjs` has run the cascade over real open-weight models
+  (above); no vendor model's output has been through it, and its run is not in CI.
 - **The canary does not route traffic.** `inShadow` says whether a request is
   in the sample and `shadow()` runs both dispatches, but nothing here sits in
   a request path: the caller decides where to call it from, and a caller that
