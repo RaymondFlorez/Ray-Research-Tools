@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 47 tests, five of them need Postgres
+go test -race ./...                                    # 49 tests, six of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 

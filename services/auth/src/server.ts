@@ -116,8 +116,8 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
     }
     if (req.method === 'GET' && url.pathname === '/auth/callback') {
       const trace = traceId(req.headers.traceparent as string | undefined);
-      const record = (actor: string, tenant: string, resource: string, outcome: string) =>
-        options.audit.append({ actor, tenant, action: 'sign_in', resource, purpose: 'auth.sign_in', traceId: trace, outcome });
+      const record = (actor: string, tenant: string, resource: string, outcome: string, sessionId?: string) =>
+        options.audit.append({ actor, tenant, action: 'sign_in', resource, purpose: 'auth.sign_in', traceId: trace, outcome, ...(sessionId ? { sessionId } : {}) });
       // A refusal is recorded and then shown; if the record cannot be
       // written the person is still refused, with the reason they would see.
       const refuse = async (returnTo: string, reason: string, actor = 'unknown', tenant = '') => {
@@ -162,7 +162,7 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
           return;
         }
         try {
-          await record(identity.username, user.tenant, `session/${minted.session.sid}`, `signed in with ${identity.amr.join('+') || 'no reported method'}`);
+          await record(identity.username, user.tenant, `session/${minted.session.sid}`, `signed in with ${identity.amr.join('+') || 'no reported method'}`, minted.session.sid);
         } catch {
           // The session was minted and is never handed out; end it so it cannot be used.
           await options.issuer.end(minted.session.sid).catch(() => {});
@@ -200,7 +200,7 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
       let recorded = true;
       if (ended) {
         recorded = await options.audit
-          .append({ actor: ended.sub, tenant: ended.tenant, action: 'sign_out', resource: `session/${ended.sid}`, purpose: 'auth.sign_out', traceId: traceId(req.headers.traceparent as string | undefined), outcome: 'signed out' })
+          .append({ actor: ended.sub, tenant: ended.tenant, action: 'sign_out', resource: `session/${ended.sid}`, purpose: 'auth.sign_out', traceId: traceId(req.headers.traceparent as string | undefined), outcome: 'signed out', sessionId: ended.sid })
           .then(() => true, () => false);
       }
       json(res, 200, { signedOut: true, ...(recorded ? {} : { recorded: false }), ...(durable ? {} : { durable: false }) }, [cookie(SESSION_COOKIE, '', 0)]);

@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 30 tests; two live and four on Postgres, skipped by default
+go test -race ./...                       # 32 tests; two live and five on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
   go test ./server/ -run LocalModel -v    # a real open-weight model, behind any Chat Completions server

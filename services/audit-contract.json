@@ -29,6 +29,7 @@
    "records.purpose|text|NO|",
    "records.trace_id|text|NO|",
    "records.outcome|text|NO|",
+   "records.session_id|text|NO|''::text",
    "retention.one|boolean|NO|true",
    "retention.min_days|integer|NO|"
   ],

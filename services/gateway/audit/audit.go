@@ -42,6 +42,11 @@ type Record struct {
 	Purpose  string    `json:"purpose"`
 	TraceID  string    `json:"traceId"`
 	Outcome  string    `json:"outcome"`
+	// SessionID is the picasso-auth session the caller signed in under, the
+	// id its sign_in record names (session/<sid>), so a read or a dispatch can
+	// be joined to its sign-in. Empty under development identity, which has
+	// no session.
+	SessionID string `json:"sessionId,omitempty"`
 }
 
 // Validate refuses a record missing what the PRD requires of every one, or
@@ -132,8 +137,10 @@ CREATE TABLE IF NOT EXISTS %[1]s.records (
   resource text NOT NULL CHECK (resource <> ''),
   purpose text NOT NULL CHECK (purpose <> ''),
   trace_id text NOT NULL CHECK (trace_id <> ''),
-  outcome text NOT NULL
+  outcome text NOT NULL,
+  session_id text NOT NULL DEFAULT ''
 );
+ALTER TABLE %[1]s.records ADD COLUMN IF NOT EXISTS session_id text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS %[1]s.retention (
   one boolean PRIMARY KEY DEFAULT true CHECK (one),
   min_days integer NOT NULL CHECK (min_days >= 1)
@@ -262,8 +269,8 @@ func (p *Postgres) Append(ctx context.Context, r Record) error {
 	if err := r.Validate(); err != nil {
 		return err
 	}
-	_, err := p.pool.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.records (actor, tenant, action, resource, purpose, trace_id, outcome) VALUES ($1,$2,$3,$4,$5,$6,$7)`, p.schema),
-		r.Actor, r.Tenant, r.Action, r.Resource, r.Purpose, r.TraceID, r.Outcome)
+	_, err := p.pool.Exec(ctx, fmt.Sprintf(`INSERT INTO %s.records (actor, tenant, action, resource, purpose, trace_id, outcome, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, p.schema),
+		r.Actor, r.Tenant, r.Action, r.Resource, r.Purpose, r.TraceID, r.Outcome, r.SessionID)
 	return err
 }
 

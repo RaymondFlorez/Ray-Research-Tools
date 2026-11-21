@@ -174,6 +174,12 @@ try {
   const signins = execFileSync('psql', [PG, '-tAc', `SELECT actor || '|' || action || '|' || resource || '|' || outcome FROM ${SCHEMA}_signin.records ORDER BY seq`], { encoding: 'utf8' }).trim().split('\n');
   const pmIn = signins.find((r) => r.startsWith('pm|sign_in|session/') && r.includes('|signed in with '));
   const pmSession = pmIn?.split('|')[2];
+  // The export, written by the collaboration server, names the session it ran under; picasso-auth's
+  // own trail names the same session at the sign-in that opened it.
+  const exportSession = execFileSync('psql', [PG, '-tAc', `SELECT session_id FROM ${SCHEMA}_audit.records WHERE action = 'export'`], { encoding: 'utf8' }).trim();
+  const loaderIn = signins.find((r) => r.startsWith('loader|sign_in|session/'))?.split('|')[2];
+  check('and the export joins to the sign-in that opened its session, across the two services\' trails',
+    exportSession.length > 0 && loaderIn === `session/${exportSession}`, `${exportSession ? 'session id present' : 'no session id'}; ${loaderIn === `session/${exportSession}` ? 'matches the loader\'s sign-in' : 'no matching sign-in'}`);
   check('and picasso-auth recorded the sign-ins, the refusal and the logout on its Postgres trail, under the session id',
     pmIn !== undefined && signins.includes(`pm|sign_out|${pmSession}|signed out`) && signins.some((r) => r.includes('|sign_in|session/none|refused: ') && r.includes('second factor')),
     signins.map((r) => r.replace(/session\/[A-Za-z0-9_-]{22}/, 'session/<sid>')).join('; '));

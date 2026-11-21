@@ -28,6 +28,12 @@ export interface AuditRecord {
   purpose: string;
   traceId: string;
   outcome: string;
+  /**
+   * The picasso-auth session behind the action, the id a sign_in record names
+   * (`session/<sid>`), so the trail joins a read, a dispatch or an export to
+   * its sign-in. Absent under development identity.
+   */
+  sessionId?: string;
 }
 
 /**
@@ -71,8 +77,10 @@ CREATE TABLE IF NOT EXISTS ${schema}.records (
   resource text NOT NULL CHECK (resource <> ''),
   purpose text NOT NULL CHECK (purpose <> ''),
   trace_id text NOT NULL CHECK (trace_id <> ''),
-  outcome text NOT NULL
+  outcome text NOT NULL,
+  session_id text NOT NULL DEFAULT ''
 );
+ALTER TABLE ${schema}.records ADD COLUMN IF NOT EXISTS session_id text NOT NULL DEFAULT '';
 CREATE TABLE IF NOT EXISTS ${schema}.retention (
   one boolean PRIMARY KEY DEFAULT true CHECK (one),
   min_days integer NOT NULL CHECK (min_days >= 1)
@@ -146,8 +154,8 @@ export class PostgresAudit implements AuditStore {
   async append(r: AuditRecord): Promise<void> {
     validate(r);
     await this.pool.query(
-      `INSERT INTO ${this.schema}.records (actor, tenant, action, resource, purpose, trace_id, outcome) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [r.actor, r.tenant, r.action, r.resource, r.purpose, r.traceId, r.outcome],
+      `INSERT INTO ${this.schema}.records (actor, tenant, action, resource, purpose, trace_id, outcome, session_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [r.actor, r.tenant, r.action, r.resource, r.purpose, r.traceId, r.outcome, r.sessionId ?? ''],
     );
   }
 }

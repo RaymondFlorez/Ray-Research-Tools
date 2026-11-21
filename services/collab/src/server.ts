@@ -294,7 +294,7 @@ export async function startCollab(o: CollabOptions): Promise<Collab> {
       return send(400, { error: 'an export names its title, whether it leaves the tenant, and at least one cell' });
     }
     const trace = traceId(request.headers.traceparent as string | undefined);
-    const record = { actor: ctx.user, tenant: ctx.tenant, action: 'export', resource: doc, purpose, traceId: trace };
+    const record = { actor: ctx.user, tenant: ctx.tenant, action: 'export', resource: doc, purpose, traceId: trace, ...(ctx.sid ? { sessionId: ctx.sid } : {}) };
     let bundle;
     try {
       bundle = buildBundle({

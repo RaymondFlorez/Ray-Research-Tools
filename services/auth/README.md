@@ -194,9 +194,11 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   a `sign_in` record (a refusal before the person is known has actor `unknown`), and every
   logout of a live session a `sign_out`, under `session/<sid>`. A sign-in whose record cannot
   be written is refused and its session ended; a logout ends the session either way and says
-  `recorded: false`. A refresh carries the sign-in's session id and is not recorded. The data
-  plane's and the gateway's records name the user and tenant but not the session id, so
-  joining a read to its sign-in goes through the user and the time.
+  `recorded: false`. A refresh carries the sign-in's session id and is not recorded. Every
+  record on the trail, from the data plane, the gateway and the collaboration server too,
+  carries the session id it ran under (`session_id`, empty under development identity), so a
+  read, a dispatch or an export joins to its sign-in on that id; `signin-shots.mjs` joins an
+  export to the sign-in that opened its session.
 - **Rotation is a restart.** The new key goes in `--key` and the old one in `--retired-key`.
   Tokens the old key signed keep verifying, and new ones are signed with the new key. Drop
   `--retired-key` fifteen minutes later. Nothing automates the schedule.

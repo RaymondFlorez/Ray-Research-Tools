@@ -260,3 +260,52 @@ func TestExpiryRunsOnASchedule(t *testing.T) {
 		t.Error("a zero interval was accepted")
 	}
 }
+
+// A trail made before records carried a session id gains the column when
+// it is migrated again, and a record keeps the session it names.
+func TestAnOlderTrailGainsTheSessionColumn(t *testing.T) {
+	url := os.Getenv("DATAPLANE_PG_URL")
+	if url == "" {
+		if os.Getenv("DATAPLANE_REQUIRE_PG") == "1" {
+			t.Fatal("DATAPLANE_REQUIRE_PG is set and DATAPLANE_PG_URL is not")
+		}
+		t.Skip("DATAPLANE_PG_URL is not set")
+	}
+	ctx := context.Background()
+	owner, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	schema := fmt.Sprintf("auditsid_%d", time.Now().UnixNano())
+	if err := Migrate(ctx, owner, schema); err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Exec(ctx, fmt.Sprintf("DROP SCHEMA %s CASCADE", schema))
+	// The table as it was.
+	if _, err := owner.Exec(ctx, fmt.Sprintf("ALTER TABLE %s.records DROP COLUMN session_id", schema)); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(ctx, owner, schema); err != nil {
+		t.Fatalf("migrating an older trail: %v", err)
+	}
+	trail, err := NewPostgres(owner, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sid := range []string{"Zk3pQ9", ""} {
+		if err := trail.Append(ctx, Record{Actor: "pm", Tenant: "dev", Action: "read", Resource: "book", Purpose: "risk.rebalance", TraceID: "t", Outcome: "served", SessionID: sid}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var got []string
+	rows, _ := owner.Query(ctx, fmt.Sprintf("SELECT session_id FROM %s.records ORDER BY seq", schema))
+	for rows.Next() {
+		var s string
+		_ = rows.Scan(&s)
+		got = append(got, s)
+	}
+	if len(got) != 2 || got[0] != "Zk3pQ9" || got[1] != "" {
+		t.Errorf("session ids read back: %q", got)
+	}
+}

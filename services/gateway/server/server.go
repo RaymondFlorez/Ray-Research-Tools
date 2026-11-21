@@ -256,38 +256,50 @@ func fail(w http.ResponseWriter, status int, format string, args ...any) {
 // for an identity provider that the data plane also uses.
 func (s *Server) withUser(h func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		user, status, msg := s.caller(r)
+		user, sid, status, msg := s.caller(r)
 		if status != 0 {
 			fail(w, status, "%s", msg)
 			return
+		}
+		if sid != "" {
+			r = r.WithContext(context.WithValue(r.Context(), sessionKey{}, sid))
 		}
 		h(w, r, user)
 	}
 }
 
+type sessionKey struct{}
+
+// sessionID is the picasso-auth session a request was verified under, or ""
+// under development identity.
+func sessionID(r *http.Request) string {
+	sid, _ := r.Context().Value(sessionKey{}).(string)
+	return sid
+}
+
 // caller resolves who is asking: a verified session token, or, only when
 // DevIdentity is on and no token was sent, the name in X-Picasso-User.
-func (s *Server) caller(r *http.Request) (string, int, string) {
+func (s *Server) caller(r *http.Request) (string, string, int, string) {
 	if token := identity.Token(r); token != "" && s.identity != nil {
 		session, refusal := s.identity.Verify(r.Context(), token)
 		if refusal != nil {
-			return "", http.StatusUnauthorized, "session: " + refusal.Error()
+			return "", "", http.StatusUnauthorized, "session: " + refusal.Error()
 		}
 		if !s.users[session.User] {
-			return "", http.StatusUnauthorized, "unknown user"
+			return "", "", http.StatusUnauthorized, "unknown user"
 		}
 		if t := s.tenants[session.User]; t != "" && t != session.Tenant {
-			return "", http.StatusForbidden, "the session is for another tenant"
+			return "", "", http.StatusForbidden, "the session is for another tenant"
 		}
-		return session.User, 0, ""
+		return session.User, session.SID, 0, ""
 	}
 	if s.devIdentity {
 		if user := r.Header.Get("X-Picasso-User"); s.users[user] {
-			return user, 0, ""
+			return user, "", 0, ""
 		}
-		return "", http.StatusUnauthorized, "unknown user"
+		return "", "", http.StatusUnauthorized, "unknown user"
 	}
-	return "", http.StatusUnauthorized, "sign in: no session token"
+	return "", "", http.StatusUnauthorized, "sign in: no session token"
 }
 
 func (s *Server) Handler() http.Handler {
@@ -570,7 +582,7 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 	record := audit.Record{
 		At: s.now().UTC(), Actor: user, Tenant: s.tenants[user], Action: "ai_dispatch",
 		Resource: p.ID + "/" + req.Model, Purpose: req.Purpose, TraceID: audit.TraceID(r),
-		Outcome: "sent: " + req.DataClass,
+		Outcome: "sent: " + req.DataClass, SessionID: sessionID(r),
 	}
 	if req.Pinned != nil {
 		record.Outcome += fmt.Sprintf(", pinned at temperature 0, seed %d", req.Pinned.Seed)

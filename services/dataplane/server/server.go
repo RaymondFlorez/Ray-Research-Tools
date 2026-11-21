@@ -87,6 +87,9 @@ func (s *Server) auditRead(w http.ResponseWriter, r *http.Request, e entitle.Ent
 	trace := audit.TraceID(r)
 	for _, resource := range resources {
 		rec := audit.Record{Actor: e.UserID, Tenant: e.TenantID, Action: action, Resource: resource, Purpose: purpose, TraceID: trace, Outcome: "served"}
+		if session, ok := sessionOf(r); ok {
+			rec.SessionID = session.SID
+		}
 		if err := s.Audit.Append(r.Context(), rec); err != nil {
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "the audit trail could not be written, so the data is not served: " + err.Error()})
 			return false
