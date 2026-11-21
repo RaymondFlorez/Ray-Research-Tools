@@ -136,6 +136,12 @@ jobs:
         env:
           COLLAB_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
           COLLAB_REQUIRE_PG: '1'
+      # picasso-auth's revocation store on the same Postgres: logouts outlive a restart.
+      - run: npm test --workspace @picasso/auth
+        working-directory: .
+        env:
+          AUTH_PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+          AUTH_REQUIRE_PG: '1'
 
   gateway:
     runs-on: ubuntu-latest

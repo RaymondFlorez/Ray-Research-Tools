@@ -165,7 +165,7 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
           await record(identity.username, user.tenant, `session/${minted.session.sid}`, `signed in with ${identity.amr.join('+') || 'no reported method'}`);
         } catch {
           // The session was minted and is never handed out; end it so it cannot be used.
-          options.issuer.end(minted.session.sid);
+          await options.issuer.end(minted.session.sid).catch(() => {});
           back(res, p.returnTo, 'the sign-in could not be recorded on the audit trail, so it was refused');
           return;
         }
@@ -187,11 +187,15 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
     }
     if (req.method === 'POST' && url.pathname === '/auth/logout') {
       let ended: { sub: string; tenant: string; sid: string } | undefined;
+      let durable = true;
       try {
         ended = await options.issuer.verify(token ?? '');
-        options.issuer.end(ended.sid);
       } catch {
         // Logging out of a session that is already over is not an error.
+      }
+      if (ended) {
+        // Ended in this process either way; `durable: false` says a restart would forget it.
+        durable = await options.issuer.end(ended.sid).then(() => true, () => false);
       }
       let recorded = true;
       if (ended) {
@@ -199,7 +203,7 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
           .append({ actor: ended.sub, tenant: ended.tenant, action: 'sign_out', resource: `session/${ended.sid}`, purpose: 'auth.sign_out', traceId: traceId(req.headers.traceparent as string | undefined), outcome: 'signed out' })
           .then(() => true, () => false);
       }
-      json(res, 200, { signedOut: true, ...(recorded ? {} : { recorded: false }) }, [cookie(SESSION_COOKIE, '', 0)]);
+      json(res, 200, { signedOut: true, ...(recorded ? {} : { recorded: false }), ...(durable ? {} : { durable: false }) }, [cookie(SESSION_COOKIE, '', 0)]);
       return;
     }
     if (req.method === 'GET' && url.pathname === '/auth/me') {

@@ -19,6 +19,7 @@
 import { randomBytes } from 'node:crypto';
 import { SESSION_TTL_MS, acceptRefresh, authorizeSession, type TenantProfile, type VerifiedClaims } from '@picasso/canvas-guard';
 import { SignJWT, calculateJwkThumbprint, exportJWK, generateKeyPair, importJWK, jwtVerify, type CryptoKey, type JWK } from 'jose';
+import type { RevocationStore } from './revocations.js';
 
 export const AUDIENCE = 'picasso';
 const ALG = 'EdDSA';
@@ -49,6 +50,12 @@ export interface IssuerOptions {
    * Public or private JWKs; only the public part is kept.
    */
   retiredJwks?: readonly JWK[];
+  /**
+   * Where logged-out sessions are kept. Absent, they are kept in memory and a
+   * restart forgets them: with `privateJwk` the same key comes back, and a
+   * logged-out session's unexpired token would verify, and refresh, again.
+   */
+  revocations?: RevocationStore;
   now?: () => number;
 }
 
@@ -99,7 +106,9 @@ export class SessionIssuer {
     for (const jwk of [publicJwk, ...(await Promise.all((options.retiredJwks ?? []).map(publish)))]) {
       if (!verifying.has(jwk.kid!)) verifying.set(jwk.kid!, { key: (await importJWK(jwk, ALG)) as CryptoKey, jwk });
     }
-    return new SessionIssuer(options, privateKey, publicJwk, verifying);
+    const issuer = new SessionIssuer(options, privateKey, publicJwk, verifying);
+    for (const [sid, until] of (await options.revocations?.live(issuer.now())) ?? []) issuer.ended.set(sid, until);
+    return issuer;
   }
 
   /** The public key set the services verify against: the signing key first, then any retired ones. */
@@ -168,9 +177,15 @@ export class SessionIssuer {
     return { token: await this.sign(next), session: next, refreshAt: decision.refreshAt };
   }
 
-  /** Logout: this issuer refuses the session from now on, and lists it for the services. */
-  end(sid: string): void {
-    this.ended.set(sid, this.now() + REVOKED_FOR_MS);
+  /**
+   * Logout: this issuer refuses the session from now on, and lists it for the
+   * services. That holds at once; the promise resolves when the revocation
+   * store has it too, and so a restart will.
+   */
+  end(sid: string): Promise<void> {
+    const until = this.now() + REVOKED_FOR_MS;
+    this.ended.set(sid, until);
+    return this.options.revocations?.add(sid, until) ?? Promise.resolve();
   }
 
   /**

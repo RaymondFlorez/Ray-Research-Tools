@@ -8,11 +8,12 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 28 tests
+npm test --workspace @picasso/auth          # 32 tests; one needs Postgres (AUTH_PG_URL)
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
-   --users users.json --tenants config/tenants.json --key session-key.jwk \
+   --users users.json --tenants config/tenants.json --key session-key.jwk --pg postgres://... \
    --audit-pg postgres://... --migrate     # without --audit-pg, sign-ins are recorded in memory only
+# --key requires --pg, where logged-out sessions are kept: see "A logout outlives a restart" 
 ```
 
 | Module | What it does |
@@ -21,6 +22,7 @@ OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://pica
 | `sessions.ts` | Picasso's session tokens: minted, verified and refreshed under canvas-guard's rules |
 | `verify.ts` | What a service does with a token, held to the Go services' verdicts |
 | `server.ts` | `/auth/login`, `/auth/callback`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/revoked`, `/.well-known/jwks.json` |
+| `revocations.ts` | Where logged-out sessions are kept, in memory or in Postgres, so a restart does not bring them back |
 | `audit.ts` | PRD 7.2's trail from TypeScript: the schema, the purpose rule and the Postgres writer, held to `services/audit-contract.json`; the collaboration server's exports use it too |
 | `standin.ts` | A **stand-in** OpenID provider for tests and the browser check; `main.ts` never loads it |
 
@@ -124,6 +126,21 @@ logged-out session from a live one does not guess. Both languages are tested the
 Removing the revocation check, or the staleness check, fails those tests. In the Go suite,
 the contract test fails too.
 
+## A logout outlives a restart
+
+The revocation list was held in memory, so it ended with the process. Restarted with the same
+`--key`, the issuer accepted a logged-out session's unexpired token again, and refreshed it: a
+token taken from a browser before its owner logged out became a live session for the rest of
+its twelve hours. `test/revocations.test.ts` shows exactly that without a store.
+
+Logged-out sessions are now kept in a `RevocationStore`, in Postgres with `--pg` (a
+`revoked_sessions` table in `--schema`, created with `--migrate`), and loaded when the issuer
+starts. An entry is kept as long as any token of the session could still verify, then
+cleared. `--key` without `--pg` refuses to start; without `--key` a restart makes a new key and
+ends every session anyway. A logout takes effect in the process at once, and the answer says
+`durable: false` if the store did not take it. Through the binary: a logout, a restart, and
+the same token reads as logged out and cannot refresh.
+
 ## Rotating the signing key
 
 `--retired-key` keeps a previous signing key published and accepted, and it never signs. The
@@ -167,8 +184,10 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   session sees a reconnect, and one that can no longer refresh, past its twelve hours, stays
   out. The revocation list is public, like the key set. Its session ids are random and already
   unusable, but it does show how many people logged out in the last quarter-hour.
-- **Sessions are in memory.** A restart ends every session's revocation record, and, without
-  `--key`, every session.
+- **One issuer process.** Logged-out sessions survive a restart, but each process reads the
+  store only when it starts: two picasso-auth processes behind one name would each know only
+  their own logouts until restarted. The services read the published list from whichever
+  answers.
 - **Sign-ins are on the trail; refreshes are not.** Every callback, admitted or refused, writes
   a `sign_in` record (a refusal before the person is known has actor `unknown`), and every
   logout of a live session a `sign_out`, under `session/<sid>`. A sign-in whose record cannot
