@@ -117,8 +117,9 @@ Anthropic's API is the other provider host this environment reaches. Measured:
   the gateway's own machine, through the Chat Completions adapter. There is no key for any
   vendor here: the Anthropic adapter has reached the real API only to be refused, and the
   Gemini and OpenRouter-exchange code is tested against stand-ins written to each one's
-  documented API. CI does not run the local-model test; it needs the model server and the
-  weights, which it does not download.
+  documented API. CI's `real-model` job runs the local-model test on every push: it
+  downloads the 360M weights, checks them against the published hash, and serves them with
+  llama.cpp on the runner's CPU.
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
   No sampling parameters are sent, since current Claude models reject them.
 - **Identity is picasso-auth's session token**, as at the data plane, with the same

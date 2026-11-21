@@ -156,3 +156,51 @@ jobs:
         run: diff -r ../dataplane/audit audit && diff -r ../dataplane/identity identity
       - run: go vet ./...
       - run: go test -race ./...
+
+  # A real open-weight model behind the gateway, not a stand-in: SmolLM2-360M
+  # (Apache-2.0), checked against the hash Hugging Face publishes, served by
+  # llama.cpp's OpenAI-compatible server on the runner's CPU. The gateway test
+  # skips without a model, so the step fails unless it ran and passed.
+  real-model:
+    runs-on: ubuntu-latest
+    env:
+      MODEL_FILE: smollm2-360m-instruct-q8_0.gguf
+      MODEL_SHA256: 48ab3034d0dd401fbc721eb1df3217902fee7dab9078992d66431f09b7750201
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/gateway/go.mod
+          cache-dependency-path: services/gateway/go.sum
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/models
+          key: llama-cpp-python-0.3.16-${{ env.MODEL_SHA256 }}
+      - name: llama.cpp's server
+        run: pip install "llama-cpp-python[server]==0.3.16"
+        env:
+          # Portable code: a wheel cached from one runner's CPU runs on the next.
+          CMAKE_ARGS: -DGGML_NATIVE=OFF
+      - name: the model, as published
+        run: |
+          mkdir -p ~/models
+          test -f ~/models/$MODEL_FILE || curl -sSfL -o ~/models/$MODEL_FILE https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct-GGUF/resolve/main/$MODEL_FILE
+          echo "$MODEL_SHA256  $HOME/models/$MODEL_FILE" | sha256sum -c
+      - name: serve it
+        run: |
+          nohup python -m llama_cpp.server --model ~/models/$MODEL_FILE --host 127.0.0.1 --port 8081 --n_ctx 2048 --model_alias smollm2-360m > server.log 2>&1 &
+          for i in $(seq 1 120); do curl -sf http://127.0.0.1:8081/v1/models >/dev/null && exit 0; sleep 1; done
+          cat server.log; exit 1
+      - name: positions to a real model through the gateway, never to a vendor
+        working-directory: services/gateway
+        env:
+          GATEWAY_LOCAL_MODEL_URL: http://127.0.0.1:8081/v1
+          GATEWAY_LOCAL_MODEL: smollm2-360m
+        run: |
+          go test ./server/ -run LocalModel -count=1 -v | tee out.txt
+          grep -q -- '--- PASS: TestARealLocalModelAnswersPositionsAndAVendorNeverSeesThem' out.txt
