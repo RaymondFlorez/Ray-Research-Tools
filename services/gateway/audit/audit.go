@@ -196,6 +196,32 @@ func Expire(ctx context.Context, pool *pgxpool.Pool, schema string) (int64, erro
 	return n, err
 }
 
+// ExpireEvery runs Expire at once and then every interval until ctx ends,
+// handing each result to report. It is for a process of its own that holds
+// the owner's credentials, so that no service has to: the services write as
+// the insert-only role and cannot expire anything. A failed run is reported
+// and the next is still attempted, so a database that is briefly away does
+// not stop the schedule.
+func ExpireEvery(ctx context.Context, pool *pgxpool.Pool, schema string, every time.Duration, report func(removed int64, err error)) error {
+	if every <= 0 {
+		return fmt.Errorf("an expiry interval must be positive, not %v", every)
+	}
+	tick := time.NewTicker(every)
+	defer tick.Stop()
+	for {
+		n, err := Expire(ctx, pool, schema)
+		if ctx.Err() != nil {
+			return nil
+		}
+		report(n, err)
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-tick.C:
+		}
+	}
+}
+
 // SetRetention changes the minimum time a record is kept, as the owner.
 func SetRetention(ctx context.Context, pool *pgxpool.Pool, schema string, days int) error {
 	if !identifier.MatchString(schema) {

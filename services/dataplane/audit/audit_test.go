@@ -191,3 +191,72 @@ func TestOnlyTheOwnerExpiresAndOnlyPastTheRetentionPeriod(t *testing.T) {
 		t.Error("the retention policy could be deleted")
 	}
 }
+
+// The schedule: an expiry at once, then one every interval, each reported,
+// until the context ends.
+func TestExpiryRunsOnASchedule(t *testing.T) {
+	url := os.Getenv("DATAPLANE_PG_URL")
+	if url == "" {
+		if os.Getenv("DATAPLANE_REQUIRE_PG") == "1" {
+			t.Fatal("DATAPLANE_REQUIRE_PG is set and DATAPLANE_PG_URL is not")
+		}
+		t.Skip("DATAPLANE_PG_URL is not set")
+	}
+	ctx := context.Background()
+	owner, err := pgxpool.New(ctx, url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Close()
+	schema := fmt.Sprintf("audits_%d", time.Now().UnixNano())
+	if err := Migrate(ctx, owner, schema); err != nil {
+		t.Fatal(err)
+	}
+	defer owner.Exec(ctx, fmt.Sprintf("DROP SCHEMA %s CASCADE", schema))
+	old := func() {
+		for _, sql := range []string{
+			"ALTER TABLE %s.records DISABLE TRIGGER stamp",
+			"INSERT INTO %s.records (at, actor, tenant, action, resource, purpose, trace_id, outcome) VALUES (now() - interval '8 years', 'pm', 'dev', 'read', 'book', 'p', 't', 'served')",
+			"ALTER TABLE %s.records ENABLE TRIGGER stamp",
+		} {
+			if _, err := owner.Exec(ctx, fmt.Sprintf(sql, schema)); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	old()
+	old()
+
+	runs := make(chan int64, 16)
+	run, stop := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() {
+		done <- ExpireEvery(run, owner, schema, 100*time.Millisecond, func(n int64, err error) {
+			if err != nil {
+				t.Errorf("a scheduled expiry: %v", err)
+			}
+			runs <- n
+		})
+	}()
+	if n := <-runs; n != 2 {
+		t.Errorf("the first run, at once: %d removed, want 2", n)
+	}
+	old()
+	// A later tick takes the record added since.
+	deadline := time.After(5 * time.Second)
+	for removed := int64(0); removed < 1; {
+		select {
+		case n := <-runs:
+			removed += n
+		case <-deadline:
+			t.Fatal("no scheduled run removed the new record")
+		}
+	}
+	stop()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if err := ExpireEvery(ctx, owner, schema, 0, func(int64, error) {}); err == nil {
+		t.Error("a zero interval was accepted")
+	}
+}

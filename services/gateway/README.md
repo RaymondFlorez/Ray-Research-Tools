@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 27 tests; two live and three on Postgres, skipped by default
+go test -race ./...                       # 28 tests; two live and four on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
   go test ./server/ -run LocalModel -v    # a real open-weight model, behind any Chat Completions server
@@ -132,6 +132,7 @@ Anthropic's API is the other provider host this environment reaches. Measured:
   the old key opens neither, and finds that a rekey under the wrong key changes nothing on
   disk. The per-user dispatch log is in memory. The trail is in Postgres with `-audit-pg`,
   under the data plane's rules: the process writes as the role it is given, and records
-  expire only when the schema's owner runs expiry.
+  expire only when the schema's owner runs expiry, once or on a schedule, with the data
+  plane binary's `-audit-expire` and `-audit-expire-every`.
 - **No budgets or rate limits.** `canvas-router` holds the budget rules and does not yet call
   this gateway; nothing here stops a user spending their own account.

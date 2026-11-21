@@ -7,7 +7,7 @@ FRED/ALFRED, Stooq daily bars, and Coinbase's public ticker feed live.
 
 ```bash
 cd services/dataplane
-go test -race ./...                                    # 46 tests, four of them need Postgres
+go test -race ./...                                    # 47 tests, five of them need Postgres
 DATAPLANE_PG_URL=postgres://... go test ./pit/ ./audit/ # the Postgres store and audit trail too
 DATAPLANE_REQUIRE_PG=1 ...                             # fail, not skip, without one (CI)
 
@@ -240,8 +240,12 @@ with a SYNTHETIC position:
   that role; `main` does not.
 - **The retention period is a default, not the PRD's.** The PRD asks for "a distinct
   retention policy" and names no period. The schema keeps a record seven years unless its
-  owner sets another (`audit.SetRetention`), and `-audit-expire` must be run, as the owner, for
-  anything to go. Nothing schedules it.
+  owner sets another (`audit.SetRetention`), and only the owner's expiry removes anything.
+  `-audit-expire -audit-expire-every 24h` is that schedule: a process of its own, holding the
+  owner's credentials so that no service has to, which expires at once and then at each
+  interval, reports each run, and carries on after a failed one (tested on Postgres; on the
+  live trail it removed nothing, every record being inside the period). Running that process
+  is the operator's: nothing here deploys it.
 - **The live stream is not on the trail.** `/v1/stream` checks entitlements per tick, and
   writes no record if the symbology classifies an instrument as positions. There is no export
   endpoint here to audit. canvas-guard's export bundle is built in the browser, and is not

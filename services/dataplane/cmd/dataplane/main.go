@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -71,6 +72,7 @@ func main() {
 	migrate := flag.Bool("migrate", false, "create the schema first (as the owning role)")
 	auditSchema := flag.String("audit-schema", "audit", "the audit trail's own schema, with -pg")
 	auditExpire := flag.Bool("audit-expire", false, "remove the audit records past the schema's retention period, then exit; run as the schema's owner, with -pg")
+	auditExpireEvery := flag.Duration("audit-expire-every", 0, "with -audit-expire: keep running, and expire again at this interval until stopped (e.g. 24h); a process of its own, holding the owner's credentials so no service has to")
 	replay := flag.String("replay", "", "a recording to replay as the feed (NDJSON)")
 	speed := flag.Float64("speed", 1, "replay speed; 0 is as fast as possible")
 	coinbase := flag.String("coinbase", "", "Coinbase Exchange products to stream live, comma-separated (each must be in the symbology under feed \"coinbase\")")
@@ -87,8 +89,24 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer pool.Close()
+		if *auditExpireEvery > 0 {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+			defer stop()
+			fmt.Fprintf(os.Stderr, "audit expiry: every %v on %s\n", *auditExpireEvery, *auditSchema)
+			err := audit.ExpireEvery(ctx, pool, *auditSchema, *auditExpireEvery, func(n int64, err error) {
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "audit expiry: %v; the next run is in %v\n", err, *auditExpireEvery)
+					return
+				}
+				fmt.Fprintf(os.Stderr, "audit expiry: %d records past the retention period removed from %s\n", n, *auditSchema)
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
 		n, err := audit.Expire(context.Background(), pool, *auditSchema)
-		pool.Close()
 		if err != nil {
 			log.Fatalf("audit expiry: %v", err)
 		}
