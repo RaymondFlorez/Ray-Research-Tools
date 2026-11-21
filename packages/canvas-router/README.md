@@ -5,7 +5,7 @@ override, the speculative cascade with deterministic verifiers, budget ceilings 
 rather than degrade, and the trace store the eval harness reads.
 
 ```bash
-npm test --workspace @picasso/canvas-router    # 115 tests
+npm test --workspace @picasso/canvas-router    # 116 tests
 ```
 
 ## Phase 3's exit criterion

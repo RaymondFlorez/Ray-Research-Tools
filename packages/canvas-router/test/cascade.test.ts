@@ -247,3 +247,27 @@ describe('the ladder, as a real run found it', () => {
     expect(r.steps.map((s) => s.decision.model.id)).toEqual(['small', 'large', 'mid']);
   });
 });
+
+/**
+ * The eval harness over the same models (`scripts/eval-live.mjs`) measured two
+ * of the three at 0 of 40. Written into the policy, they were still tried on
+ * every request: the primary first, then the other on the way up.
+ */
+describe('a model the harness measured at zero', () => {
+  const local = (id: string, quality: number): Model => ({
+    id, version: '1', modalities: ['text'], tools: false, structuredOutput: false, vendor: 'open', placement: 'self_hosted',
+    centsPerKiloToken: 0.004, latencyMsP50: 1_000, latencyMsP95: 4_000, quality: { 'doc.extract': quality }, deterministic: true, contextTokens: 8_192,
+  });
+  const policy = {
+    ...DEFAULT_POLICY,
+    models: [local('small', 0), local('mid', 0), local('large', 0.45)],
+    entries: [{ taskClass: 'doc.extract' as const, slo: { kind: 'p95' as const, ms: 30_000 }, primary: ['small'], fallback: ['mid', 'large'], escalateAfterFailures: 1 }],
+  };
+  const extract = features({ taskClass: 'doc.extract', dataSensitivity: 'positions', latencyBudgetMs: 30_000 });
+
+  it('is not tried, as primary or on the way up, and the reason is on the decision', async () => {
+    const r = await cascade(policy, extract, async (m) => m.id, (): Verdict => ({ accepted: false, confidence: 1, deterministic: true, reason: 'no' }), { maxTiers: 4 });
+    expect(r.steps.map((s) => s.decision.model.id)).toEqual(['large']);
+    expect(r.steps[0]!.decision.excluded).toContainEqual({ modelId: 'small', rule: 'measured at 0 on doc.extract: it answered none of the eval set' });
+  });
+});

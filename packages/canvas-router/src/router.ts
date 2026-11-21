@@ -177,6 +177,14 @@ export function route(
       excluded.push({ modelId: model.id, rule: `not evaluated on ${features.taskClass}` });
       return false;
     }
+    // A measured zero is a model the eval harness saw succeed on none of a
+    // golden set of at least MIN_ITEMS: as much a non-candidate as an untested
+    // one. Kept eligible, it was still tried first as the cascade's primary,
+    // and again on the way up, on every request (cascade-live.mjs).
+    if (model.quality[features.taskClass] === 0) {
+      excluded.push({ modelId: model.id, rule: `measured at 0 on ${features.taskClass}: it answered none of the eval set` });
+      return false;
+    }
     if (!placements.includes(model.placement)) {
       excluded.push({
         modelId: model.id,
