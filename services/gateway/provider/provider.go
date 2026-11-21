@@ -16,6 +16,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -33,7 +34,25 @@ type Request struct {
 	System    string    `json:"system,omitempty"`
 	Messages  []Message `json:"messages"`
 	MaxTokens int       `json:"maxTokens"`
+	// Pinned asks for the reproducible answer a compute path needs (PRD 4.7):
+	// temperature 0 and a fixed seed. Absent, the provider's defaults apply,
+	// and two calls with the same request are two samples.
+	Pinned *Pinned `json:"pinned,omitempty"`
 }
+
+// Pinned is the seed a pinned dispatch uses; its temperature is always 0.
+type Pinned struct {
+	Seed int64 `json:"seed"`
+}
+
+// ErrCannotPin is a pinned request to an API that takes no temperature or
+// seed. Current Claude models reject sampling parameters with a 400 and have
+// no seed, so sending the request unpinned would hand a compute path a
+// sample and call it pinned.
+var ErrCannotPin = errors.New("this API takes no temperature or seed, so it cannot serve a pinned dispatch")
+
+// CanPin reports whether an API family takes a temperature and a seed.
+func CanPin(kind string) bool { return kind == "openai" || kind == "gemini" }
 
 // Stop is why generation stopped, normalised across providers.
 type Stop string

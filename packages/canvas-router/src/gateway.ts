@@ -32,6 +32,8 @@ export interface GatewayProvider {
   auth: 'oauth' | 'api_key' | 'none';
   /** The data classes this provider may receive. */
   accepts: DataClass[];
+  /** Whether it takes temperature 0 and a seed: false for Claude, which takes neither. */
+  pins: boolean;
   models?: string[];
   suggested?: string[];
   connected: boolean;
@@ -55,6 +57,8 @@ export interface GatewayChat {
    * `sql.generate`. The gateway refuses a dispatch without one.
    */
   purpose: string;
+  /** Temperature 0 and this seed (PRD 4.7). The gateway refuses it for a provider that cannot do both. */
+  pinned?: { seed: number };
 }
 
 export interface GatewayResponse {
@@ -173,6 +177,27 @@ export interface GatewayPrompt {
    * `sql.generate`. The gateway refuses a dispatch without one.
    */
   purpose: string;
+  /**
+   * Temperature 0 and this seed, for an answer that feeds a compute node and
+   * must come out the same again. Without it each call is a fresh sample.
+   */
+  pinned?: { seed: number };
+}
+
+/**
+ * A pinned dispatch to a provider that cannot pin. The manifest can call a
+ * model deterministic, and so routable for a compute path, while the gateway
+ * reaches it through an API that takes no temperature or seed: Claude's. Sent
+ * anyway, the answer would be a sample presented as a pinned result.
+ */
+export class NotPinnable extends Error {
+  constructor(
+    readonly modelId: string,
+    readonly provider: string,
+  ) {
+    super(`${modelId} goes to ${provider}, which takes no temperature or seed, so it cannot serve a pinned dispatch`);
+    this.name = 'NotPinnable';
+  }
 }
 
 /**
@@ -194,6 +219,7 @@ export function gatewayDispatch(
     const provider = byId.get(route.provider);
     if (!provider) throw new Error(`${model.id} routes to ${route.provider}, which the gateway does not have`);
     if (provider.placement !== model.placement) throw new PlacementMismatch(model.id, model.placement, provider.placement, provider.id);
+    if (prompt.pinned && !provider.pins) throw new NotPinnable(model.id, provider.id);
     return client.chat({ provider: provider.id, model: route.model, ...prompt });
   };
 }

@@ -59,7 +59,12 @@ func (o OpenAICompatible) Chat(ctx context.Context, credential string, req Reque
 	if field == "" {
 		field = "max_tokens"
 	}
-	body, _ := json.Marshal(map[string]any{"model": req.Model, "messages": messages, field: req.MaxTokens})
+	payload := map[string]any{"model": req.Model, "messages": messages, field: req.MaxTokens}
+	if req.Pinned != nil {
+		payload["temperature"] = 0
+		payload["seed"] = req.Pinned.Seed
+	}
+	body, _ := json.Marshal(payload)
 	hreq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(o.BaseURL, "/")+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return Response{}, err

@@ -95,3 +95,48 @@ func TestNoTrailMeansNoDispatch(t *testing.T) {
 		t.Error("dispatched with no trail")
 	}
 }
+
+// A pinned dispatch: refused for Claude, which takes no temperature or seed,
+// before anything is written or sent; carried to a Chat Completions server,
+// and on the trail with its seed.
+func TestAPinnedDispatchIsPinnedOrRefused(t *testing.T) {
+	claude, local := newUpstream(t), newUpstream(t)
+	trail := &audit.Memory{}
+	_, srv := gateway(t, []Provider{
+		{ID: "anthropic", Name: "Anthropic", Kind: "anthropic", BaseURL: claude.srv.URL, Placement: Vendor, Auth: AuthAPIKey},
+		{ID: "vllm", Name: "vLLM", Kind: "openai", BaseURL: local.srv.URL + "/v1", Placement: SelfHosted, Auth: AuthNone},
+	}, func(s *Server) { s.trail = trail })
+	_, _ = call(t, srv, "PUT", "/v1/accounts/anthropic", "pm", map[string]string{"apiKey": "sk-ant-abcdefgh"})
+
+	body := chatBody("anthropic", "public")
+	body["pinned"] = map[string]any{"seed": 7}
+	if code, out := call(t, srv, "POST", "/v1/chat", "pm", body); code != http.StatusUnprocessableEntity || !strings.Contains(out["error"].(string), "cannot serve a pinned dispatch") {
+		t.Errorf("pinned to Claude: %d %v", code, out)
+	}
+	if len(claude.calls) != 0 || len(trail.Records()) != 0 {
+		t.Fatalf("a pinned dispatch Claude cannot serve reached it (%d) or the trail (%d)", len(claude.calls), len(trail.Records()))
+	}
+
+	body = chatBody("vllm", "positions")
+	body["pinned"] = map[string]any{"seed": 7}
+	if code, out := call(t, srv, "POST", "/v1/chat", "pm", body); code != 200 {
+		t.Fatalf("pinned to vLLM: %d %v", code, out)
+	}
+	var sent map[string]any
+	_ = json.Unmarshal([]byte(local.calls[0].body), &sent)
+	if sent["temperature"] != float64(0) || sent["seed"] != float64(7) {
+		t.Errorf("vLLM received %v", sent)
+	}
+	if recs := trail.Records(); len(recs) != 2 || recs[0].Outcome != "sent: positions, pinned at temperature 0, seed 7" {
+		t.Errorf("trail: %+v", recs)
+	}
+
+	_, listing := call(t, srv, "GET", "/v1/providers", "pm", nil)
+	pins := map[string]any{}
+	for _, p := range listing["providers"].([]any) {
+		pins[p.(map[string]any)["id"].(string)] = p.(map[string]any)["pins"]
+	}
+	if pins["anthropic"] != false || pins["vllm"] != true {
+		t.Errorf("the listing says %v", pins)
+	}
+}

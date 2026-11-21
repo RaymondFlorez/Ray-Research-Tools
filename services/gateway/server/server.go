@@ -306,12 +306,14 @@ func (s *Server) Handler() http.Handler {
 }
 
 type providerView struct {
-	ID        string               `json:"id"`
-	Name      string               `json:"name"`
-	Kind      string               `json:"kind"`
-	Placement Placement            `json:"placement"`
-	Auth      Auth                 `json:"auth"`
-	Accepts   []string             `json:"accepts"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Kind      string    `json:"kind"`
+	Placement Placement `json:"placement"`
+	Auth      Auth      `json:"auth"`
+	Accepts   []string  `json:"accepts"`
+	// Pins: whether a pinned dispatch (temperature 0 and a seed) can go here.
+	Pins      bool                 `json:"pins"`
 	Models    []string             `json:"models,omitempty"`
 	Suggested []string             `json:"suggested,omitempty"`
 	Connected bool                 `json:"connected"`
@@ -323,7 +325,7 @@ func (s *Server) listProviders(w http.ResponseWriter, _ *http.Request, user stri
 	out := []providerView{}
 	for _, id := range s.order {
 		p := s.providers[id]
-		v := providerView{ID: p.ID, Name: p.Name, Kind: p.Kind, Placement: p.Placement, Auth: p.Auth, Models: p.Models, Suggested: p.Suggested, Connected: p.Auth == AuthNone}
+		v := providerView{ID: p.ID, Name: p.Name, Kind: p.Kind, Placement: p.Placement, Auth: p.Auth, Pins: provider.CanPin(p.Kind), Models: p.Models, Suggested: p.Suggested, Connected: p.Auth == AuthNone}
 		for _, c := range []string{"public", "licensed", "positions", "mnpi_risk"} {
 			if allowed[p.Placement][c] {
 				v.Accepts = append(v.Accepts, c)
@@ -495,6 +497,9 @@ type chatRequest struct {
 	// Purpose is why the call is made, for the audit trail: a task name such
 	// as "sql.generate", not free text about the content.
 	Purpose string `json:"purpose"`
+	// Pinned: temperature 0 and this seed, or a refusal from a provider that
+	// cannot do both.
+	Pinned *provider.Pinned `json:"pinned,omitempty"`
 }
 
 func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
@@ -528,7 +533,11 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 		refuse(http.StatusForbidden, "%s is not among the models the operator allows on %s", req.Model, p.Name)
 		return
 	}
-	preq := provider.Request{Model: req.Model, System: req.System, Messages: req.Messages, MaxTokens: req.MaxTokens}
+	if req.Pinned != nil && !provider.CanPin(p.Kind) {
+		refuse(http.StatusUnprocessableEntity, "%s takes no temperature or seed, so it cannot serve a pinned dispatch", p.Name)
+		return
+	}
+	preq := provider.Request{Model: req.Model, System: req.System, Messages: req.Messages, MaxTokens: req.MaxTokens, Pinned: req.Pinned}
 	if err := preq.Validate(); err != nil {
 		refuse(http.StatusBadRequest, "%v", err)
 		return
@@ -562,6 +571,9 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request, user string) {
 		At: s.now().UTC(), Actor: user, Tenant: s.tenants[user], Action: "ai_dispatch",
 		Resource: p.ID + "/" + req.Model, Purpose: req.Purpose, TraceID: audit.TraceID(r),
 		Outcome: "sent: " + req.DataClass,
+	}
+	if req.Pinned != nil {
+		record.Outcome += fmt.Sprintf(", pinned at temperature 0, seed %d", req.Pinned.Seed)
 	}
 	if err := s.trail.Append(r.Context(), record); err != nil {
 		refuse(http.StatusServiceUnavailable, "the audit trail could not be written, so nothing was dispatched: %v", err)

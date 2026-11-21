@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 28 tests; two live and four on Postgres, skipped by default
+go test -race ./...                       # 30 tests; two live and four on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
   go test ./server/ -run LocalModel -v    # a real open-weight model, behind any Chat Completions server
@@ -121,7 +121,13 @@ Anthropic's API is the other provider host this environment reaches. Measured:
   downloads the 360M weights, checks them against the published hash, and serves them with
   llama.cpp on the runner's CPU.
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
-  No sampling parameters are sent, since current Claude models reject them.
+- **Pinned means temperature 0 and a seed, or a refusal.** A request with `pinned: {seed}`
+  sends `temperature: 0` and the seed to Chat Completions servers and to Gemini, and records
+  the seed on the trail. Claude takes neither (Opus 5.5 returns a 400 for any sampling
+  parameter, and there is no seed), so a pinned request to an Anthropic provider is refused
+  with a 422 before anything is written or sent, and the listing says `pins: false`. An
+  unpinned request sends no sampling parameters anywhere. Whether a server's temperature 0
+  is actually reproducible is the server's; see the router's README for what llama.cpp did.
 - **Identity is picasso-auth's session token**, as at the data plane, with the same
   `-dev-identity` escape for development, and the same revocation list: a logged-out session
   is refused within five seconds.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cascade, sqlVerifier } from '../src/cascade.js';
-import { GatewayClient, GatewayError, PlacementMismatch, gatewayDispatch, type GatewayProvider } from '../src/gateway.js';
+import { GatewayClient, GatewayError, NotPinnable, PlacementMismatch, gatewayDispatch, type GatewayProvider } from '../src/gateway.js';
 import { DEFAULT_POLICY } from '../src/policy.js';
 import type { RoutingFeatures } from '../src/router.js';
 
@@ -18,8 +18,8 @@ function gatewayStandIn(answer: (path: string, body: any) => { status?: number; 
 }
 
 const providers: GatewayProvider[] = [
-  { id: 'vllm', name: 'vLLM', kind: 'openai', placement: 'self_hosted', auth: 'none', accepts: ['public', 'licensed', 'positions', 'mnpi_risk'], connected: true },
-  { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', placement: 'vendor', auth: 'api_key', accepts: ['public', 'licensed'], connected: true },
+  { id: 'vllm', name: 'vLLM', kind: 'openai', placement: 'self_hosted', auth: 'none', accepts: ['public', 'licensed', 'positions', 'mnpi_risk'], pins: true, connected: true },
+  { id: 'anthropic', name: 'Anthropic', kind: 'anthropic', placement: 'vendor', auth: 'api_key', accepts: ['public', 'licensed'], pins: false, connected: true },
 ];
 
 const routes = {
@@ -78,5 +78,18 @@ describe('a cascade dispatched through the gateway', () => {
     await expect(cascade(DEFAULT_POLICY, features, gatewayDispatch(client, wrong, providers, prompt), (a, m) => verify(a.text, m)))
       .rejects.toThrow(PlacementMismatch);
     expect(calls).toHaveLength(0);
+  });
+
+  // The manifest calls frontier-a deterministic, so a compute path may route to it; the
+  // gateway reaches it through Claude, which takes no temperature or seed.
+  it('pins each call, and refuses to escalate a pinned request to a provider that cannot pin', async () => {
+    const { calls, fetcher } = gatewayStandIn(() => ({
+      body: { provider: 'vllm', response: { text: 'select * from nowhere', stop: 'end', model: 'q', inputTokens: 40, outputTokens: 5 } },
+    }));
+    const client = new GatewayClient({ baseUrl: 'http://gw', user: 'pm', fetch: fetcher });
+    const pinned = { ...prompt, pinned: { seed: 7 } };
+    await expect(cascade(DEFAULT_POLICY, { ...features, determinismRequired: true }, gatewayDispatch(client, routes, providers, pinned), (a, m) => verify(a.text, m)))
+      .rejects.toThrow(NotPinnable);
+    expect(calls.map((c) => [c.body.provider, c.body.pinned])).toEqual([['vllm', { seed: 7 }]]);
   });
 });

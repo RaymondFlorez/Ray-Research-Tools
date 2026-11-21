@@ -50,7 +50,12 @@ func (g Gemini) Chat(ctx context.Context, credential string, req Request) (Respo
 	if err := req.Validate(); err != nil {
 		return Response{}, err
 	}
-	body := map[string]any{"generationConfig": map[string]any{"maxOutputTokens": req.MaxTokens}}
+	config := map[string]any{"maxOutputTokens": req.MaxTokens}
+	if req.Pinned != nil {
+		config["temperature"] = 0
+		config["seed"] = req.Pinned.Seed
+	}
+	body := map[string]any{"generationConfig": config}
 	if req.System != "" {
 		body["systemInstruction"] = geminiContent{Parts: []geminiPart{{Text: req.System}}}
 	}

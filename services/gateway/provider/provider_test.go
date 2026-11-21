@@ -7,6 +7,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -196,4 +197,48 @@ func TestAnthropicLiveRejectsAnInvalidKey(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	t.Logf("live: %s", perr.Message)
+}
+
+// A pinned request (PRD 4.7: temperature 0 and a seed on any compute path)
+// carries both where the API takes them, sends neither when not pinned, and
+// is refused, unsent, where the API takes neither.
+func TestPinnedRequestsArePinnedOrRefused(t *testing.T) {
+	pinned := req
+	pinned.Pinned = &Pinned{Seed: 7}
+
+	oa, os := standIn(t, 200, `{"model":"m","choices":[{"message":{"content":"4"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	if _, err := (OpenAICompatible{BaseURL: oa.URL}).Chat(context.Background(), "", pinned); err != nil {
+		t.Fatal(err)
+	}
+	if os.body["temperature"] != float64(0) || os.body["seed"] != float64(7) {
+		t.Errorf("chat completions, pinned: %v", os.body)
+	}
+	plain, ps := standIn(t, 200, `{"model":"m","choices":[{"message":{"content":"4"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`)
+	if _, err := (OpenAICompatible{BaseURL: plain.URL}).Chat(context.Background(), "", req); err != nil {
+		t.Fatal(err)
+	}
+	_, temp := ps.body["temperature"]
+	_, seed := ps.body["seed"]
+	if temp || seed {
+		t.Errorf("chat completions, unpinned, sent sampling parameters: %v", ps.body)
+	}
+
+	gm, gs := standIn(t, 200, `{"candidates":[{"content":{"role":"model","parts":[{"text":"4"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":1}}`)
+	if _, err := (Gemini{BaseURL: gm.URL}).Chat(context.Background(), "k", pinned); err != nil {
+		t.Fatal(err)
+	}
+	if cfg := gs.body["generationConfig"].(map[string]any); cfg["temperature"] != float64(0) || cfg["seed"] != float64(7) {
+		t.Errorf("gemini, pinned: %v", cfg)
+	}
+
+	an, as := standIn(t, 200, `{}`)
+	if _, err := (Anthropic{BaseURL: an.URL}).Chat(context.Background(), "sk-test", pinned); !errors.Is(err, ErrCannotPin) {
+		t.Errorf("anthropic, pinned: %v", err)
+	}
+	if as.path != "" {
+		t.Errorf("a pinned request reached Claude at %s", as.path)
+	}
+	if !CanPin("openai") || !CanPin("gemini") || CanPin("anthropic") {
+		t.Error("CanPin")
+	}
 }

@@ -109,7 +109,10 @@ export async function cascade<T>(
     if (verdict.accepted && !belowConfidence) break;
 
     failures += 1;
-    const budget = entry?.escalateAfterFailures ?? 1;
+    // A retry on the same tier is a second sample. A request that must be
+    // reproducible is pinned (temperature 0, one seed), so its retry is the
+    // same request and comes back with the same answer: escalate instead.
+    const budget = features.determinismRequired ? 1 : (entry?.escalateAfterFailures ?? 1);
     if (failures < budget) {
       // The table allows another try at the same tier before spending more.
       attempt += 1;

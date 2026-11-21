@@ -33,6 +33,9 @@ func (a Anthropic) Chat(ctx context.Context, credential string, req Request) (Re
 	if err := req.Validate(); err != nil {
 		return Response{}, err
 	}
+	if req.Pinned != nil {
+		return Response{}, ErrCannotPin
+	}
 	if credential == "" {
 		return Response{}, fmt.Errorf("anthropic: no API key for this user")
 	}
