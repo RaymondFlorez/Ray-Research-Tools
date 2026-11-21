@@ -12,10 +12,16 @@
  * the process does. To rotate it, restart with the new key as `--key` and the
  * old one as `--retired-key`: tokens it signed keep verifying, and new ones
  * are signed with the new key. Drop `--retired-key` fifteen minutes later.
+ *
+ * `--audit-pg` puts sign-ins and logouts on PRD 7.2's trail in Postgres
+ * (`--audit-schema`, created with `--migrate`); without it the trail is in
+ * this process's memory, for development.
  */
 
 import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
+import pg from 'pg';
+import { MemoryAudit, migrateAudit, PostgresAudit, type AuditStore } from './audit.js';
 import { Oidc } from './oidc.js';
 import { startAuth } from './server.js';
 import { SessionIssuer } from './sessions.js';
@@ -31,6 +37,9 @@ const { values } = parseArgs({
     'retired-key': { type: 'string', multiple: true },
     port: { type: 'string', default: '8770' },
     address: { type: 'string', default: '127.0.0.1' },
+    'audit-pg': { type: 'string' },
+    'audit-schema': { type: 'string', default: 'audit' },
+    migrate: { type: 'boolean', default: false },
   },
 });
 for (const required of ['public-url', 'oidc-issuer', 'client-id', 'users', 'tenants'] as const) {
@@ -53,5 +62,14 @@ const oidc = new Oidc({
   ...(process.env.OIDC_CLIENT_SECRET ? { clientSecret: process.env.OIDC_CLIENT_SECRET } : {}),
   redirectUri: `${publicUrl}/auth/callback`,
 });
-const { url } = await startAuth({ oidc, issuer, users: read(values.users!), secure: publicUrl.startsWith('https:') }, Number(values.port), values.address);
+let audit: AuditStore;
+if (values['audit-pg']) {
+  const pool = new pg.Pool({ connectionString: values['audit-pg'] });
+  if (values.migrate) await migrateAudit(pool, values['audit-schema']!);
+  audit = new PostgresAudit(pool, values['audit-schema']!);
+} else {
+  console.error('no --audit-pg: sign-ins are recorded in memory only');
+  audit = new MemoryAudit();
+}
+const { url } = await startAuth({ oidc, issuer, users: read(values.users!), secure: publicUrl.startsWith('https:'), audit }, Number(values.port), values.address);
 console.error(`picasso-auth listening on ${url}, issuing for ${publicUrl}`);

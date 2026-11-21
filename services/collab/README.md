@@ -16,7 +16,7 @@ node services/collab/dist/main.js --auth-url https://picasso.example.com --pg po
 |---|---|
 | `store.ts` | The update log, snapshots and named versions in Postgres, each rule held by the database |
 | `server.ts` | Hocuspocus with tenant-scoped sign-in, logging every update, snapshotting, and the versions API |
-| `audit.ts` | PRD 7.2's audit trail, written from TypeScript, held to the Go package's schema by `services/audit-contract.json` |
+| `audit.ts` | PRD 7.2's audit trail, written from TypeScript: re-exported from `services/auth/src/audit.ts`, where sign-ins are recorded, and held to the Go package's schema by `services/audit-contract.json` |
 | `main.ts` | The binary |
 
 Clients are canvas-sync's `SyncedCanvas` over `@hocuspocus/provider`: the document schema,

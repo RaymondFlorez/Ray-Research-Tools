@@ -23,9 +23,18 @@
  *     SameSite=Lax, which keeps it off other sites' POSTs and subrequests
  *     while letting it arrive with the browser's navigation back from the
  *     provider. Strict would drop it on that navigation.
+ *
+ * Every sign-in that reaches the callback, admitted or refused, and every
+ * logout of a live session, goes on PRD 7.2's audit trail, under the session
+ * id each service's records can be joined to. A sign-in whose record cannot
+ * be written is refused, as a read or a dispatch is. A logout ends the
+ * session whether or not its record is written: keeping a session alive
+ * because the trail is down would be the wrong way to fail. A refresh is not
+ * recorded; it carries the session id the sign-in record already names.
  */
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { traceId, type AuditStore } from './audit.js';
 import type { Oidc } from './oidc.js';
 import { SessionRefused, type SessionIssuer } from './sessions.js';
 
@@ -40,6 +49,8 @@ export interface AuthOptions {
   users: Readonly<Record<string, { tenant: string }>>;
   /** Whether cookies need `Secure`: true whenever the site is served over https. */
   secure: boolean;
+  /** PRD 7.2's trail. Required: a service that signs people in records it. */
+  audit: AuditStore;
   now?: () => number;
 }
 
@@ -104,38 +115,63 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
       return;
     }
     if (req.method === 'GET' && url.pathname === '/auth/callback') {
+      const trace = traceId(req.headers.traceparent as string | undefined);
+      const record = (actor: string, tenant: string, resource: string, outcome: string) =>
+        options.audit.append({ actor, tenant, action: 'sign_in', resource, purpose: 'auth.sign_in', traceId: trace, outcome });
+      // A refusal is recorded and then shown; if the record cannot be
+      // written the person is still refused, with the reason they would see.
+      const refuse = async (returnTo: string, reason: string, actor = 'unknown', tenant = '') => {
+        await record(actor, tenant, 'session/none', `refused: ${reason}`).catch(() => {});
+        back(res, returnTo, reason);
+      };
       const state = url.searchParams.get('state') ?? '';
       const p = pending.get(state);
       pending.delete(state);
       if (!p) {
-        back(res, '/', 'this sign-in link has already been used or was never issued');
+        await refuse('/', 'this sign-in link has already been used or was never issued');
         return;
       }
       if (cookies(req)[SIGNIN_COOKIE] !== state) {
-        back(res, p.returnTo, 'this sign-in was started in another browser');
+        await refuse(p.returnTo, 'this sign-in was started in another browser');
         return;
       }
       if (p.expires < now()) {
-        back(res, p.returnTo, 'the sign-in took longer than ten minutes; start it again');
+        await refuse(p.returnTo, 'the sign-in took longer than ten minutes; start it again');
         return;
       }
       const providerError = url.searchParams.get('error');
       const code = url.searchParams.get('code');
       if (providerError || !code) {
-        back(res, p.returnTo, `the provider did not sign you in: ${providerError ?? 'no code'}`);
+        await refuse(p.returnTo, `the provider did not sign you in: ${providerError ?? 'no code'}`);
         return;
       }
+      let identity: Awaited<ReturnType<Oidc['finish']>> | undefined;
       try {
-        const identity = await options.oidc.finish(code, p.verifier, p.nonce);
+        identity = await options.oidc.finish(code, p.verifier, p.nonce);
         const user = options.users[identity.username];
         if (!user) {
-          back(res, p.returnTo, `${identity.username} has no Picasso account`);
+          await refuse(p.returnTo, `${identity.username} has no Picasso account`, identity.username);
           return;
         }
-        const minted = await options.issuer.mint(identity.username, user.tenant, identity);
+        let minted;
+        try {
+          minted = await options.issuer.mint(identity.username, user.tenant, identity);
+        } catch (err) {
+          if (err instanceof SessionRefused) await refuse(p.returnTo, err.message, identity.username, user.tenant);
+          else throw err;
+          return;
+        }
+        try {
+          await record(identity.username, user.tenant, `session/${minted.session.sid}`, `signed in with ${identity.amr.join('+') || 'no reported method'}`);
+        } catch {
+          // The session was minted and is never handed out; end it so it cannot be used.
+          options.issuer.end(minted.session.sid);
+          back(res, p.returnTo, 'the sign-in could not be recorded on the audit trail, so it was refused');
+          return;
+        }
         redirect(res, p.returnTo, [cookie(SIGNIN_COOKIE, '', 0), cookie(SESSION_COOKIE, minted.token, 15 * 60)]);
       } catch (err) {
-        back(res, p.returnTo, err instanceof SessionRefused ? err.message : `sign-in failed: ${(err as Error).message}`);
+        await refuse(p.returnTo, `sign-in failed: ${(err as Error).message}`, identity?.username);
       }
       return;
     }
@@ -150,12 +186,20 @@ export function startAuth(options: AuthOptions, port = 0, address = '127.0.0.1')
       return;
     }
     if (req.method === 'POST' && url.pathname === '/auth/logout') {
+      let ended: { sub: string; tenant: string; sid: string } | undefined;
       try {
-        options.issuer.end((await options.issuer.verify(token ?? '')).sid);
+        ended = await options.issuer.verify(token ?? '');
+        options.issuer.end(ended.sid);
       } catch {
         // Logging out of a session that is already over is not an error.
       }
-      json(res, 200, { signedOut: true }, [cookie(SESSION_COOKIE, '', 0)]);
+      let recorded = true;
+      if (ended) {
+        recorded = await options.audit
+          .append({ actor: ended.sub, tenant: ended.tenant, action: 'sign_out', resource: `session/${ended.sid}`, purpose: 'auth.sign_out', traceId: traceId(req.headers.traceparent as string | undefined), outcome: 'signed out' })
+          .then(() => true, () => false);
+      }
+      json(res, 200, { signedOut: true, ...(recorded ? {} : { recorded: false }) }, [cookie(SESSION_COOKIE, '', 0)]);
       return;
     }
     if (req.method === 'GET' && url.pathname === '/auth/me') {

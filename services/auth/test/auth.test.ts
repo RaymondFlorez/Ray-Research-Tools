@@ -1,5 +1,6 @@
 import { createLocalJWKSet, createRemoteJWKSet, exportJWK, generateKeyPair, jwtVerify } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MemoryAudit } from '../src/audit.js';
 import { Oidc } from '../src/oidc.js';
 import { SESSION_COOKIE, startAuth } from '../src/server.js';
 import { AUDIENCE, REVOKED_FOR_MS, SessionIssuer } from '../src/sessions.js';
@@ -24,8 +25,9 @@ async function setup(misbehave?: StandInOptions['misbehave'], now?: () => number
   const idp = await startStandIn({ clientId: CLIENT, redirectUris: [redirectUri], users: standInUsers, ...(misbehave ? { misbehave } : {}) });
   const issuer = await SessionIssuer.create({ issuer: `http://127.0.0.1:${port}`, tenants, ...(now ? { now } : {}) });
   const oidc = new Oidc({ issuer: idp.issuer, clientId: CLIENT, redirectUri });
-  const auth = await startAuth({ oidc, issuer, users, secure: false, ...(now ? { now } : {}) }, port);
-  return { idp, issuer, auth, url: auth.url };
+  const trail = new MemoryAudit();
+  const auth = await startAuth({ oidc, issuer, users, secure: false, audit: trail, ...(now ? { now } : {}) }, port);
+  return { idp, issuer, auth, url: auth.url, trail };
 }
 
 describe('signing in', () => {
@@ -250,5 +252,75 @@ describe('silent refresh', () => {
     expect(refreshes).toBe(51);
     s.auth.server.close();
     await s.idp.close();
+  });
+});
+
+describe('sign-ins on the audit trail', () => {
+  let s: Awaited<ReturnType<typeof setup>>;
+  beforeAll(async () => {
+    s = await setup();
+  });
+  afterAll(async () => {
+    s.auth.server.close();
+    await s.idp.close();
+  });
+  const sidOf = (b: Browser) => JSON.parse(Buffer.from(b.jar.get(SESSION_COOKIE)!.split('.')[1]!, 'base64url').toString()).sid as string;
+  const last = () => s.trail.records().at(-1)!;
+
+  it('records a sign-in under the session id every service sees, and the logout under the same', async () => {
+    const b = new Browser();
+    await b.signIn(s.url, 'pm');
+    const sid = sidOf(b);
+    expect(last()).toMatchObject({ actor: 'pm', tenant: 'desk', action: 'sign_in', resource: `session/${sid}`, purpose: 'auth.sign_in', outcome: 'signed in with pwd+otp' });
+    expect(last().traceId).toMatch(/^[0-9a-f]{32}$/);
+    await b.go(`${s.url}/auth/logout`, { method: 'POST' });
+    expect(last()).toMatchObject({ actor: 'pm', tenant: 'desk', action: 'sign_out', resource: `session/${sid}`, purpose: 'auth.sign_out', outcome: 'signed out' });
+  });
+
+  it('records each refusal with its reason: no second factor, no account, another browser', async () => {
+    await new Browser().signIn(s.url, 'analyst');
+    expect(last()).toMatchObject({ actor: 'analyst', tenant: 'desk', action: 'sign_in', resource: 'session/none' });
+    expect(last().outcome).toMatch(/^refused: .*second factor/);
+    await new Browser().signIn(s.url, 'intern');
+    expect(last()).toMatchObject({ actor: 'intern', outcome: 'refused: intern has no Picasso account' });
+    const attacker = new Browser();
+    const toIdp = await attacker.go(`${s.url}/auth/login?login_hint=pm`);
+    const callback = (await attacker.go(toIdp.headers.get('location')!)).headers.get('location')!;
+    await new Browser().go(callback);
+    expect(last()).toMatchObject({ actor: 'unknown', outcome: 'refused: this sign-in was started in another browser' });
+  });
+
+  it('refuses a sign-in whose record cannot be written, and the session it minted is dead', async () => {
+    const revoked = async () => ((await (await fetch(`${s.url}/auth/revoked`)).json()) as { sids: string[] }).sids.length;
+    const before = await revoked();
+    s.trail.fail = true;
+    try {
+      const b = new Browser();
+      const landed = await b.signIn(s.url, 'pm');
+      expect(landed.searchParams.get('auth_error')).toBe('the sign-in could not be recorded on the audit trail, so it was refused');
+      expect(b.jar.has(SESSION_COOKIE)).toBe(false);
+      expect(await revoked()).toBe(before + 1);
+    } finally {
+      s.trail.fail = false;
+    }
+  });
+
+  it('ends a session at logout even when the trail is down, and says the logout went unrecorded', async () => {
+    const b = new Browser();
+    await b.signIn(s.url, 'pm');
+    const token = b.jar.get(SESSION_COOKIE)!;
+    s.trail.fail = true;
+    try {
+      expect(await (await b.go(`${s.url}/auth/logout`, { method: 'POST' })).json()).toEqual({ signedOut: true, recorded: false });
+    } finally {
+      s.trail.fail = false;
+    }
+    b.jar.set(SESSION_COOKIE, token);
+    expect(await (await b.go(`${s.url}/auth/me`)).json()).toMatchObject({ signedIn: false });
+  });
+
+  it('keeps no token, code or cookie on the trail', async () => {
+    const raw = JSON.stringify(s.trail.records());
+    expect(raw).not.toMatch(/eyJ|code=|picasso_session/);
   });
 });

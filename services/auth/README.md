@@ -8,10 +8,11 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 23 tests
+npm test --workspace @picasso/auth          # 28 tests
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
-   --users users.json --tenants config/tenants.json --key session-key.jwk
+   --users users.json --tenants config/tenants.json --key session-key.jwk \
+   --audit-pg postgres://... --migrate     # without --audit-pg, sign-ins are recorded in memory only
 ```
 
 | Module | What it does |
@@ -20,6 +21,7 @@ OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://pica
 | `sessions.ts` | Picasso's session tokens: minted, verified and refreshed under canvas-guard's rules |
 | `verify.ts` | What a service does with a token, held to the Go services' verdicts |
 | `server.ts` | `/auth/login`, `/auth/callback`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/revoked`, `/.well-known/jwks.json` |
+| `audit.ts` | PRD 7.2's trail from TypeScript: the schema, the purpose rule and the Postgres writer, held to `services/audit-contract.json`; the collaboration server's exports use it too |
 | `standin.ts` | A **stand-in** OpenID provider for tests and the browser check; `main.ts` never loads it |
 
 `test/certified-provider.test.ts` signs in against `oidc-provider` 9.13.3 instead, an OpenID
@@ -167,10 +169,13 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   unusable, but it does show how many people logged out in the last quarter-hour.
 - **Sessions are in memory.** A restart ends every session's revocation record, and, without
   `--key`, every session.
-- **Sign-ins are not audited.** The data plane and the gateway write PRD 7.2's records for
-  position reads and AI dispatches. Each record names the user, the tenant and a trace id, but
-  not the session id. Sign-in, refresh and logout are not recorded anywhere but this
-  process's memory.
+- **Sign-ins are on the trail; refreshes are not.** Every callback, admitted or refused, writes
+  a `sign_in` record (a refusal before the person is known has actor `unknown`), and every
+  logout of a live session a `sign_out`, under `session/<sid>`. A sign-in whose record cannot
+  be written is refused and its session ended; a logout ends the session either way and says
+  `recorded: false`. A refresh carries the sign-in's session id and is not recorded. The data
+  plane's and the gateway's records name the user and tenant but not the session id, so
+  joining a read to its sign-in goes through the user and the time.
 - **Rotation is a restart.** The new key goes in `--key` and the old one in `--retired-key`.
   Tokens the old key signed keep verifying, and new ones are signed with the new key. Drop
   `--retired-key` fifteen minutes later. Nothing automates the schedule.

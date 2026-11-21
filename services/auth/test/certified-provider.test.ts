@@ -22,6 +22,7 @@ import type { AddressInfo } from 'node:net';
 import { exportJWK, generateKeyPair } from 'jose';
 import Provider from 'oidc-provider';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { MemoryAudit } from '../src/audit.js';
 import { Oidc } from '../src/oidc.js';
 import { SESSION_COOKIE, startAuth } from '../src/server.js';
 import { SessionIssuer } from '../src/sessions.js';
@@ -79,8 +80,9 @@ async function start({ releaseAmr, fetcher }: { releaseAmr: boolean; fetcher?: t
   });
   const issuer = await SessionIssuer.create({ issuer: `http://127.0.0.1:${port}`, tenants });
   const oidc = new Oidc({ issuer: issuerUrl, clientId: CLIENT, clientSecret: SECRET, redirectUri, ...(fetcher ? { fetch: fetcher } : {}) });
-  const auth = await startAuth({ oidc, issuer, users, secure: false }, port);
-  return { auth, url: auth.url, close: () => new Promise<void>((r) => http.close(() => r())) };
+  const trail = new MemoryAudit();
+  const auth = await startAuth({ oidc, issuer, users, secure: false, audit: trail }, port);
+  return { auth, url: auth.url, trail, close: () => new Promise<void>((r) => http.close(() => r())) };
 }
 
 describe('signing in against a certified OpenID provider', () => {

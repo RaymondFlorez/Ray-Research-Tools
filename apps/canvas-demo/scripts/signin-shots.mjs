@@ -74,7 +74,8 @@ const idp = await startStandIn({
 const users = join(ROOT, 'services/dataplane/config/users.json');
 const children = [
   spawn(process.execPath, [join(ROOT, 'services/auth/dist/main.js'), '--public-url', SITE, '--oidc-issuer', idp.issuer, '--client-id', 'picasso-web',
-    '--users', users, '--tenants', join(ROOT, 'services/auth/config/tenants.json'), '--port', String(AUTH_PORT)], { stdio: ['ignore', 'ignore', 'inherit'] }),
+    '--users', users, '--tenants', join(ROOT, 'services/auth/config/tenants.json'), '--port', String(AUTH_PORT),
+    '--audit-pg', PG, '--audit-schema', `${SCHEMA}_signin`, '--migrate'], { stdio: ['ignore', 'ignore', 'inherit'] }),
   spawn(process.execPath, [join(ROOT, 'services/collab/dist/main.js'), '--auth-url', SITE, '--pg', PG, '--users', users, '--schema', SCHEMA, '--audit-schema', `${SCHEMA}_audit`, '--vendor-policies', join(ROOT, 'services/collab/config/vendor-policies.json'), '--migrate',
     '--port', String(COLLAB_PORT)], { stdio: ['ignore', 'ignore', 'inherit'] }),
   spawn(process.execPath, ['scripts/serve.mjs'], { cwd: ROOT, env: { ...process.env, PORT: String(PORT), AUTH_URL: `http://127.0.0.1:${AUTH_PORT}`, COLLAB_URL: `http://127.0.0.1:${COLLAB_PORT}` }, stdio: 'ignore' }),
@@ -170,6 +171,12 @@ try {
   await pm.reload();
   await pm.waitForFunction(() => window.__shared?.state() === 'signed-out');
   check('logout ends the session: a reload is signed out', (await pm.isVisible('#signin')));
+  const signins = execFileSync('psql', [PG, '-tAc', `SELECT actor || '|' || action || '|' || resource || '|' || outcome FROM ${SCHEMA}_signin.records ORDER BY seq`], { encoding: 'utf8' }).trim().split('\n');
+  const pmIn = signins.find((r) => r.startsWith('pm|sign_in|session/') && r.includes('|signed in with '));
+  const pmSession = pmIn?.split('|')[2];
+  check('and picasso-auth recorded the sign-ins, the refusal and the logout on its Postgres trail, under the session id',
+    pmIn !== undefined && signins.includes(`pm|sign_out|${pmSession}|signed out`) && signins.some((r) => r.includes('|sign_in|session/none|refused: ') && r.includes('second factor')),
+    signins.map((r) => r.replace(/session\/[A-Za-z0-9_-]{22}/, 'session/<sid>')).join('; '));
   // The collaboration server re-reads picasso-auth's revocation list every 5 seconds.
   await new Promise((r) => setTimeout(r, 5_500));
   const after = stolen ? await atCollab(stolen) : 0;
@@ -189,7 +196,7 @@ try {
   for (const c of children) c.kill();
   await idp.close();
   try {
-    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SCHEMA}_audit CASCADE`], { stdio: 'ignore' });
+    execFileSync('psql', [PG, '-qc', `DROP SCHEMA ${SCHEMA} CASCADE; DROP SCHEMA IF EXISTS ${SCHEMA}_audit CASCADE; DROP SCHEMA IF EXISTS ${SCHEMA}_signin CASCADE`], { stdio: 'ignore' });
   } catch {
     // left to its owner; the schema is unique to this run
   }

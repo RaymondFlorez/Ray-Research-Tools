@@ -16,13 +16,15 @@
   },
   "dependencies": {
     "@picasso/canvas-guard": "*",
-    "jose": "6.2.12"
+    "jose": "6.2.12",
+    "pg": "8.23.1"
   },
   "devDependencies": {
     "@types/node": "^22.20.2",
     "@types/oidc-provider": "9.13.1",
     "oidc-provider": "9.13.3",
     "typescript": "^5.6.3",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "@types/pg": "8.23.1"
   }
 }
