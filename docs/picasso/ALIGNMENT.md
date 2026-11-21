@@ -95,7 +95,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | 4.4 fleet as manifests | Built | `canvas-router` manifest; `services/gateway` reaches any provider (Anthropic SDK, Chat Completions, Gemini) on each user's own account; a real open-weight model (SmolLM2-360M on llama.cpp, self-hosted, no key) answered positions-class calls through it on 20 Nov 2026, 0.88s p50, and got the arithmetic wrong 20 times in 20; no vendor model yet, for want of a key |
 | 4.5 blackboard, Coordinator, Critic, Reconciler | Built | `canvas-agents` |
 | 4.6 context assembly with priorities and floors | Built | `canvas-agents` context |
-| 4.7 trace store, eval harness, canary, determinism | Built | `canvas-router` trace/evals/canary; `fingerprintOf` → `canvas-core` `explainKeyChange` |
+| 4.7 trace store, eval harness, canary, determinism | Built | `canvas-router` trace/evals/canary; `fingerprintOf` → `canvas-core` `explainKeyChange`; the harness run over three real open-weight models (`scripts/eval-live.mjs`, 40 synthetic items) measured two at 0, and the rewritten policy still routed to them until the router excluded a measured zero: one call per request instead of 2.5, p50 13.3s → 6.5s |
 | 4.7 traces in ClickHouse | Infra | `TraceStore` is in-process |
 
 ### 5 · Analytics and simulation

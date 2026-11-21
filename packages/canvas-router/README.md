@@ -276,6 +276,31 @@ What this says about the table: the primary tier accepted nothing in 20, so on t
 only adds latency. On the simulated fleet the cheap tier ended 86.8% of requests; on these
 models, 0%. Those are the numbers the eval harness exists to replace.
 
+### The harness, on the same models
+
+`scripts/eval-live.mjs` runs `runEval` through the gateway on 40 SYNTHETIC statements from
+another seed (an item scores 1 only when the extraction is exactly right) and writes
+`rewrite()`'s policy for `cascade-live.mjs` to use (`POLICY_FILE`). Measured 21 November 2026:
+
+| Model | Shipped quality (an ordering by size) | Measured, 40 items |
+|---|---|---|
+| SmolLM2-360M | 0.5 | 0.000 |
+| SmolLM2-1.7B | 0.6 | 0.000 |
+| Qwen2.5-1.5B | 0.7 | 0.450 ± 0.080 |
+
+Rewritten, the policy routed exactly as before: 20 requests made 49 calls, 13.3s at p50 and
+22.0s at most, the 360M tried first every time and the 1.7B after Qwen failed. A score is
+something the router weighs, and zero still left both eligible. `route` now excludes a model
+measured at 0 for the class, as it excludes an untested one; `rewrite` writes nothing from fewer
+than 30 items, so such a zero means none of at least 30 succeeded. On the same 20 requests:
+20 calls, one each, 6.5s at p50 and 8.8s at most, 15 accepted and all 15 right, none sent to
+the vendor tier.
+
+The 15 is not the rule's doing. Qwen answers every request in both runs, and its acceptance on
+these 20 has been 10, 11 and 15 across runs, since the gateway sends no temperature and each
+answer is a fresh sample. What the rule changed is the calls and the time. 0 of 40 also does
+not mean the model can never succeed: the 95% upper bound on its rate is about 7%.
+
 ## What is not here
 
 - **No preemption of running work.** 7.3 says batch work "is preempted". The queue orders
