@@ -8,7 +8,7 @@ collaboration server verify.
 > session tokens with silent refresh.
 
 ```bash
-npm test --workspace @picasso/auth          # 32 tests; one needs Postgres (AUTH_PG_URL)
+npm test --workspace @picasso/auth          # 35 tests; two need Postgres (AUTH_PG_URL)
 OIDC_CLIENT_SECRET=... node services/auth/dist/main.js --public-url https://picasso.example.com \
    --oidc-issuer https://login.example.com --client-id picasso-web \
    --users users.json --tenants config/tenants.json --key session-key.jwk --pg postgres://... \
@@ -184,10 +184,12 @@ anywhere: the stand-in provider, this service, and the collaboration server with
   session sees a reconnect, and one that can no longer refresh, past its twelve hours, stays
   out. The revocation list is public, like the key set. Its session ids are random and already
   unusable, but it does show how many people logged out in the last quarter-hour.
-- **One issuer process.** Logged-out sessions survive a restart, but each process reads the
-  store only when it starts: two picasso-auth processes behind one name would each know only
-  their own logouts until restarted. The services read the published list from whichever
-  answers.
+- **Several issuer processes share logouts within one refresh.** Each re-reads the store
+  every five seconds (the services' own cadence for the published list), so a logout on one
+  is refused by the others within five seconds, and by a service within ten. Two binaries on
+  one Postgres schema: logged out on one, refused by the other 5.0s later, refresh included.
+  A failed read is logged and the next one tried. Before this, each process read the store
+  only at start, and a session logged out on one stayed live, and refreshable, on the other.
 - **Sign-ins are on the trail; refreshes are not.** Every callback, admitted or refused, writes
   a `sign_in` record (a refusal before the person is known has actor `unknown`), and every
   logout of a live session a `sign_out`, under `session/<sid>`. A sign-in whose record cannot

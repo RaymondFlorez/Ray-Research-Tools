@@ -27,6 +27,7 @@ import { MemoryAudit, migrateAudit, PostgresAudit, type AuditStore } from './aud
 import { PostgresRevocations } from './revocations.js';
 import { Oidc } from './oidc.js';
 import { startAuth } from './server.js';
+import { REVOCATION_REFRESH_MS } from './verify.js';
 import { SessionIssuer } from './sessions.js';
 
 const { values } = parseArgs({
@@ -89,5 +90,7 @@ if (values['audit-pg']) {
   console.error('no --audit-pg: sign-ins are recorded in memory only');
   audit = new MemoryAudit();
 }
+// Logouts written by other picasso-auth processes on the same store, on the services' own cadence.
+if (revocations) issuer.syncEvery(REVOCATION_REFRESH_MS, (err) => console.error(`revocation store: ${(err as Error).message}`));
 const { url } = await startAuth({ oidc, issuer, users: read(values.users!), secure: publicUrl.startsWith('https:'), audit }, Number(values.port), values.address);
 console.error(`picasso-auth listening on ${url}, issuing for ${publicUrl}`);

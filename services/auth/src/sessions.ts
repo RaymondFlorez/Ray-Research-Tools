@@ -189,6 +189,30 @@ export class SessionIssuer {
   }
 
   /**
+   * Takes in the logouts other issuers wrote to the shared store since this
+   * one started or last looked. Each picasso-auth process reads the store at
+   * start; behind one name, two processes otherwise knew only their own
+   * logouts until restarted, so a session logged out on one was still live,
+   * and refreshable, on the other.
+   */
+  async syncRevocations(): Promise<void> {
+    if (!this.options.revocations) return;
+    for (const [sid, until] of await this.options.revocations.live(this.now())) {
+      if ((this.ended.get(sid) ?? 0) < until) this.ended.set(sid, until);
+    }
+  }
+
+  /**
+   * Re-reads the shared store every `everyMs` until the returned function is
+   * called. A failed read is handed to `onError` and the next is still tried.
+   */
+  syncEvery(everyMs: number, onError: (err: unknown) => void = () => {}): () => void {
+    const timer = setInterval(() => void this.syncRevocations().catch(onError), everyMs);
+    timer.unref?.();
+    return () => clearInterval(timer);
+  }
+
+  /**
    * The sessions every service must refuse, published at /auth/revoked. A
    * session leaves the list once no token of its own can verify anywhere:
    * after that, refusing it is the expiry check's job, here as everywhere.
