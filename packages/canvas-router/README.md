@@ -297,9 +297,27 @@ than 30 items, so such a zero means none of at least 30 succeeded. On the same 2
 the vendor tier.
 
 The 15 is not the rule's doing. Qwen answers every request in both runs, and its acceptance on
-these 20 has been 10, 11 and 15 across runs, since the gateway sends no temperature and each
-answer is a fresh sample. What the rule changed is the calls and the time. 0 of 40 also does
+these 20 has been 10, 11 and 15 across runs, since the gateway sent no temperature and each
+answer was a fresh sample. What the rule changed is the calls and the time. 0 of 40 also does
 not mean the model can never succeed: the 95% upper bound on its rate is about 7%.
+
+### Pinned
+
+`PINNED=<seed> cascade-live.mjs` marks the request as one that must reproduce and sends every
+call at temperature 0 with that seed (`GatewayPrompt.pinned`; the gateway passes both to
+llama.cpp and records the seed on the trail). Two pinned runs on the shipped ladder, 21
+November 2026: identical, line for line, in every tier tried, every verdict, and the
+fingerprint of every answer, on all 20 statements; 13 accepted in each, all right, 47 calls
+each, and all 94 on the trail as "pinned at temperature 0, seed 1". The unpinned runs of the
+same 20 had accepted 10, 11 and 15, so the drift was sampling, and pinning removes it on this
+server and these CPUs. A different build or hardware may change the arithmetic and with it the
+answers; that is not measured here.
+
+A pinned retry is the same request at the same seed, so with `determinismRequired` the cascade
+escalates at the first failure instead of retrying on the tier. Claude takes no temperature and
+no seed, so a pinned call to a provider the gateway lists as `pins: false` is refused before it
+is sent (`NotPinnable`); the shipped manifest calls both frontier models deterministic, and the
+test routes put them on Claude.
 
 ## What is not here
 
