@@ -52,7 +52,10 @@ export interface ReadPlanOptions {
   estimate: (step: { kind: StepKind; taskClass?: TaskClass }) => { cents: number; ms: number };
 }
 
-const ID = /^[a-z][a-z0-9_-]{0,39}$/;
+// An id is a label other steps point at; it has to be there, short, printable and unique.
+// The first version also required lower case and a leading letter, and refused Qwen's
+// "1" and "2", which are perfectly good labels: 22 of the first run's faults were that rule.
+const ID = /^(?=.*\S)[^\u0000-\u001f\u007f]{1,64}$/;
 
 const firstJson = (text: string): unknown => {
   const start = text.search(/[[{]/);
@@ -87,8 +90,8 @@ export function readPlan(text: string, options: ReadPlanOptions): PlanReading {
     }
     const s = value as Record<string, unknown>;
     const id = typeof s.id === 'string' ? s.id : '';
-    const name = id ? `${at} (${id})` : at;
-    if (!ID.test(id)) problems.push(`${name}: id must be lower case letters, digits, - or _`);
+    const name = ID.test(id) ? `${at} (${id})` : at;
+    if (!ID.test(id)) problems.push(`${name}: id must be a printable label of 1 to 64 characters`);
     else if (ids.has(id)) problems.push(`${name}: the id is used twice`);
     ids.add(id);
     const kind = s.kind as StepKind;

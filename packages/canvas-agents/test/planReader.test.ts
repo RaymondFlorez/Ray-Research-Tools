@@ -54,6 +54,16 @@ describe('reading a model\'s plan', () => {
     expect(readPlan(JSON.stringify(circle), { estimate }).problems).toEqual(['the steps x -> z -> y -> x depend on each other in a circle, so none of them can start']);
   });
 
+  it('takes any short printable label as an id, as models write them, and still refuses a missing or duplicate one', () => {
+    const numbered = proposed.map((s, i) => ({ ...s, id: String(i + 1), dependsOn: s.dependsOn.map((d) => String(proposed.findIndex((p) => p.id === d) + 1)) }));
+    expect(readPlan(JSON.stringify(numbered), { estimate }).problems).toEqual([]);
+    const blank = [{ ...proposed[0], id: '  ' }, { ...proposed[2], id: 'Step 1' }, { ...proposed[2], id: 'Step 1' }];
+    expect(readPlan(JSON.stringify(blank), { estimate }).problems).toEqual([
+      'step 1: id must be a printable label of 1 to 64 characters',
+      'step 3 (Step 1): the id is used twice',
+    ]);
+  });
+
   it('says so when there is no plan at all', () => {
     expect(readPlan('I would first look at the transcript.', { estimate }).problems).toEqual(['no plan: the answer has no JSON list of steps']);
     expect(readPlan('{"steps": []}', { estimate }).problems).toEqual(['the plan has no steps']);
