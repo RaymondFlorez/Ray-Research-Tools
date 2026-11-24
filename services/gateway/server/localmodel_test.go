@@ -69,3 +69,43 @@ func TestARealLocalModelAnswersPositionsAndAVendorNeverSeesThem(t *testing.T) {
 		t.Errorf("the vendor received %d requests", len(vendor.calls))
 	}
 }
+
+// Pinned, the same request comes back the same: temperature 0 and one seed,
+// sent twice to the real model, give one answer. This is what a compute path
+// relies on, checked against the server rather than against the request.
+func TestAPinnedRequestToARealModelAnswersTheSameTwice(t *testing.T) {
+	base, model := os.Getenv("GATEWAY_LOCAL_MODEL_URL"), os.Getenv("GATEWAY_LOCAL_MODEL")
+	if base == "" || model == "" {
+		t.Skip("GATEWAY_LOCAL_MODEL_URL and GATEWAY_LOCAL_MODEL name a running open-weight model")
+	}
+	trail := &audit.Memory{}
+	_, srv := gateway(t, []Provider{{ID: "local", Name: "a local open-weight model", Kind: "openai", BaseURL: base, Placement: SelfHosted, Auth: AuthNone}},
+		func(s *Server) { s.trail = trail })
+	body := map[string]any{
+		"provider": "local", "model": model, "dataClass": "positions", "purpose": "position.summarize", "maxTokens": 48,
+		"system":   "Answer in one short sentence.",
+		"messages": []map[string]string{{"role": "user", "text": "A portfolio holds 1,000 shares bought at $120 and now priced at $135. What is the unrealized profit?"}},
+		"pinned":   map[string]any{"seed": 11},
+	}
+	var answers []string
+	for i := 0; i < 3; i++ {
+		code, out := call(t, srv, "POST", "/v1/chat", "pm", body)
+		if code != http.StatusOK {
+			t.Fatalf("pinned call %d: %d %v", i, code, out)
+		}
+		answers = append(answers, out["response"].(map[string]any)["text"].(string))
+	}
+	if answers[0] != answers[1] || answers[1] != answers[2] {
+		t.Fatalf("pinned answers differ: %q", answers)
+	}
+	t.Logf("%s, pinned at seed 11, answered %q three times", model, answers[0])
+	pinned := 0
+	for _, r := range trail.Records() {
+		if r.Outcome == "sent: positions, pinned at temperature 0, seed 11" {
+			pinned++
+		}
+	}
+	if pinned != 3 {
+		t.Errorf("%d pinned dispatches on the trail, want 3: %+v", pinned, trail.Records())
+	}
+}

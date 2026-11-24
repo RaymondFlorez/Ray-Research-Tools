@@ -202,11 +202,12 @@ jobs:
           nohup python -m llama_cpp.server --model ~/models/$MODEL_FILE --host 127.0.0.1 --port 8081 --n_ctx 2048 --model_alias smollm2-360m > server.log 2>&1 &
           for i in $(seq 1 120); do curl -sf http://127.0.0.1:8081/v1/models >/dev/null && exit 0; sleep 1; done
           cat server.log; exit 1
-      - name: positions to a real model through the gateway, never to a vendor
+      - name: positions to a real model through the gateway, never to a vendor; pinned, the same answer every time
         working-directory: services/gateway
         env:
           GATEWAY_LOCAL_MODEL_URL: http://127.0.0.1:8081/v1
           GATEWAY_LOCAL_MODEL: smollm2-360m
         run: |
-          go test ./server/ -run LocalModel -count=1 -v | tee out.txt
+          go test ./server/ -run 'LocalModel|RealModel' -count=1 -v | tee out.txt
           grep -q -- '--- PASS: TestARealLocalModelAnswersPositionsAndAVendorNeverSeesThem' out.txt
+          grep -q -- '--- PASS: TestAPinnedRequestToARealModelAnswersTheSameTwice' out.txt

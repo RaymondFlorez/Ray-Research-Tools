@@ -6,10 +6,10 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 32 tests; two live and five on Postgres, skipped by default
+go test -race ./...                       # 33 tests; three live and five on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
-  go test ./server/ -run LocalModel -v    # a real open-weight model, behind any Chat Completions server
+  go test ./server/ -run "LocalModel|RealModel" -v    # a real open-weight model, behind any Chat Completions server
 
 GATEWAY_VAULT_KEY=$(openssl rand -base64 32) go run ./cmd/gateway \
    -auth-url https://picasso.example.com -providers config/providers.json -users ../dataplane/config/users.json -vault vault.json \
@@ -117,9 +117,11 @@ Anthropic's API is the other provider host this environment reaches. Measured:
   the gateway's own machine, through the Chat Completions adapter. There is no key for any
   vendor here: the Anthropic adapter has reached the real API only to be refused, and the
   Gemini and OpenRouter-exchange code is tested against stand-ins written to each one's
-  documented API. CI's `real-model` job runs the local-model test on every push: it
+  documented API. CI's `real-model` job runs both local-model tests on every push: it
   downloads the 360M weights, checks them against the published hash, and serves them with
-  llama.cpp on the runner's CPU.
+  llama.cpp on the runner's CPU. One sends positions to the model and none to a vendor; the
+  other sends one pinned request three times and requires one answer (unpinned, the same
+  question got $15, $0 and $35 on three calls).
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
 - **Pinned means temperature 0 and a seed, or a refusal.** A request with `pinned: {seed}`
   sends `temperature: 0` and the seed to Chat Completions servers and to Gemini, and records
