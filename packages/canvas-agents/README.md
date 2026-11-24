@@ -290,11 +290,42 @@ contradicting excerpt was found; that is not the same as none existing" —
 because an evidence card that reads as settled when nobody looked is what the
 Critic exists to catch.
 
+## A model's plan, read
+
+`readPlan` (`src/planReader.ts`) turns a model's decomposition of a question
+into steps for `plan()`, and refuses one that cannot run: each step's kind,
+agent and task class is checked against the real vocabularies, each dependency
+against the steps, the graph for a circle. Faults are named and nothing is
+repaired. Costs are never read from the model; the router prices each step.
+
+`scripts/plan-live.mjs` asks the three local models through the gateway to plan
+12 questions about a book, pinned, with `readPlan` deciding escalation. Measured
+24 November 2026: SmolLM2-360M 0 of 12, SmolLM2-1.7B 0 of 7, Qwen2.5-1.5B 5 of
+12, so 5 of 12 questions got a runnable plan. The faults the reader found: 18
+answers with no JSON list of steps, 6 step kinds outside the vocabulary (such as
+`retrieve` for `retrieval`), 2 circles, 2 task classes the router does not know,
+1 dependency on a step that was not there.
+
+The first run found 2 of 12, and 22 of its faults were the reader's own: it
+required ids in lower case starting with a letter, and Qwen numbers its steps
+`1`, `2`. An id now only has to be a short printable label, unique.
+
+**Runnable is not good.** The plans that passed are the shape of a plan, and
+read as poor ones: "read the last AAPL call" is a single retrieval step tagged
+`intent.classify`; "which positions lost the most since Friday" is six chained
+compute steps dispatching `sql.generate`, `doc.extract`, `doc.deep_read` and
+`quant.codegen` in no order a person would choose. All five cost under the
+25-cent threshold, so under the PRD's rule none would be shown before running.
+Whether a small model's plan should be shown regardless is a product decision
+the PRD does not make; nothing here makes it.
+
 ## What is not here
 
-- No real model calls. Every agent in the runtime is a function the caller
-  supplies, and the Critic's prose is a callback. What is measured is the
-  runtime, the reconciliation and the deterministic critiques.
+- The runtime makes no model calls. Every agent is a function the caller
+  supplies, and the Critic's prose is a callback; `plan-live.mjs` is the one
+  path that reaches a real model, for the plan, and it executes nothing. What
+  is measured is the runtime, the reconciliation, the deterministic critiques
+  and the plan reader.
 - No retrieval index. `disconfirming` takes a `Retrieve` function, and
   `assembleContext` takes evidence already ranked by one.
 - No tokenizer. `approximateTokens` is four characters to a token, which
