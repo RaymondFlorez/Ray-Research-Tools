@@ -11,14 +11,19 @@ and does not measure anything itself. Re-audit it when a README's figure changes
 | **Infra** | Needs a system this repository does not contain (a datastore, a feed, a cluster, a model) — the seam it would plug into is built |
 | **Refused** | The PRD names it and defines nothing to build; inventing it would misrepresent a real methodology |
 
-Last audited on 9 November 2026 at commit 7b98c0b, from a fresh clone with no build output:
-build, typecheck, 1,845 TypeScript tests (plus 18 collaboration tests on Postgres, 19 with the
-one that needs none), 247 Rust tests, 5,797-value WASM parity, 44 data plane and 26 gateway Go
-tests on Postgres (one, a live call to api.anthropic.com, skipped by default), the 30-check
-historical-morning script through the Go service, and fourteen headless-browser demo scripts,
-all green. CI (`.github/workflows/ci.yml`) repeats that on every push, in five jobs. When this
-file was added, the same audit measured 1,686 TypeScript tests, 228 Rust tests, 5,379-value
-parity and eight browser checks.
+Last audited on 24 November 2026 at commit c6cf489, from a fresh clone with no build output
+(no `dist` directory before the build): build, typecheck, 1,867 TypeScript tests, 247 Rust
+tests, 5,797-value WASM parity (bit-identical), 49 data plane and 30 gateway Go tests on
+Postgres (two gateway tests skipped: the live call to api.anthropic.com, and the real-model
+test, which CI's `real-model` job runs), 21 collaboration and 35 picasso-auth tests on
+Postgres, the 31-check historical-morning script through the Go service, and fourteen
+headless-browser demo scripts. All green but one timing: the 40-leg book's in-browser
+repricing took 90.4ms against its 90ms budget while three model servers were generating on
+the same four cores, and 88.5ms rerun with the machine idle; that check has under 2% of
+headroom here. CI (`.github/workflows/ci.yml`) repeats all of it on every push, in six jobs.
+The audit before, on 9 November at 7b98c0b, measured 1,845 TypeScript tests, 44 data plane
+and 26 gateway Go tests and a 30-check script; when this file was added it was 1,686
+TypeScript tests, 228 Rust tests, 5,379-value parity and eight browser checks.
 
 ## Appendix B exit criteria
 
