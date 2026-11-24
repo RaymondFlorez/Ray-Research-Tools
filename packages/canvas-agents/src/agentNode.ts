@@ -40,9 +40,9 @@ import {
 } from '@picasso/canvas-core';
 import type { AgentRole } from './blackboard.js';
 
-export const AGENT_ROLES: readonly AgentRole[] = [
+export const AGENT_ROLES = [
   'coordinator', 'retriever', 'extractor', 'quant', 'simulator', 'critic', 'reconciler', 'scribe',
-];
+] as const satisfies readonly AgentRole[];
 
 export interface AgentSpec {
   id: NodeID;
