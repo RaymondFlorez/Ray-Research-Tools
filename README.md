@@ -6,6 +6,8 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 
 - [Picasso — Analytic Canvas PRD and Technical Specification (v1.1)](docs/picasso/PRD.md) — infinite spatial canvas where financial analysis is built as a live computational graph: canvas/spatial model, AI routing and multi-agent orchestration, asset-class analytics and simulation engine, security and scalability.
 
+- [GRIT Computational Science Platform: engineering specification and prompt factory](grit-engineering/README.md): master architecture, scientific module contracts, the Alphalytica model research plan, security and deployment specs, 16 ADRs, and 117 dependency-ordered coding-agent prompts generated from a validated catalog (`python3 grit-engineering/tools/build.py --check`).
+
 ## Packages
 
 | Package | Description |

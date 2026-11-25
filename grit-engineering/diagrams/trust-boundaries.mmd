@@ -1,0 +1,43 @@
+%% Trust zones Z0 to Z7 (specifications/security.md).
+flowchart LR
+  subgraph Z0[Z0 Internet: untrusted]
+    U[Browser]
+  end
+  subgraph Z1[Z1 Static frontend]
+    FE[Observatory]
+  end
+  subgraph Z2[Z2 Control plane]
+    API[API]
+  end
+  subgraph Z3[Z3 Data]
+    DB[(Metadata)]
+    AS[(Artifacts)]
+  end
+  subgraph Z4[Z4 Scientific jobs]
+    JOB[Job container]
+  end
+  subgraph Z5[Z5 Experimental workers: untrusted output]
+    TW[Training / inference]
+  end
+  subgraph Z6[Z6 Independent evaluation]
+    EV[grit-eval]
+    HO[(Holdouts)]
+    ER[(Signed results)]
+  end
+  subgraph Z7[Z7 Governance]
+    AU[(Audit chain)]
+    AZ[Authorization + budgets]
+  end
+  U --> FE --> API
+  API --> DB
+  API --> AZ
+  API -->|append| AU
+  API -->|job spec| JOB
+  JOB -->|scoped write| AS
+  API -->|signed bundle| TW
+  TW -->|write own run prefix only| AS
+  EV -->|read by hash| AS
+  EV --> HO
+  EV --> ER
+  EV -->|append| AU
+  API -->|read only| ER

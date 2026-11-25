@@ -1,0 +1,22 @@
+%% Model data flow from source to model card.
+flowchart LR
+  SRC[Licensed source] --> GATE{License gate}
+  GATE -->|SPDX allowlisted + human verified| CLEAN[Normalize + filter]
+  GATE -->|otherwise| HOLD[Blocked]
+  CLEAN --> DEDUP[Exact + MinHash near-dup clustering]
+  DEDUP --> SPLIT[Cluster-level hash split]
+  SPLIT --> TRAIN[train shards]
+  SPLIT --> VAL[val shards]
+  SPLIT --> TEST[test shards]
+  TEST --> HOLDOUT[(Holdout store: evaluator only)]
+  TRAIN --> TOKTRAIN[Tokenizer training: train split only]
+  TOKTRAIN --> PACK[Tokenize + pack to .bin shards]
+  VAL --> PACK
+  PACK --> JOB[Authorized training job]
+  JOB --> CKPT[(Checkpoints: safetensors + manifest)]
+  CKPT -->|by hash, read-only| EVAL[grit-eval]
+  HOLDOUT --> EVAL
+  TRAIN -->|13-gram index| EVAL
+  EVAL --> SIGNED[(Signed result)]
+  SIGNED --> REVIEW[Human review]
+  REVIEW --> CARD[Model card + report]

@@ -1,0 +1,59 @@
+# Allowed import edges between GRIT packages. Checked by scripts/check_layers.py (ADR-0004).
+# Each package lists the GRIT packages it may import. Third-party imports are governed by each
+# package's own pyproject.toml, except where `forbid_third_party` names imports that are banned outright.
+# Packages that don't exist yet are ignored by the checker, so this file can declare the whole plan.
+
+[packages.grit_core]
+layer = "L1"
+allow = []
+forbid_third_party = ["torch", "fastapi", "sqlite3", "requests", "httpx"]
+
+[packages.grit_algebra]
+layer = "L2"
+allow = ["grit_core"]
+
+[packages.grit_dynamics]
+layer = "L2"
+allow = ["grit_core"]
+
+[packages.grit_bio]
+layer = "L2"
+allow = ["grit_core", "grit_dynamics"]
+
+[packages.grit_cognition]
+layer = "L2"
+allow = ["grit_core", "grit_dynamics"]
+
+[packages.grit_physics]
+layer = "L2"
+allow = ["grit_core"]
+forbid_third_party = ["torch"]
+
+[packages.grit_discovery]
+layer = "L2"
+allow = ["grit_core"]
+
+[packages.grit_verify]
+layer = "L5"
+allow = ["grit_core"]
+forbid_third_party = ["torch"]
+
+[packages.grit_lab]
+layer = "L3"
+allow = ["grit_core", "grit_verify"]
+# grit_lab may import only the public types of grit_verify (protocols, results, plans)
+allow_submodules = { grit_verify = ["grit_verify.protocols", "grit_verify.types", "grit_verify.signing"] }
+
+[packages.grit_data]
+layer = "L4"
+allow = ["grit_core"]
+
+[packages.alphalytica]
+layer = "L4"
+allow = ["grit_core", "grit_data", "grit_physics", "grit_verify"]
+allow_submodules = { grit_verify = ["grit_verify.protocols", "grit_verify.types"] }
+
+[packages.grit_api]
+layer = "L7"
+allow = ["grit_core", "grit_algebra", "grit_dynamics", "grit_bio", "grit_cognition", "grit_physics",
+         "grit_discovery", "grit_lab", "grit_verify", "grit_data", "alphalytica"]

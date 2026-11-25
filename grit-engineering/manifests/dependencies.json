@@ -1,0 +1,1763 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "id": "GRIT-P001",
+      "title": "Repository skeleton, workspace and toolchain",
+      "group": "A",
+      "wave": 1
+    },
+    {
+      "id": "GRIT-P002",
+      "title": "Architecture documents, ADRs and module contracts in the repository",
+      "group": "A",
+      "wave": 2
+    },
+    {
+      "id": "GRIT-P003",
+      "title": "Layer enforcement with the import checker",
+      "group": "A",
+      "wave": 2
+    },
+    {
+      "id": "GRIT-P004",
+      "title": "Scientific traceability registry and validator",
+      "group": "A",
+      "wave": 2
+    },
+    {
+      "id": "GRIT-P005",
+      "title": "Test infrastructure, markers and numerical tolerance policy",
+      "group": "A",
+      "wave": 3
+    },
+    {
+      "id": "GRIT-P006",
+      "title": "Prompt execution tracking and resumability",
+      "group": "A",
+      "wave": 2
+    },
+    {
+      "id": "GRIT-P007",
+      "title": "Core types, error hierarchy and canonical hashing",
+      "group": "B",
+      "wave": 4
+    },
+    {
+      "id": "GRIT-P008",
+      "title": "Units at boundaries",
+      "group": "B",
+      "wave": 5
+    },
+    {
+      "id": "GRIT-P009",
+      "title": "Runtime validation contracts",
+      "group": "B",
+      "wave": 5
+    },
+    {
+      "id": "GRIT-P010",
+      "title": "Stable numerics and solver wrappers",
+      "group": "B",
+      "wave": 6
+    },
+    {
+      "id": "GRIT-P011",
+      "title": "Linear algebra and geometry helpers",
+      "group": "B",
+      "wave": 6
+    },
+    {
+      "id": "GRIT-P012",
+      "title": "Graph primitives and causal DAG tools",
+      "group": "B",
+      "wave": 5
+    },
+    {
+      "id": "GRIT-P013",
+      "title": "Optimization wrappers and gradient checking",
+      "group": "B",
+      "wave": 7
+    },
+    {
+      "id": "GRIT-P014",
+      "title": "Immutable configs and environment provenance capture",
+      "group": "B",
+      "wave": 6
+    },
+    {
+      "id": "GRIT-P015",
+      "title": "Probability distributions and seeding",
+      "group": "C",
+      "wave": 6
+    },
+    {
+      "id": "GRIT-P016",
+      "title": "Information theory",
+      "group": "C",
+      "wave": 7
+    },
+    {
+      "id": "GRIT-P017",
+      "title": "Statistics, uncertainty, scoring rules and calibration math",
+      "group": "C",
+      "wave": 7
+    },
+    {
+      "id": "GRIT-P018",
+      "title": "Numerical reference suite and micro-benchmarks (milestone M1)",
+      "group": "C",
+      "wave": 8
+    },
+    {
+      "id": "GRIT-P019",
+      "title": "State spaces, typed operators, composition and higher-order functions",
+      "group": "D",
+      "wave": 9
+    },
+    {
+      "id": "GRIT-P020",
+      "title": "Relations, equivalence and invariants",
+      "group": "D",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P021",
+      "title": "Fixed points and capability metrics (provisional)",
+      "group": "D",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P022",
+      "title": "Symbolic mathematics with a safe expression parser",
+      "group": "D",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P023",
+      "title": "Formal verification adapters (optional Z3 and Lean export)",
+      "group": "D",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P024",
+      "title": "Discrete and continuous dynamical systems",
+      "group": "E",
+      "wave": 9
+    },
+    {
+      "id": "GRIT-P025",
+      "title": "Stochastic processes",
+      "group": "E",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P026",
+      "title": "Stability, attractors and bifurcations",
+      "group": "E",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P027",
+      "title": "Control and feedback",
+      "group": "E",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P028",
+      "title": "Multiscale models, resource constraints and scenario simulation",
+      "group": "E",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P029",
+      "title": "Biochemistry, reaction kinetics and catalysis",
+      "group": "F",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P030",
+      "title": "Regulatory networks, systems biology and homeostasis",
+      "group": "F",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P031",
+      "title": "Genetics and population dynamics",
+      "group": "F",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P032",
+      "title": "Evolutionary landscapes and comparative biology",
+      "group": "F",
+      "wave": 14
+    },
+    {
+      "id": "GRIT-P033",
+      "title": "Neuron models",
+      "group": "G",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P034",
+      "title": "Synaptic dynamics and plasticity",
+      "group": "G",
+      "wave": 14
+    },
+    {
+      "id": "GRIT-P035",
+      "title": "Neural circuits and network simulation (milestone M3)",
+      "group": "G",
+      "wave": 15
+    },
+    {
+      "id": "GRIT-P036",
+      "title": "Capability profiles and comparative assessment",
+      "group": "H",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P037",
+      "title": "Learning curves, retention, generalization and transfer",
+      "group": "H",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P038",
+      "title": "Metacognitive calibration, memory and attention models",
+      "group": "H",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P039",
+      "title": "Reasoning task generators with independent answer checkers",
+      "group": "H",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P040",
+      "title": "Compute accounting and scaling laws",
+      "group": "I",
+      "wave": 9
+    },
+    {
+      "id": "GRIT-P041",
+      "title": "Hardware profiles and measurement: latency, throughput, memory, energy",
+      "group": "I",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P042",
+      "title": "Efficiency, thermodynamic limits, Pareto analysis and the cost estimator",
+      "group": "I",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P043",
+      "title": "Literature, scientific claims and provenance",
+      "group": "J",
+      "wave": 9
+    },
+    {
+      "id": "GRIT-P044",
+      "title": "Hypotheses, concept graphs, analogy and intellectual lineage",
+      "group": "J",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P045",
+      "title": "Classification, complexity, productivity, meta-analysis and causal attribution (milestone M4)",
+      "group": "J",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P046",
+      "title": "grit_verify public types, protocols and signing",
+      "group": "L",
+      "wave": 9
+    },
+    {
+      "id": "GRIT-P047",
+      "title": "Experiment specifications and the state machine",
+      "group": "K",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P048",
+      "title": "Metadata store: SQLite schema and migrations",
+      "group": "K",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P049",
+      "title": "Content-addressed artifact store and run provenance records",
+      "group": "K",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P050",
+      "title": "Hash-chained audit log",
+      "group": "K",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P051",
+      "title": "Authorization and human review",
+      "group": "K",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P052",
+      "title": "Resource budgets and isolated local execution",
+      "group": "K",
+      "wave": 14
+    },
+    {
+      "id": "GRIT-P053",
+      "title": "Lab CLI, datasets and baselines registry, and reporting",
+      "group": "K",
+      "wave": 15
+    },
+    {
+      "id": "GRIT-P054",
+      "title": "Verification contracts, invariant suites and regression testing",
+      "group": "L",
+      "wave": 10
+    },
+    {
+      "id": "GRIT-P055",
+      "title": "Statistical validation, calibration evaluation and replication",
+      "group": "L",
+      "wave": 11
+    },
+    {
+      "id": "GRIT-P056",
+      "title": "Independent benchmarks, protected holdouts and contamination checks",
+      "group": "L",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P057",
+      "title": "Causal inference, formal verification runner and independent audit verification",
+      "group": "L",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P058",
+      "title": "Evaluator process boundary and signed results (milestone M5)",
+      "group": "L",
+      "wave": 16
+    },
+    {
+      "id": "GRIT-P059",
+      "title": "Alphalytica package, ModelConfig and exact parameter counting",
+      "group": "M",
+      "wave": 12
+    },
+    {
+      "id": "GRIT-P060",
+      "title": "Generation 0 reference decoder-only Transformer",
+      "group": "M",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P061",
+      "title": "Generation 1 component variants: attention, position, normalization, feedforward",
+      "group": "M",
+      "wave": 14
+    },
+    {
+      "id": "GRIT-P062",
+      "title": "grit_data: dataset manifests, checksummed ingestion and the license gate",
+      "group": "N",
+      "wave": 13
+    },
+    {
+      "id": "GRIT-P063",
+      "title": "Text normalization, filtering and deduplication",
+      "group": "N",
+      "wave": 14
+    },
+    {
+      "id": "GRIT-P064",
+      "title": "Leakage-safe splits and dataset versioning",
+      "group": "N",
+      "wave": 15
+    },
+    {
+      "id": "GRIT-P065",
+      "title": "Tokenizers: byte-level reference and byte-level BPE",
+      "group": "N",
+      "wave": 16
+    },
+    {
+      "id": "GRIT-P066",
+      "title": "Tokenized shards, sequence packing and resumable batching",
+      "group": "N",
+      "wave": 17
+    },
+    {
+      "id": "GRIT-P067",
+      "title": "Training configuration and run record integration",
+      "group": "O",
+      "wave": 18
+    },
+    {
+      "id": "GRIT-P068",
+      "title": "Training loop: optimizer, schedule, accumulation, clipping, precision, determinism",
+      "group": "O",
+      "wave": 19
+    },
+    {
+      "id": "GRIT-P069",
+      "title": "Checkpointing and bit-identical resume",
+      "group": "O",
+      "wave": 20
+    },
+    {
+      "id": "GRIT-P070",
+      "title": "Metrics, profiling, budget watchdog and lab-governed runs",
+      "group": "O",
+      "wave": 21
+    },
+    {
+      "id": "GRIT-P071",
+      "title": "Inference provider interface and local PyTorch backend",
+      "group": "P",
+      "wave": 21
+    },
+    {
+      "id": "GRIT-P072",
+      "title": "KV cache, streaming, cancellation and context management",
+      "group": "P",
+      "wave": 22
+    },
+    {
+      "id": "GRIT-P073",
+      "title": "Batch inference, memory accounting and resource limits",
+      "group": "P",
+      "wave": 23
+    },
+    {
+      "id": "GRIT-P074",
+      "title": "Inference benchmark suite",
+      "group": "P",
+      "wave": 24
+    },
+    {
+      "id": "GRIT-P075",
+      "title": "Quantization adapters and Hugging Face-compatible export",
+      "group": "P",
+      "wave": 25
+    },
+    {
+      "id": "GRIT-P076",
+      "title": "Authorized external API provider",
+      "group": "P",
+      "wave": 22
+    },
+    {
+      "id": "GRIT-P077",
+      "title": "Language modeling evaluation suite",
+      "group": "Q",
+      "wave": 17
+    },
+    {
+      "id": "GRIT-P078",
+      "title": "Capability task suite",
+      "group": "Q",
+      "wave": 18
+    },
+    {
+      "id": "GRIT-P079",
+      "title": "Calibration, robustness, generalization and contamination suites",
+      "group": "Q",
+      "wave": 19
+    },
+    {
+      "id": "GRIT-P080",
+      "title": "Resource-normalized comparison, regression detection and evaluation reports",
+      "group": "Q",
+      "wave": 20
+    },
+    {
+      "id": "GRIT-P081",
+      "title": "Generation 0 end-to-end run, profiling and model card (milestone M6)",
+      "group": "O",
+      "wave": 26
+    },
+    {
+      "id": "GRIT-P082",
+      "title": "API service skeleton",
+      "group": "T",
+      "wave": 17
+    },
+    {
+      "id": "GRIT-P083",
+      "title": "Instrument registry and compute endpoints",
+      "group": "T",
+      "wave": 18
+    },
+    {
+      "id": "GRIT-P084",
+      "title": "Experiment, run, evaluation, registry and model endpoints",
+      "group": "T",
+      "wave": 22
+    },
+    {
+      "id": "GRIT-P085",
+      "title": "Observatory frontend scaffold, design tokens and shell",
+      "group": "R",
+      "wave": 18
+    },
+    {
+      "id": "GRIT-P086",
+      "title": "Board navigation, command palette, keyboard model and workspace routing",
+      "group": "R",
+      "wave": 19
+    },
+    {
+      "id": "GRIT-P087",
+      "title": "Instrument framework: parameter panels, result views and provenance",
+      "group": "R",
+      "wave": 20
+    },
+    {
+      "id": "GRIT-P088",
+      "title": "Scientific visualization primitives",
+      "group": "S",
+      "wave": 21
+    },
+    {
+      "id": "GRIT-P089",
+      "title": "Instruments: Mathematics, Physics and Dynamical Systems labs",
+      "group": "S",
+      "wave": 22
+    },
+    {
+      "id": "GRIT-P090",
+      "title": "Instruments: Biochemistry, Evolution and Neuroscience labs",
+      "group": "S",
+      "wave": 22
+    },
+    {
+      "id": "GRIT-P091",
+      "title": "Instruments: Cognition, Metascience, Verification and Education labs",
+      "group": "S",
+      "wave": 23
+    },
+    {
+      "id": "GRIT-P092",
+      "title": "Model Laboratory, Training Dashboard, Inference Benchmarking and Experiment Registry workspaces",
+      "group": "R",
+      "wave": 25
+    },
+    {
+      "id": "GRIT-P093",
+      "title": "Library, Knowledge Graph, Publication Studio and Learning workspaces",
+      "group": "R",
+      "wave": 23
+    },
+    {
+      "id": "GRIT-P094",
+      "title": "Reproducible notebooks and tutorials (milestone M7)",
+      "group": "R",
+      "wave": 26
+    },
+    {
+      "id": "GRIT-P095",
+      "title": "Grand Chessboard integration: OIDC, module manifest and shared tokens",
+      "group": "T",
+      "wave": 27
+    },
+    {
+      "id": "GRIT-P096",
+      "title": "Local development profile",
+      "group": "U",
+      "wave": 28
+    },
+    {
+      "id": "GRIT-P097",
+      "title": "Container images and single-server deployment (Profile 2)",
+      "group": "U",
+      "wave": 29
+    },
+    {
+      "id": "GRIT-P098",
+      "title": "GPU worker image, signed job bundles and object storage",
+      "group": "V",
+      "wave": 30
+    },
+    {
+      "id": "GRIT-P099",
+      "title": "GPU lifecycle: provisioning runbook, monitoring, cost ledger and guaranteed shutdown",
+      "group": "V",
+      "wave": 31
+    },
+    {
+      "id": "GRIT-P100",
+      "title": "Generation 1 controlled architecture studies",
+      "group": "M",
+      "wave": 32
+    },
+    {
+      "id": "GRIT-P101",
+      "title": "Generation 2 larger experimental baselines",
+      "group": "M",
+      "wave": 33
+    },
+    {
+      "id": "GRIT-P102",
+      "title": "Alternative architecture experiments: MoE, state-space, recurrent, local attention, hierarchical",
+      "group": "M",
+      "wave": 33
+    },
+    {
+      "id": "GRIT-P103",
+      "title": "Generation 3 feasibility study and specification (no training)",
+      "group": "M",
+      "wave": 34
+    },
+    {
+      "id": "GRIT-P104",
+      "title": "Generation 3 Alphalytica research model training",
+      "group": "M",
+      "wave": 35
+    },
+    {
+      "id": "GRIT-P105",
+      "title": "Production single-server hardening: backups, monitoring, rollback, incident response",
+      "group": "W",
+      "wave": 30
+    },
+    {
+      "id": "GRIT-P106",
+      "title": "Multi-user production: PostgreSQL, per-workspace permissions, network isolation",
+      "group": "W",
+      "wave": 31
+    },
+    {
+      "id": "GRIT-P107",
+      "title": "Horizontal scaling plan and load test harness",
+      "group": "W",
+      "wave": 32
+    },
+    {
+      "id": "GRIT-P108",
+      "title": "Threat model in the repository and the security test suite",
+      "group": "X",
+      "wave": 28
+    },
+    {
+      "id": "GRIT-P109",
+      "title": "Supply chain integrity: SBOM, pinning, signing of checkpoints and datasets",
+      "group": "X",
+      "wave": 31
+    },
+    {
+      "id": "GRIT-P110",
+      "title": "Reliability drills: restore, crash-resume, rate limits and quotas",
+      "group": "X",
+      "wave": 32
+    },
+    {
+      "id": "GRIT-P111",
+      "title": "Documentation site: API, math and developer guides",
+      "group": "Y",
+      "wave": 29
+    },
+    {
+      "id": "GRIT-P112",
+      "title": "Model cards, dataset cards, traceability report and publication export",
+      "group": "Y",
+      "wave": 30
+    },
+    {
+      "id": "GRIT-P113",
+      "title": "End-to-end scientific path",
+      "group": "Z",
+      "wave": 31
+    },
+    {
+      "id": "GRIT-P114",
+      "title": "End-to-end model path",
+      "group": "Z",
+      "wave": 31
+    },
+    {
+      "id": "GRIT-P115",
+      "title": "Governance bypass acceptance tests",
+      "group": "Z",
+      "wave": 33
+    },
+    {
+      "id": "GRIT-P116",
+      "title": "Independent replication and final acceptance (milestone M10)",
+      "group": "Z",
+      "wave": 34
+    },
+    {
+      "id": "GRIT-P117",
+      "title": "Optional MLX backend for Apple Silicon",
+      "group": "P",
+      "wave": 27
+    }
+  ],
+  "edges": [
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P002"
+    },
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P003"
+    },
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P004"
+    },
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P005"
+    },
+    {
+      "from": "GRIT-P004",
+      "to": "GRIT-P005"
+    },
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P006"
+    },
+    {
+      "from": "GRIT-P001",
+      "to": "GRIT-P007"
+    },
+    {
+      "from": "GRIT-P004",
+      "to": "GRIT-P007"
+    },
+    {
+      "from": "GRIT-P005",
+      "to": "GRIT-P007"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P008"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P009"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P010"
+    },
+    {
+      "from": "GRIT-P009",
+      "to": "GRIT-P010"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P011"
+    },
+    {
+      "from": "GRIT-P009",
+      "to": "GRIT-P011"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P012"
+    },
+    {
+      "from": "GRIT-P010",
+      "to": "GRIT-P013"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P014"
+    },
+    {
+      "from": "GRIT-P008",
+      "to": "GRIT-P014"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P015"
+    },
+    {
+      "from": "GRIT-P009",
+      "to": "GRIT-P015"
+    },
+    {
+      "from": "GRIT-P007",
+      "to": "GRIT-P016"
+    },
+    {
+      "from": "GRIT-P015",
+      "to": "GRIT-P016"
+    },
+    {
+      "from": "GRIT-P015",
+      "to": "GRIT-P017"
+    },
+    {
+      "from": "GRIT-P008",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P010",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P011",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P012",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P013",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P014",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P016",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P018"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P019"
+    },
+    {
+      "from": "GRIT-P019",
+      "to": "GRIT-P020"
+    },
+    {
+      "from": "GRIT-P020",
+      "to": "GRIT-P021"
+    },
+    {
+      "from": "GRIT-P019",
+      "to": "GRIT-P022"
+    },
+    {
+      "from": "GRIT-P020",
+      "to": "GRIT-P023"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P024"
+    },
+    {
+      "from": "GRIT-P024",
+      "to": "GRIT-P025"
+    },
+    {
+      "from": "GRIT-P015",
+      "to": "GRIT-P025"
+    },
+    {
+      "from": "GRIT-P024",
+      "to": "GRIT-P026"
+    },
+    {
+      "from": "GRIT-P024",
+      "to": "GRIT-P027"
+    },
+    {
+      "from": "GRIT-P025",
+      "to": "GRIT-P028"
+    },
+    {
+      "from": "GRIT-P026",
+      "to": "GRIT-P028"
+    },
+    {
+      "from": "GRIT-P028",
+      "to": "GRIT-P029"
+    },
+    {
+      "from": "GRIT-P011",
+      "to": "GRIT-P029"
+    },
+    {
+      "from": "GRIT-P013",
+      "to": "GRIT-P029"
+    },
+    {
+      "from": "GRIT-P029",
+      "to": "GRIT-P030"
+    },
+    {
+      "from": "GRIT-P027",
+      "to": "GRIT-P030"
+    },
+    {
+      "from": "GRIT-P029",
+      "to": "GRIT-P031"
+    },
+    {
+      "from": "GRIT-P025",
+      "to": "GRIT-P031"
+    },
+    {
+      "from": "GRIT-P031",
+      "to": "GRIT-P032"
+    },
+    {
+      "from": "GRIT-P011",
+      "to": "GRIT-P032"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P032"
+    },
+    {
+      "from": "GRIT-P029",
+      "to": "GRIT-P033"
+    },
+    {
+      "from": "GRIT-P033",
+      "to": "GRIT-P034"
+    },
+    {
+      "from": "GRIT-P034",
+      "to": "GRIT-P035"
+    },
+    {
+      "from": "GRIT-P026",
+      "to": "GRIT-P035"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P036"
+    },
+    {
+      "from": "GRIT-P024",
+      "to": "GRIT-P036"
+    },
+    {
+      "from": "GRIT-P036",
+      "to": "GRIT-P037"
+    },
+    {
+      "from": "GRIT-P013",
+      "to": "GRIT-P037"
+    },
+    {
+      "from": "GRIT-P036",
+      "to": "GRIT-P038"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P038"
+    },
+    {
+      "from": "GRIT-P036",
+      "to": "GRIT-P039"
+    },
+    {
+      "from": "GRIT-P015",
+      "to": "GRIT-P039"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P040"
+    },
+    {
+      "from": "GRIT-P040",
+      "to": "GRIT-P041"
+    },
+    {
+      "from": "GRIT-P041",
+      "to": "GRIT-P042"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P043"
+    },
+    {
+      "from": "GRIT-P043",
+      "to": "GRIT-P044"
+    },
+    {
+      "from": "GRIT-P012",
+      "to": "GRIT-P044"
+    },
+    {
+      "from": "GRIT-P044",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P037",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P038",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P039",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P042",
+      "to": "GRIT-P045"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P046"
+    },
+    {
+      "from": "GRIT-P046",
+      "to": "GRIT-P047"
+    },
+    {
+      "from": "GRIT-P014",
+      "to": "GRIT-P047"
+    },
+    {
+      "from": "GRIT-P047",
+      "to": "GRIT-P048"
+    },
+    {
+      "from": "GRIT-P048",
+      "to": "GRIT-P049"
+    },
+    {
+      "from": "GRIT-P048",
+      "to": "GRIT-P050"
+    },
+    {
+      "from": "GRIT-P050",
+      "to": "GRIT-P051"
+    },
+    {
+      "from": "GRIT-P049",
+      "to": "GRIT-P052"
+    },
+    {
+      "from": "GRIT-P051",
+      "to": "GRIT-P052"
+    },
+    {
+      "from": "GRIT-P052",
+      "to": "GRIT-P053"
+    },
+    {
+      "from": "GRIT-P046",
+      "to": "GRIT-P054"
+    },
+    {
+      "from": "GRIT-P018",
+      "to": "GRIT-P054"
+    },
+    {
+      "from": "GRIT-P054",
+      "to": "GRIT-P055"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P055"
+    },
+    {
+      "from": "GRIT-P055",
+      "to": "GRIT-P056"
+    },
+    {
+      "from": "GRIT-P039",
+      "to": "GRIT-P056"
+    },
+    {
+      "from": "GRIT-P055",
+      "to": "GRIT-P057"
+    },
+    {
+      "from": "GRIT-P012",
+      "to": "GRIT-P057"
+    },
+    {
+      "from": "GRIT-P050",
+      "to": "GRIT-P057"
+    },
+    {
+      "from": "GRIT-P056",
+      "to": "GRIT-P058"
+    },
+    {
+      "from": "GRIT-P057",
+      "to": "GRIT-P058"
+    },
+    {
+      "from": "GRIT-P053",
+      "to": "GRIT-P058"
+    },
+    {
+      "from": "GRIT-P042",
+      "to": "GRIT-P059"
+    },
+    {
+      "from": "GRIT-P046",
+      "to": "GRIT-P059"
+    },
+    {
+      "from": "GRIT-P059",
+      "to": "GRIT-P060"
+    },
+    {
+      "from": "GRIT-P060",
+      "to": "GRIT-P061"
+    },
+    {
+      "from": "GRIT-P014",
+      "to": "GRIT-P062"
+    },
+    {
+      "from": "GRIT-P049",
+      "to": "GRIT-P062"
+    },
+    {
+      "from": "GRIT-P062",
+      "to": "GRIT-P063"
+    },
+    {
+      "from": "GRIT-P063",
+      "to": "GRIT-P064"
+    },
+    {
+      "from": "GRIT-P064",
+      "to": "GRIT-P065"
+    },
+    {
+      "from": "GRIT-P065",
+      "to": "GRIT-P066"
+    },
+    {
+      "from": "GRIT-P061",
+      "to": "GRIT-P067"
+    },
+    {
+      "from": "GRIT-P066",
+      "to": "GRIT-P067"
+    },
+    {
+      "from": "GRIT-P053",
+      "to": "GRIT-P067"
+    },
+    {
+      "from": "GRIT-P067",
+      "to": "GRIT-P068"
+    },
+    {
+      "from": "GRIT-P068",
+      "to": "GRIT-P069"
+    },
+    {
+      "from": "GRIT-P069",
+      "to": "GRIT-P070"
+    },
+    {
+      "from": "GRIT-P041",
+      "to": "GRIT-P070"
+    },
+    {
+      "from": "GRIT-P069",
+      "to": "GRIT-P071"
+    },
+    {
+      "from": "GRIT-P058",
+      "to": "GRIT-P071"
+    },
+    {
+      "from": "GRIT-P071",
+      "to": "GRIT-P072"
+    },
+    {
+      "from": "GRIT-P072",
+      "to": "GRIT-P073"
+    },
+    {
+      "from": "GRIT-P042",
+      "to": "GRIT-P073"
+    },
+    {
+      "from": "GRIT-P073",
+      "to": "GRIT-P074"
+    },
+    {
+      "from": "GRIT-P074",
+      "to": "GRIT-P075"
+    },
+    {
+      "from": "GRIT-P071",
+      "to": "GRIT-P076"
+    },
+    {
+      "from": "GRIT-P056",
+      "to": "GRIT-P076"
+    },
+    {
+      "from": "GRIT-P058",
+      "to": "GRIT-P077"
+    },
+    {
+      "from": "GRIT-P016",
+      "to": "GRIT-P077"
+    },
+    {
+      "from": "GRIT-P017",
+      "to": "GRIT-P077"
+    },
+    {
+      "from": "GRIT-P077",
+      "to": "GRIT-P078"
+    },
+    {
+      "from": "GRIT-P078",
+      "to": "GRIT-P079"
+    },
+    {
+      "from": "GRIT-P079",
+      "to": "GRIT-P080"
+    },
+    {
+      "from": "GRIT-P055",
+      "to": "GRIT-P080"
+    },
+    {
+      "from": "GRIT-P070",
+      "to": "GRIT-P081"
+    },
+    {
+      "from": "GRIT-P075",
+      "to": "GRIT-P081"
+    },
+    {
+      "from": "GRIT-P080",
+      "to": "GRIT-P081"
+    },
+    {
+      "from": "GRIT-P064",
+      "to": "GRIT-P081"
+    },
+    {
+      "from": "GRIT-P053",
+      "to": "GRIT-P082"
+    },
+    {
+      "from": "GRIT-P058",
+      "to": "GRIT-P082"
+    },
+    {
+      "from": "GRIT-P082",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P028",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P035",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P039",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P042",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P045",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P022",
+      "to": "GRIT-P083"
+    },
+    {
+      "from": "GRIT-P083",
+      "to": "GRIT-P084"
+    },
+    {
+      "from": "GRIT-P071",
+      "to": "GRIT-P084"
+    },
+    {
+      "from": "GRIT-P082",
+      "to": "GRIT-P085"
+    },
+    {
+      "from": "GRIT-P085",
+      "to": "GRIT-P086"
+    },
+    {
+      "from": "GRIT-P086",
+      "to": "GRIT-P087"
+    },
+    {
+      "from": "GRIT-P083",
+      "to": "GRIT-P087"
+    },
+    {
+      "from": "GRIT-P087",
+      "to": "GRIT-P088"
+    },
+    {
+      "from": "GRIT-P088",
+      "to": "GRIT-P089"
+    },
+    {
+      "from": "GRIT-P088",
+      "to": "GRIT-P090"
+    },
+    {
+      "from": "GRIT-P088",
+      "to": "GRIT-P091"
+    },
+    {
+      "from": "GRIT-P084",
+      "to": "GRIT-P091"
+    },
+    {
+      "from": "GRIT-P088",
+      "to": "GRIT-P092"
+    },
+    {
+      "from": "GRIT-P084",
+      "to": "GRIT-P092"
+    },
+    {
+      "from": "GRIT-P074",
+      "to": "GRIT-P092"
+    },
+    {
+      "from": "GRIT-P088",
+      "to": "GRIT-P093"
+    },
+    {
+      "from": "GRIT-P084",
+      "to": "GRIT-P093"
+    },
+    {
+      "from": "GRIT-P093",
+      "to": "GRIT-P094"
+    },
+    {
+      "from": "GRIT-P091",
+      "to": "GRIT-P094"
+    },
+    {
+      "from": "GRIT-P089",
+      "to": "GRIT-P094"
+    },
+    {
+      "from": "GRIT-P090",
+      "to": "GRIT-P094"
+    },
+    {
+      "from": "GRIT-P092",
+      "to": "GRIT-P094"
+    },
+    {
+      "from": "GRIT-P094",
+      "to": "GRIT-P095"
+    },
+    {
+      "from": "GRIT-P084",
+      "to": "GRIT-P095"
+    },
+    {
+      "from": "GRIT-P095",
+      "to": "GRIT-P096"
+    },
+    {
+      "from": "GRIT-P096",
+      "to": "GRIT-P097"
+    },
+    {
+      "from": "GRIT-P070",
+      "to": "GRIT-P098"
+    },
+    {
+      "from": "GRIT-P097",
+      "to": "GRIT-P098"
+    },
+    {
+      "from": "GRIT-P098",
+      "to": "GRIT-P099"
+    },
+    {
+      "from": "GRIT-P042",
+      "to": "GRIT-P099"
+    },
+    {
+      "from": "GRIT-P081",
+      "to": "GRIT-P100"
+    },
+    {
+      "from": "GRIT-P099",
+      "to": "GRIT-P100"
+    },
+    {
+      "from": "GRIT-P061",
+      "to": "GRIT-P100"
+    },
+    {
+      "from": "GRIT-P100",
+      "to": "GRIT-P101"
+    },
+    {
+      "from": "GRIT-P100",
+      "to": "GRIT-P102"
+    },
+    {
+      "from": "GRIT-P101",
+      "to": "GRIT-P103"
+    },
+    {
+      "from": "GRIT-P103",
+      "to": "GRIT-P104"
+    },
+    {
+      "from": "GRIT-P097",
+      "to": "GRIT-P105"
+    },
+    {
+      "from": "GRIT-P057",
+      "to": "GRIT-P105"
+    },
+    {
+      "from": "GRIT-P105",
+      "to": "GRIT-P106"
+    },
+    {
+      "from": "GRIT-P095",
+      "to": "GRIT-P106"
+    },
+    {
+      "from": "GRIT-P106",
+      "to": "GRIT-P107"
+    },
+    {
+      "from": "GRIT-P095",
+      "to": "GRIT-P108"
+    },
+    {
+      "from": "GRIT-P084",
+      "to": "GRIT-P108"
+    },
+    {
+      "from": "GRIT-P108",
+      "to": "GRIT-P109"
+    },
+    {
+      "from": "GRIT-P098",
+      "to": "GRIT-P109"
+    },
+    {
+      "from": "GRIT-P105",
+      "to": "GRIT-P110"
+    },
+    {
+      "from": "GRIT-P109",
+      "to": "GRIT-P110"
+    },
+    {
+      "from": "GRIT-P094",
+      "to": "GRIT-P111"
+    },
+    {
+      "from": "GRIT-P108",
+      "to": "GRIT-P111"
+    },
+    {
+      "from": "GRIT-P111",
+      "to": "GRIT-P112"
+    },
+    {
+      "from": "GRIT-P081",
+      "to": "GRIT-P112"
+    },
+    {
+      "from": "GRIT-P112",
+      "to": "GRIT-P113"
+    },
+    {
+      "from": "GRIT-P094",
+      "to": "GRIT-P113"
+    },
+    {
+      "from": "GRIT-P112",
+      "to": "GRIT-P114"
+    },
+    {
+      "from": "GRIT-P080",
+      "to": "GRIT-P114"
+    },
+    {
+      "from": "GRIT-P114",
+      "to": "GRIT-P115"
+    },
+    {
+      "from": "GRIT-P110",
+      "to": "GRIT-P115"
+    },
+    {
+      "from": "GRIT-P115",
+      "to": "GRIT-P116"
+    },
+    {
+      "from": "GRIT-P113",
+      "to": "GRIT-P116"
+    },
+    {
+      "from": "GRIT-P081",
+      "to": "GRIT-P117"
+    },
+    {
+      "from": "GRIT-P074",
+      "to": "GRIT-P117"
+    }
+  ],
+  "waves": {
+    "1": [
+      "GRIT-P001"
+    ],
+    "2": [
+      "GRIT-P002",
+      "GRIT-P003",
+      "GRIT-P004",
+      "GRIT-P006"
+    ],
+    "3": [
+      "GRIT-P005"
+    ],
+    "4": [
+      "GRIT-P007"
+    ],
+    "5": [
+      "GRIT-P008",
+      "GRIT-P009",
+      "GRIT-P012"
+    ],
+    "6": [
+      "GRIT-P010",
+      "GRIT-P011",
+      "GRIT-P014",
+      "GRIT-P015"
+    ],
+    "7": [
+      "GRIT-P013",
+      "GRIT-P016",
+      "GRIT-P017"
+    ],
+    "8": [
+      "GRIT-P018"
+    ],
+    "9": [
+      "GRIT-P019",
+      "GRIT-P024",
+      "GRIT-P040",
+      "GRIT-P043",
+      "GRIT-P046"
+    ],
+    "10": [
+      "GRIT-P020",
+      "GRIT-P022",
+      "GRIT-P025",
+      "GRIT-P026",
+      "GRIT-P027",
+      "GRIT-P036",
+      "GRIT-P041",
+      "GRIT-P044",
+      "GRIT-P047",
+      "GRIT-P054"
+    ],
+    "11": [
+      "GRIT-P021",
+      "GRIT-P023",
+      "GRIT-P028",
+      "GRIT-P037",
+      "GRIT-P038",
+      "GRIT-P039",
+      "GRIT-P042",
+      "GRIT-P048",
+      "GRIT-P055"
+    ],
+    "12": [
+      "GRIT-P029",
+      "GRIT-P045",
+      "GRIT-P049",
+      "GRIT-P050",
+      "GRIT-P056",
+      "GRIT-P059"
+    ],
+    "13": [
+      "GRIT-P030",
+      "GRIT-P031",
+      "GRIT-P033",
+      "GRIT-P051",
+      "GRIT-P057",
+      "GRIT-P060",
+      "GRIT-P062"
+    ],
+    "14": [
+      "GRIT-P032",
+      "GRIT-P034",
+      "GRIT-P052",
+      "GRIT-P061",
+      "GRIT-P063"
+    ],
+    "15": [
+      "GRIT-P035",
+      "GRIT-P053",
+      "GRIT-P064"
+    ],
+    "16": [
+      "GRIT-P058",
+      "GRIT-P065"
+    ],
+    "17": [
+      "GRIT-P066",
+      "GRIT-P077",
+      "GRIT-P082"
+    ],
+    "18": [
+      "GRIT-P067",
+      "GRIT-P078",
+      "GRIT-P083",
+      "GRIT-P085"
+    ],
+    "19": [
+      "GRIT-P068",
+      "GRIT-P079",
+      "GRIT-P086"
+    ],
+    "20": [
+      "GRIT-P069",
+      "GRIT-P080",
+      "GRIT-P087"
+    ],
+    "21": [
+      "GRIT-P070",
+      "GRIT-P071",
+      "GRIT-P088"
+    ],
+    "22": [
+      "GRIT-P072",
+      "GRIT-P076",
+      "GRIT-P084",
+      "GRIT-P089",
+      "GRIT-P090"
+    ],
+    "23": [
+      "GRIT-P073",
+      "GRIT-P091",
+      "GRIT-P093"
+    ],
+    "24": [
+      "GRIT-P074"
+    ],
+    "25": [
+      "GRIT-P075",
+      "GRIT-P092"
+    ],
+    "26": [
+      "GRIT-P081",
+      "GRIT-P094"
+    ],
+    "27": [
+      "GRIT-P095",
+      "GRIT-P117"
+    ],
+    "28": [
+      "GRIT-P096",
+      "GRIT-P108"
+    ],
+    "29": [
+      "GRIT-P097",
+      "GRIT-P111"
+    ],
+    "30": [
+      "GRIT-P098",
+      "GRIT-P105",
+      "GRIT-P112"
+    ],
+    "31": [
+      "GRIT-P099",
+      "GRIT-P106",
+      "GRIT-P109",
+      "GRIT-P113",
+      "GRIT-P114"
+    ],
+    "32": [
+      "GRIT-P100",
+      "GRIT-P107",
+      "GRIT-P110"
+    ],
+    "33": [
+      "GRIT-P101",
+      "GRIT-P102",
+      "GRIT-P115"
+    ],
+    "34": [
+      "GRIT-P103",
+      "GRIT-P116"
+    ],
+    "35": [
+      "GRIT-P104"
+    ]
+  },
+  "critical_path": [
+    "GRIT-P001",
+    "GRIT-P004",
+    "GRIT-P005",
+    "GRIT-P007",
+    "GRIT-P009",
+    "GRIT-P010",
+    "GRIT-P013",
+    "GRIT-P018",
+    "GRIT-P046",
+    "GRIT-P047",
+    "GRIT-P048",
+    "GRIT-P049",
+    "GRIT-P062",
+    "GRIT-P063",
+    "GRIT-P064",
+    "GRIT-P065",
+    "GRIT-P066",
+    "GRIT-P067",
+    "GRIT-P068",
+    "GRIT-P069",
+    "GRIT-P071",
+    "GRIT-P072",
+    "GRIT-P073",
+    "GRIT-P074",
+    "GRIT-P092",
+    "GRIT-P094",
+    "GRIT-P095",
+    "GRIT-P096",
+    "GRIT-P097",
+    "GRIT-P098",
+    "GRIT-P099",
+    "GRIT-P100",
+    "GRIT-P101",
+    "GRIT-P103",
+    "GRIT-P104"
+  ]
+}

@@ -1,0 +1,5289 @@
+{
+  "version": 1,
+  "files": {
+    ".env.example": {
+      "purpose": "documented local variables (no secrets)",
+      "created_by": "GRIT-P096",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_doctor.py"
+      ]
+    },
+    ".github/workflows/ci.yml": {
+      "purpose": "CI: lint, type, fast tests on Linux and macOS",
+      "created_by": "GRIT-P001",
+      "modified_by": [
+        "GRIT-P005",
+        "GRIT-P094"
+      ],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    ".github/workflows/docs.yml": {
+      "purpose": "docs build",
+      "created_by": "GRIT-P111",
+      "modified_by": [],
+      "tests": []
+    },
+    ".github/workflows/images.yml": {
+      "purpose": "image build and smoke test",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    ".github/workflows/observatory.yml": {
+      "purpose": "frontend CI",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    ".github/workflows/postgres.yml": {
+      "purpose": "CI against PostgreSQL",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_workspace_permissions.py"
+      ]
+    },
+    ".github/workflows/security.yml": {
+      "purpose": "gitleaks, pip-audit, npm audit",
+      "created_by": "GRIT-P108",
+      "modified_by": [
+        "GRIT-P109"
+      ],
+      "tests": [
+        "tests/security/test_api_fuzz.py",
+        "tests/security/test_traversal.py",
+        "tests/security/test_authz_cli.py",
+        "apps/observatory/e2e/xss.spec.ts"
+      ]
+    },
+    ".gitignore": {
+      "purpose": "ignore rules",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    ".pre-commit-config.yaml": {
+      "purpose": "pre-commit hooks (nbstripout, gitleaks)",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    ".python-version": {
+      "purpose": "3.12",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "AGENTS.md": {
+      "purpose": "coding-agent protocol (copied from grit-engineering)",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "Makefile": {
+      "purpose": "standard developer targets",
+      "created_by": "GRIT-P001",
+      "modified_by": [
+        "GRIT-P002",
+        "GRIT-P003",
+        "GRIT-P004",
+        "GRIT-P005",
+        "GRIT-P006",
+        "GRIT-P018",
+        "GRIT-P067",
+        "GRIT-P082",
+        "GRIT-P085",
+        "GRIT-P096",
+        "GRIT-P111",
+        "GRIT-P112"
+      ],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "README.md": {
+      "purpose": "project overview and quickstart",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "apps/observatory/e2e/instruments.spec.ts": {
+      "purpose": "e2e",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/keyboard.spec.ts": {
+      "purpose": "keyboard-only e2e",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/labs-bio-neuro.spec.ts": {
+      "purpose": "e2e for 15 instruments",
+      "created_by": "GRIT-P090",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts": {
+      "purpose": "e2e for 20 instruments",
+      "created_by": "GRIT-P091",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/labs-math-physics-dynamics.spec.ts": {
+      "purpose": "e2e for 15 instruments",
+      "created_by": "GRIT-P089",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/scientific-paths.spec.ts": {
+      "purpose": "UI half of the e2e",
+      "created_by": "GRIT-P113",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/shell.spec.ts": {
+      "purpose": "shell e2e with axe",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/viz.spec.ts": {
+      "purpose": "visual regression and performance",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/workspaces-knowledge.spec.ts": {
+      "purpose": "e2e",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/workspaces-model.spec.ts": {
+      "purpose": "e2e",
+      "created_by": "GRIT-P092",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/e2e/xss.spec.ts": {
+      "purpose": "XSS checks",
+      "created_by": "GRIT-P108",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/eslint.config.js": {
+      "purpose": "lint config",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/index.html": {
+      "purpose": "entry",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/package-lock.json": {
+      "purpose": "lockfile",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/package.json": {
+      "purpose": "app manifest",
+      "created_by": "GRIT-P085",
+      "modified_by": [
+        "GRIT-P095"
+      ],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/playwright.config.ts": {
+      "purpose": "e2e config",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/public/fonts/README.md": {
+      "purpose": "font licenses (OFL)",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/scripts/module-manifest.mjs": {
+      "purpose": "manifest generator",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_oidc.py"
+      ]
+    },
+    "apps/observatory/src/App.tsx": {
+      "purpose": "providers and router",
+      "created_by": "GRIT-P085",
+      "modified_by": [
+        "GRIT-P086"
+      ],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/api/client.ts": {
+      "purpose": "API client",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/api/schema.ts": {
+      "purpose": "generated API types",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/board/Board.test.tsx": {
+      "purpose": "tests",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/src/board/Board.tsx": {
+      "purpose": "board",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/board/Board.test.tsx",
+        "apps/observatory/e2e/keyboard.spec.ts"
+      ]
+    },
+    "apps/observatory/src/dev/VizGallery.tsx": {
+      "purpose": "fixture gallery for screenshots",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/ExportMenu.tsx": {
+      "purpose": "export",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/instruments/instruments.test.tsx",
+        "apps/observatory/e2e/instruments.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/InstrumentPage.tsx": {
+      "purpose": "instrument page",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/instruments/instruments.test.tsx",
+        "apps/observatory/e2e/instruments.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/ParameterPanel.tsx": {
+      "purpose": "parameter panel",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/instruments/instruments.test.tsx",
+        "apps/observatory/e2e/instruments.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/ProvenanceDrawer.tsx": {
+      "purpose": "provenance drawer",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/instruments/instruments.test.tsx",
+        "apps/observatory/e2e/instruments.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/ResultView.tsx": {
+      "purpose": "result dispatch",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/instruments/instruments.test.tsx",
+        "apps/observatory/e2e/instruments.spec.ts"
+      ]
+    },
+    "apps/observatory/src/instruments/instruments.test.tsx": {
+      "purpose": "tests",
+      "created_by": "GRIT-P087",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/src/keyboard/shortcuts.ts": {
+      "purpose": "shortcut registry",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/board/Board.test.tsx",
+        "apps/observatory/e2e/keyboard.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/biochemistry/index.tsx": {
+      "purpose": "BC views",
+      "created_by": "GRIT-P090",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-bio-neuro.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/cognition/index.tsx": {
+      "purpose": "CO views",
+      "created_by": "GRIT-P091",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/dynamics/index.tsx": {
+      "purpose": "DY1 to DY5 views",
+      "created_by": "GRIT-P089",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-math-physics-dynamics.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/education/index.tsx": {
+      "purpose": "ED views",
+      "created_by": "GRIT-P091",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/evolution/index.tsx": {
+      "purpose": "EV views",
+      "created_by": "GRIT-P090",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-bio-neuro.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/mathematics/index.tsx": {
+      "purpose": "MA1 to MA5 views",
+      "created_by": "GRIT-P089",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-math-physics-dynamics.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/metascience/index.tsx": {
+      "purpose": "MS views",
+      "created_by": "GRIT-P091",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/neuroscience/index.tsx": {
+      "purpose": "NE views",
+      "created_by": "GRIT-P090",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-bio-neuro.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/physics/index.tsx": {
+      "purpose": "PH1 to PH5 views",
+      "created_by": "GRIT-P089",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-math-physics-dynamics.spec.ts"
+      ]
+    },
+    "apps/observatory/src/labs/verification/index.tsx": {
+      "purpose": "VE views",
+      "created_by": "GRIT-P091",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts"
+      ]
+    },
+    "apps/observatory/src/main.tsx": {
+      "purpose": "bootstrap",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/palette/CommandPalette.tsx": {
+      "purpose": "command palette",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/board/Board.test.tsx",
+        "apps/observatory/e2e/keyboard.spec.ts"
+      ]
+    },
+    "apps/observatory/src/routes.tsx": {
+      "purpose": "route table",
+      "created_by": "GRIT-P086",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/board/Board.test.tsx",
+        "apps/observatory/e2e/keyboard.spec.ts"
+      ]
+    },
+    "apps/observatory/src/shell/Shell.tsx": {
+      "purpose": "app shell",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/theme/palette.test.ts": {
+      "purpose": "contrast tests",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/src/theme/tokens.css": {
+      "purpose": "design tokens",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Axis.tsx": {
+      "purpose": "axis with required unit",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/BifurcationPlot.tsx": {
+      "purpose": "bifurcation plot (canvas)",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Figure.tsx": {
+      "purpose": "figure container",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Heatmap.tsx": {
+      "purpose": "heatmap",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Histogram.tsx": {
+      "purpose": "histogram",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/LinePlot.tsx": {
+      "purpose": "lines with CI bands",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/NetworkGraph.tsx": {
+      "purpose": "network graph",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/PhasePortrait.tsx": {
+      "purpose": "phase portrait",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Raster.tsx": {
+      "purpose": "spike raster (canvas)",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/ReliabilityDiagram.tsx": {
+      "purpose": "reliability diagram",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/Scatter.tsx": {
+      "purpose": "scatter",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/lttb.ts": {
+      "purpose": "downsampling",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/viz/viz.test.tsx",
+        "apps/observatory/e2e/viz.spec.ts"
+      ]
+    },
+    "apps/observatory/src/viz/viz.test.tsx": {
+      "purpose": "tests",
+      "created_by": "GRIT-P088",
+      "modified_by": [],
+      "tests": []
+    },
+    "apps/observatory/src/workspaces/experiments/ExperimentRegistry.tsx": {
+      "purpose": "experiment registry",
+      "created_by": "GRIT-P092",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-model.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/graph/KnowledgeGraph.tsx": {
+      "purpose": "knowledge graph",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/inference/InferenceBench.tsx": {
+      "purpose": "inference benchmarking",
+      "created_by": "GRIT-P092",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-model.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/learn/Learning.tsx": {
+      "purpose": "learning and mastery",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/library/Library.tsx": {
+      "purpose": "library",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/models/ModelLab.tsx": {
+      "purpose": "model laboratory",
+      "created_by": "GRIT-P092",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-model.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/publish/PublicationStudio.tsx": {
+      "purpose": "publication studio",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "apps/observatory/src/workspaces/training/TrainingDashboard.tsx": {
+      "purpose": "training dashboard",
+      "created_by": "GRIT-P092",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-model.spec.ts"
+      ]
+    },
+    "apps/observatory/tsconfig.json": {
+      "purpose": "TypeScript config",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "apps/observatory/vite.config.ts": {
+      "purpose": "Vite config",
+      "created_by": "GRIT-P085",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/e2e/shell.spec.ts"
+      ]
+    },
+    "architecture/layers.toml": {
+      "purpose": "allowed import edges for all planned packages",
+      "created_by": "GRIT-P003",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_layers.py"
+      ]
+    },
+    "benchmarks/baselines/README.md": {
+      "purpose": "how baselines are recorded and compared",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/reference/cases.toml",
+        "packages/grit_core/tests/reference/test_reference_cases.py"
+      ]
+    },
+    "benchmarks/bio/bench_spiking.py": {
+      "purpose": "spiking benchmark",
+      "created_by": "GRIT-P035",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_circuits.py"
+      ]
+    },
+    "benchmarks/core/bench_core.py": {
+      "purpose": "core micro-benchmarks",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/reference/cases.toml",
+        "packages/grit_core/tests/reference/test_reference_cases.py"
+      ]
+    },
+    "benchmarks/inference/README.md": {
+      "purpose": "how to run and read results",
+      "created_by": "GRIT-P074",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_bench_runner.py"
+      ]
+    },
+    "benchmarks/inference/run.py": {
+      "purpose": "benchmark runner",
+      "created_by": "GRIT-P074",
+      "modified_by": [
+        "GRIT-P075"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_bench_runner.py"
+      ]
+    },
+    "benchmarks/load/README.md": {
+      "purpose": "how to run",
+      "created_by": "GRIT-P107",
+      "modified_by": [],
+      "tests": []
+    },
+    "benchmarks/load/locustfile.py": {
+      "purpose": "load test",
+      "created_by": "GRIT-P107",
+      "modified_by": [],
+      "tests": []
+    },
+    "configs/architecture/g0-base-v1.toml": {
+      "purpose": "G0 config",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "configs/architecture/g1-base-v1.toml": {
+      "purpose": "G1 baseline config",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "configs/architecture/g2-ref-v1.toml": {
+      "purpose": "G2 reference config",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "configs/architecture/g3-ref-v1.toml": {
+      "purpose": "G3 reference config",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "configs/architecture/g3-v1.toml": {
+      "purpose": "final G3 architecture",
+      "created_by": "GRIT-P103",
+      "modified_by": [],
+      "tests": []
+    },
+    "configs/evaluation/eval-g3-v1.toml": {
+      "purpose": "G3 evaluation protocol",
+      "created_by": "GRIT-P103",
+      "modified_by": [],
+      "tests": []
+    },
+    "configs/evaluation/eval-lm-v1.toml": {
+      "purpose": "standard LM evaluation protocol",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ]
+    },
+    "configs/hardware_peaks.toml": {
+      "purpose": "reviewed peak FLOPs table with citations",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "configs/prices.toml": {
+      "purpose": "price table template (user maintained)",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ]
+    },
+    "configs/providers/README.md": {
+      "purpose": "provider config format",
+      "created_by": "GRIT-P076",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_external_api.py"
+      ]
+    },
+    "configs/tokenization/bpe16k-v1.toml": {
+      "purpose": "config",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "configs/tokenization/bpe32k-v1.toml": {
+      "purpose": "config",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "configs/tokenization/bpe4k-v1.toml": {
+      "purpose": "config",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "configs/tokenization/byte-v1.toml": {
+      "purpose": "config",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "configs/training/g0-base-v1.toml": {
+      "purpose": "G0 training config",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "configs/training/tiny-test-v1.toml": {
+      "purpose": "tiny config for tests",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "conftest.py": {
+      "purpose": "Hypothesis profile registration",
+      "created_by": "GRIT-P005",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_testing_helpers.py"
+      ]
+    },
+    "curricula/dynamics-to-neurons.toml": {
+      "purpose": "ED2 curriculum",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "curricula/entropy-to-learning.toml": {
+      "purpose": "ED1 curriculum",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "datasets/license-policy.toml": {
+      "purpose": "SPDX allowlist (owner maintained)",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "datasets/manifests/fixture-synthetic-v1.toml": {
+      "purpose": "test fixture manifest",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "datasets/manifests/g0-corpus-v1.toml": {
+      "purpose": "G0 corpus manifest (owner-verified license)",
+      "created_by": "GRIT-P081",
+      "modified_by": [],
+      "tests": []
+    },
+    "datasets/schemas/manifest.schema.md": {
+      "purpose": "manifest field documentation",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "docs/README.md": {
+      "purpose": "docs tree map",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/architecture/diagrams/": {
+      "purpose": "Mermaid sources (one file per diagram, copied)",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/architecture/overview.md": {
+      "purpose": "master architecture",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/architecture/scaling-plan.md": {
+      "purpose": "scaling plan with measured baseline",
+      "created_by": "GRIT-P107",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/datasets/g0-corpus@v1.md": {
+      "purpose": "G0 dataset card",
+      "created_by": "GRIT-P081",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/decisions/": {
+      "purpose": "ADR-0001 to ADR-0016 (copied)",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/decisions/ADR-0017-production-secrets.md": {
+      "purpose": "secrets management decision",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "docs/guides/contributing.md": {
+      "purpose": "developer guide",
+      "created_by": "GRIT-P111",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/guides/gpu-workers.md": {
+      "purpose": "GPU worker guide",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "docs/guides/grand-chessboard-integration.md": {
+      "purpose": "integration guide",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_oidc.py"
+      ]
+    },
+    "docs/guides/local-development.md": {
+      "purpose": "local quickstart",
+      "created_by": "GRIT-P096",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_doctor.py"
+      ]
+    },
+    "docs/guides/multi-user-production.md": {
+      "purpose": "Profile 4 guide",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_workspace_permissions.py"
+      ]
+    },
+    "docs/guides/single-server.md": {
+      "purpose": "deployment guide",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "docs/guides/testing.md": {
+      "purpose": "testing policy",
+      "created_by": "GRIT-P005",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_testing_helpers.py"
+      ]
+    },
+    "docs/index.md": {
+      "purpose": "docs landing page",
+      "created_by": "GRIT-P111",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/math/README.md": {
+      "purpose": "math docs index",
+      "created_by": "GRIT-P111",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/milestones/M1.md": {
+      "purpose": "milestone report",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/reference/cases.toml",
+        "packages/grit_core/tests/reference/test_reference_cases.py"
+      ]
+    },
+    "docs/milestones/M10.md": {
+      "purpose": "final acceptance matrix",
+      "created_by": "GRIT-P116",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/milestones/M2.md": {
+      "purpose": "Phase 2 milestone report",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_scenarios.py",
+        "packages/grit_dynamics/tests/test_multiscale.py"
+      ]
+    },
+    "docs/milestones/M3.md": {
+      "purpose": "Phase 3 milestone report",
+      "created_by": "GRIT-P035",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_circuits.py"
+      ]
+    },
+    "docs/milestones/M4.md": {
+      "purpose": "Phase 4 milestone report",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "docs/milestones/M5.md": {
+      "purpose": "Phase 5 milestone report",
+      "created_by": "GRIT-P058",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_runner.py",
+        "tests/integration/test_eval_roundtrip.py"
+      ]
+    },
+    "docs/milestones/M6.md": {
+      "purpose": "Phase 6 milestone report with profiling results",
+      "created_by": "GRIT-P081",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/milestones/M7.md": {
+      "purpose": "Phase 8 milestone report",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/milestones/data-pipeline.md": {
+      "purpose": "data pipeline walkthrough",
+      "created_by": "GRIT-P066",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_batching.py"
+      ]
+    },
+    "docs/milestones/evaluation-suites.md": {
+      "purpose": "suite documentation",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ]
+    },
+    "docs/models/alphalytica-g0@v1.md": {
+      "purpose": "G0 model card",
+      "created_by": "GRIT-P081",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/models/alphalytica-g2@v1.md": {
+      "purpose": "G2 model card",
+      "created_by": "GRIT-P101",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/models/alphalytica-g3@v1.md": {
+      "purpose": "G3 model card",
+      "created_by": "GRIT-P104",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/registry/README.md": {
+      "purpose": "registry schema and rules",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "docs/registry/benchmarks.toml": {
+      "purpose": "empty benchmark commitments table with schema comment (filled by P056)",
+      "created_by": "GRIT-P004",
+      "modified_by": [
+        "GRIT-P056"
+      ],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "docs/registry/capability-taxonomy.toml": {
+      "purpose": "initial capability taxonomy (provisional)",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "docs/registry/concepts/alphalytica.toml": {
+      "purpose": "model registry entries (block 2300 to 2499)",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "docs/registry/concepts/grit_algebra.toml": {
+      "purpose": "grit_algebra registry",
+      "created_by": "GRIT-P019",
+      "modified_by": [
+        "GRIT-P020",
+        "GRIT-P021",
+        "GRIT-P022"
+      ],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "docs/registry/concepts/grit_bio.toml": {
+      "purpose": "grit_bio registry",
+      "created_by": "GRIT-P029",
+      "modified_by": [
+        "GRIT-P030",
+        "GRIT-P031",
+        "GRIT-P032",
+        "GRIT-P033",
+        "GRIT-P034",
+        "GRIT-P035"
+      ],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "docs/registry/concepts/grit_cognition.toml": {
+      "purpose": "grit_cognition registry",
+      "created_by": "GRIT-P036",
+      "modified_by": [
+        "GRIT-P037",
+        "GRIT-P038",
+        "GRIT-P039"
+      ],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "docs/registry/concepts/grit_core.toml": {
+      "purpose": "grit_core concept registry",
+      "created_by": "GRIT-P007",
+      "modified_by": [
+        "GRIT-P008",
+        "GRIT-P010",
+        "GRIT-P011",
+        "GRIT-P012",
+        "GRIT-P013",
+        "GRIT-P015",
+        "GRIT-P016",
+        "GRIT-P017"
+      ],
+      "tests": [
+        "packages/grit_core/tests/test_types.py",
+        "packages/grit_core/tests/test_hashing.py"
+      ]
+    },
+    "docs/registry/concepts/grit_data.toml": {
+      "purpose": "data registry entries (block 2500 to 2699)",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "docs/registry/concepts/grit_discovery.toml": {
+      "purpose": "grit_discovery registry",
+      "created_by": "GRIT-P043",
+      "modified_by": [
+        "GRIT-P044",
+        "GRIT-P045"
+      ],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "docs/registry/concepts/grit_dynamics.toml": {
+      "purpose": "grit_dynamics registry",
+      "created_by": "GRIT-P024",
+      "modified_by": [
+        "GRIT-P025",
+        "GRIT-P026",
+        "GRIT-P027",
+        "GRIT-P028"
+      ],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "docs/registry/concepts/grit_lab.toml": {
+      "purpose": "grit_lab registry",
+      "created_by": "GRIT-P047",
+      "modified_by": [
+        "GRIT-P049"
+      ],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "docs/registry/concepts/grit_physics.toml": {
+      "purpose": "grit_physics registry",
+      "created_by": "GRIT-P040",
+      "modified_by": [
+        "GRIT-P041",
+        "GRIT-P042"
+      ],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "docs/registry/concepts/grit_treatise.toml": {
+      "purpose": "seed entries for treatise concepts (provisional)",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "docs/registry/concepts/grit_verify.toml": {
+      "purpose": "grit_verify registry",
+      "created_by": "GRIT-P046",
+      "modified_by": [
+        "GRIT-P054",
+        "GRIT-P055",
+        "GRIT-P056",
+        "GRIT-P057"
+      ],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "docs/research/alternatives-report.md": {
+      "purpose": "results per family",
+      "created_by": "GRIT-P102",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_alternatives.py"
+      ]
+    },
+    "docs/research/g0-replication-protocol.md": {
+      "purpose": "replication protocol",
+      "created_by": "GRIT-P116",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g0-replication-report.md": {
+      "purpose": "replication report",
+      "created_by": "GRIT-P116",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g1-synthesis.md": {
+      "purpose": "Generation 1 synthesis and G2 baseline decision",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g2-report.md": {
+      "purpose": "Generation 2 report and scaling fit",
+      "created_by": "GRIT-P101",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g3-cost-estimate.json": {
+      "purpose": "grit-cost output",
+      "created_by": "GRIT-P103",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g3-report.md": {
+      "purpose": "G3 training and evaluation report",
+      "created_by": "GRIT-P104",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g3-reproducibility.md": {
+      "purpose": "reproducibility bundle index",
+      "created_by": "GRIT-P104",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/g3-specification.md": {
+      "purpose": "G3 specification and go/no-go package",
+      "created_by": "GRIT-P103",
+      "modified_by": [],
+      "tests": []
+    },
+    "docs/research/proposals/README.md": {
+      "purpose": "proposal template and process",
+      "created_by": "GRIT-P102",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_alternatives.py"
+      ]
+    },
+    "docs/runbooks/deploy.md": {
+      "purpose": "deploy runbook",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "docs/runbooks/gpu-run.md": {
+      "purpose": "GPU run runbook",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "docs/runbooks/incident-response.md": {
+      "purpose": "incident response",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "docs/runbooks/key-rotation.md": {
+      "purpose": "key rotation",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "docs/runbooks/restore-drill.md": {
+      "purpose": "drill procedure",
+      "created_by": "GRIT-P110",
+      "modified_by": [],
+      "tests": [
+        "tests/reliability/test_crash_resume.py",
+        "services/api/tests/test_rate_limit.py"
+      ]
+    },
+    "docs/runbooks/rollback.md": {
+      "purpose": "rollback runbook",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "docs/security/evaluator-keys.md": {
+      "purpose": "key management procedure",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "docs/security/governance-acceptance.md": {
+      "purpose": "results table",
+      "created_by": "GRIT-P115",
+      "modified_by": [],
+      "tests": [
+        "tests/e2e/test_governance_bypass.py"
+      ]
+    },
+    "docs/security/supply-chain.md": {
+      "purpose": "supply chain controls",
+      "created_by": "GRIT-P109",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_manifest_signing.py"
+      ]
+    },
+    "docs/security/threat-model.md": {
+      "purpose": "implemented threat model",
+      "created_by": "GRIT-P108",
+      "modified_by": [],
+      "tests": [
+        "tests/security/test_api_fuzz.py",
+        "tests/security/test_traversal.py",
+        "tests/security/test_authz_cli.py",
+        "apps/observatory/e2e/xss.spec.ts"
+      ]
+    },
+    "docs/specifications/": {
+      "purpose": "specification set (copied)",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/specifications/audit-format.md": {
+      "purpose": "audit file format specification",
+      "created_by": "GRIT-P050",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_audit.py"
+      ]
+    },
+    "docs/templates/": {
+      "purpose": "ADR, model card, dataset card, experiment report templates",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "docs/traceability.md": {
+      "purpose": "generated traceability matrix",
+      "created_by": "GRIT-P112",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_cards_traceability.py"
+      ]
+    },
+    "experiments/README.md": {
+      "purpose": "how to write an experiment spec",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "experiments/examples/core-entropy-estimator.toml": {
+      "purpose": "example experiment spec",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "experiments/model_research/ALPHA-G0-base.toml": {
+      "purpose": "G0 experiment spec",
+      "created_by": "GRIT-P081",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G0-replication.toml": {
+      "purpose": "replication experiment",
+      "created_by": "GRIT-P116",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G1-S1-attention.toml": {
+      "purpose": "S1 spec",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G1-S2-position.toml": {
+      "purpose": "S2 spec",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G1-S3-normalization.toml": {
+      "purpose": "S3 spec",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G1-S4-feedforward.toml": {
+      "purpose": "S4 spec",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G1-S5-size.toml": {
+      "purpose": "S5 spec",
+      "created_by": "GRIT-P100",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G2-base.toml": {
+      "purpose": "G2 spec",
+      "created_by": "GRIT-P101",
+      "modified_by": [],
+      "tests": []
+    },
+    "experiments/model_research/ALPHA-G3-v1.toml": {
+      "purpose": "G3 spec",
+      "created_by": "GRIT-P104",
+      "modified_by": [],
+      "tests": []
+    },
+    "infrastructure/compose/Caddyfile": {
+      "purpose": "reverse proxy and TLS",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "infrastructure/compose/compose.yml": {
+      "purpose": "single-server compose",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "infrastructure/docker/api.Dockerfile": {
+      "purpose": "API image",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "infrastructure/docker/eval.Dockerfile": {
+      "purpose": "evaluator image",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "infrastructure/docker/worker.Dockerfile": {
+      "purpose": "job worker image",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "infrastructure/gpu/Dockerfile": {
+      "purpose": "GPU worker image",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "infrastructure/gpu/bootstrap.sh": {
+      "purpose": "worker bootstrap",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "infrastructure/gpu/grit-deadline.service": {
+      "purpose": "systemd poweroff unit",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "infrastructure/gpu/grit-deadline.timer": {
+      "purpose": "systemd deadline timer",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "infrastructure/gpu/worker_main.py": {
+      "purpose": "worker main loop",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "infrastructure/prod/backup.sh": {
+      "purpose": "backup",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "infrastructure/prod/grit-audit-verify.timer": {
+      "purpose": "audit verification timer",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "infrastructure/prod/grit-backup.timer": {
+      "purpose": "backup timer",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "infrastructure/prod/restore.sh": {
+      "purpose": "restore",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_backup_scripts.py"
+      ]
+    },
+    "mkdocs.yml": {
+      "purpose": "docs site config",
+      "created_by": "GRIT-P111",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/README.md": {
+      "purpose": "package overview and install notes",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P059",
+      "modified_by": [
+        "GRIT-P070",
+        "GRIT-P071",
+        "GRIT-P074",
+        "GRIT-P075",
+        "GRIT-P076",
+        "GRIT-P117"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/__init__.py": {
+      "purpose": "package root",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/__init__.py": {
+      "purpose": "architecture subpackage",
+      "created_by": "GRIT-P059",
+      "modified_by": [
+        "GRIT-P060"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/alternatives/__init__.py": {
+      "purpose": "alternative architectures package (only approved families implemented)",
+      "created_by": "GRIT-P102",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_alternatives.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/config.py": {
+      "purpose": "ModelConfig",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/layers.py": {
+      "purpose": "attention, MLP, block",
+      "created_by": "GRIT-P060",
+      "modified_by": [
+        "GRIT-P061",
+        "GRIT-P072"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_model.py",
+        "models/alphalytica/tests/test_param_count.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/matching.py": {
+      "purpose": "parameter and compute matching",
+      "created_by": "GRIT-P061",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_variants.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/arch/model.py": {
+      "purpose": "Transformer",
+      "created_by": "GRIT-P060",
+      "modified_by": [
+        "GRIT-P061"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_model.py",
+        "models/alphalytica/tests/test_param_count.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/__init__.py": {
+      "purpose": "inference subpackage",
+      "created_by": "GRIT-P071",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_inference.py",
+        "tests/integration/test_textmodel_protocol.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/external_api.py": {
+      "purpose": "external API provider",
+      "created_by": "GRIT-P076",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_external_api.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/hf_export.py": {
+      "purpose": "HF export",
+      "created_by": "GRIT-P075",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_quantize_export.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/limits.py": {
+      "purpose": "limits and memory estimate",
+      "created_by": "GRIT-P073",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_batching_limits.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/provider.py": {
+      "purpose": "provider interface",
+      "created_by": "GRIT-P071",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_inference.py",
+        "tests/integration/test_textmodel_protocol.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/quantize.py": {
+      "purpose": "quantization adapters",
+      "created_by": "GRIT-P075",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_quantize_export.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/streaming.py": {
+      "purpose": "streaming",
+      "created_by": "GRIT-P072",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_kv_cache.py",
+        "models/alphalytica/tests/test_streaming.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/infer/torch_local.py": {
+      "purpose": "local PyTorch provider",
+      "created_by": "GRIT-P071",
+      "modified_by": [
+        "GRIT-P072",
+        "GRIT-P073"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_inference.py",
+        "tests/integration/test_textmodel_protocol.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/mlx/__init__.py": {
+      "purpose": "MLX backend",
+      "created_by": "GRIT-P117",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_mlx_parity.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_config.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/__init__.py": {
+      "purpose": "training subpackage",
+      "created_by": "GRIT-P067",
+      "modified_by": [
+        "GRIT-P068"
+      ],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/checkpoint.py": {
+      "purpose": "checkpointing",
+      "created_by": "GRIT-P069",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_checkpoint_resume.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/cli.py": {
+      "purpose": "training entrypoint",
+      "created_by": "GRIT-P070",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_watchdog.py",
+        "tests/integration/test_authorized_training_run.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/config.py": {
+      "purpose": "TrainingConfig",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/device.py": {
+      "purpose": "device and precision",
+      "created_by": "GRIT-P068",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_training_loop.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/loop.py": {
+      "purpose": "training loop",
+      "created_by": "GRIT-P068",
+      "modified_by": [
+        "GRIT-P069",
+        "GRIT-P070"
+      ],
+      "tests": [
+        "models/alphalytica/tests/test_training_loop.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/metrics.py": {
+      "purpose": "metrics",
+      "created_by": "GRIT-P070",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_watchdog.py",
+        "tests/integration/test_authorized_training_run.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/optim.py": {
+      "purpose": "optimizer and schedule",
+      "created_by": "GRIT-P068",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_training_loop.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/run_record.py": {
+      "purpose": "run record draft builder",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "models/alphalytica/src/alphalytica/train/watchdog.py": {
+      "purpose": "budget watchdog",
+      "created_by": "GRIT-P070",
+      "modified_by": [],
+      "tests": [
+        "models/alphalytica/tests/test_watchdog.py",
+        "tests/integration/test_authorized_training_run.py"
+      ]
+    },
+    "models/alphalytica/tests/test_alternatives.py": {
+      "purpose": "shape, causality and defining-property tests per implemented family",
+      "created_by": "GRIT-P102",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_batching_limits.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P073",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_bench_runner.py": {
+      "purpose": "runner smoke test on tiny model",
+      "created_by": "GRIT-P074",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_checkpoint_resume.py": {
+      "purpose": "resume identity tests",
+      "created_by": "GRIT-P069",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_config.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P059",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_external_api.py": {
+      "purpose": "tests with mock transport",
+      "created_by": "GRIT-P076",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_inference.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P071",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_kv_cache.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P072",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_mlx_parity.py": {
+      "purpose": "parity tests (skipped off macOS)",
+      "created_by": "GRIT-P117",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_model.py": {
+      "purpose": "shape, causality, gradient and overfit tests",
+      "created_by": "GRIT-P060",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_param_count.py": {
+      "purpose": "analytical vs actual parameter counts",
+      "created_by": "GRIT-P060",
+      "modified_by": [
+        "GRIT-P061"
+      ],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_quantize_export.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P075",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_streaming.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P072",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_training_loop.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P068",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_variants.py": {
+      "purpose": "variant property tests",
+      "created_by": "GRIT-P061",
+      "modified_by": [],
+      "tests": []
+    },
+    "models/alphalytica/tests/test_watchdog.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P070",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/README.md": {
+      "purpose": "notebook standard",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/tutorials/01-entropy.ipynb": {
+      "purpose": "tutorial",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/tutorials/02-dynamics.ipynb": {
+      "purpose": "tutorial",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/tutorials/03-neurons.ipynb": {
+      "purpose": "tutorial",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/tutorials/04-learning-curves.ipynb": {
+      "purpose": "tutorial",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "notebooks/tutorials/05-reading-an-evaluation.ipynb": {
+      "purpose": "tutorial",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P019",
+      "modified_by": [
+        "GRIT-P022",
+        "GRIT-P023"
+      ],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P019",
+      "modified_by": [
+        "GRIT-P020",
+        "GRIT-P021",
+        "GRIT-P022"
+      ],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/capability_metrics.py": {
+      "purpose": "provisional capability metrics",
+      "created_by": "GRIT-P021",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_fixed_points.py",
+        "packages/grit_algebra/tests/test_capability_metrics.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/composition.py": {
+      "purpose": "composition",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/equivalence.py": {
+      "purpose": "equivalence and quotients",
+      "created_by": "GRIT-P020",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_relations.py",
+        "packages/grit_algebra/tests/test_invariants.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/examples.py": {
+      "purpose": "controlled reference examples",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/fixed_points.py": {
+      "purpose": "fixed point algorithms",
+      "created_by": "GRIT-P021",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_fixed_points.py",
+        "packages/grit_algebra/tests/test_capability_metrics.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/formal/__init__.py": {
+      "purpose": "optional formal adapters",
+      "created_by": "GRIT-P023",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_formal.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/formal/lean_export.py": {
+      "purpose": "Lean text export",
+      "created_by": "GRIT-P023",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_formal.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/formal/z3_adapter.py": {
+      "purpose": "Z3 adapter",
+      "created_by": "GRIT-P023",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_formal.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/higher_order.py": {
+      "purpose": "operator combinators",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/invariants.py": {
+      "purpose": "invariant checking",
+      "created_by": "GRIT-P020",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_relations.py",
+        "packages/grit_algebra/tests/test_invariants.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/operators.py": {
+      "purpose": "typed operators",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/py.typed": {
+      "purpose": "PEP 561 marker",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/relations.py": {
+      "purpose": "finite relations",
+      "created_by": "GRIT-P020",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_relations.py",
+        "packages/grit_algebra/tests/test_invariants.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/state_spaces.py": {
+      "purpose": "state spaces",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_spaces_operators.py",
+        "packages/grit_algebra/tests/test_composition.py"
+      ]
+    },
+    "packages/grit_algebra/src/grit_algebra/symbolic_math.py": {
+      "purpose": "safe parser and symbolic helpers",
+      "created_by": "GRIT-P022",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_algebra/tests/test_symbolic_math.py",
+        "packages/grit_algebra/tests/fixtures/malicious_expressions.txt"
+      ]
+    },
+    "packages/grit_algebra/tests/fixtures/malicious_expressions.txt": {
+      "purpose": "negative corpus",
+      "created_by": "GRIT-P022",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_capability_metrics.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P021",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_composition.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_fixed_points.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P021",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_formal.py": {
+      "purpose": "tests (skip when z3 missing)",
+      "created_by": "GRIT-P023",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_invariants.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P020",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_relations.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P020",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_spaces_operators.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P019",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_algebra/tests/test_symbolic_math.py": {
+      "purpose": "parser, security and Jacobian tests",
+      "created_by": "GRIT-P022",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P029",
+      "modified_by": [
+        "GRIT-P030",
+        "GRIT-P031",
+        "GRIT-P032",
+        "GRIT-P033",
+        "GRIT-P034",
+        "GRIT-P035"
+      ],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/biochemistry.py": {
+      "purpose": "reaction networks",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/catalysis.py": {
+      "purpose": "enzyme kinetics",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/comparative_biology.py": {
+      "purpose": "allometry",
+      "created_by": "GRIT-P032",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_landscapes.py",
+        "packages/grit_bio/tests/test_comparative.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/computational_neuroscience.py": {
+      "purpose": "circuits",
+      "created_by": "GRIT-P035",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_circuits.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/evolutionary_landscapes.py": {
+      "purpose": "landscapes and replicators",
+      "created_by": "GRIT-P032",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_landscapes.py",
+        "packages/grit_bio/tests/test_comparative.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/genetics.py": {
+      "purpose": "population genetics",
+      "created_by": "GRIT-P031",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_genetics.py",
+        "packages/grit_bio/tests/test_population.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/homeostasis.py": {
+      "purpose": "homeostasis",
+      "created_by": "GRIT-P030",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_regulatory.py",
+        "packages/grit_bio/tests/test_homeostasis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/neuron_models.py": {
+      "purpose": "neuron models",
+      "created_by": "GRIT-P033",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_neuron_models.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/parameters/README.md": {
+      "purpose": "parameter file conventions (citation required)",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/plasticity.py": {
+      "purpose": "plasticity rules",
+      "created_by": "GRIT-P034",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_synapses.py",
+        "packages/grit_bio/tests/test_plasticity.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/population_dynamics.py": {
+      "purpose": "ecological dynamics",
+      "created_by": "GRIT-P031",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_genetics.py",
+        "packages/grit_bio/tests/test_population.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/reaction_kinetics.py": {
+      "purpose": "kinetics",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_kinetics.py",
+        "packages/grit_bio/tests/test_catalysis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/regulatory_networks.py": {
+      "purpose": "regulatory motifs",
+      "created_by": "GRIT-P030",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_regulatory.py",
+        "packages/grit_bio/tests/test_homeostasis.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/synaptic_dynamics.py": {
+      "purpose": "synapses",
+      "created_by": "GRIT-P034",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_synapses.py",
+        "packages/grit_bio/tests/test_plasticity.py"
+      ]
+    },
+    "packages/grit_bio/src/grit_bio/systems_biology.py": {
+      "purpose": "steady states and control analysis",
+      "created_by": "GRIT-P030",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_bio/tests/test_regulatory.py",
+        "packages/grit_bio/tests/test_homeostasis.py"
+      ]
+    },
+    "packages/grit_bio/tests/test_biochemistry.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_catalysis.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_circuits.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P035",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_comparative.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P032",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_genetics.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P031",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_homeostasis.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P030",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_kinetics.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P029",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_landscapes.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P032",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_neuron_models.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P033",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_plasticity.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P034",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_population.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P031",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_regulatory.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P030",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_bio/tests/test_synapses.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P034",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P036",
+      "modified_by": [
+        "GRIT-P037",
+        "GRIT-P038",
+        "GRIT-P039"
+      ],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/attention.py": {
+      "purpose": "attention models",
+      "created_by": "GRIT-P038",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_calibration_memory.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/capability_profiles.py": {
+      "purpose": "taxonomy and profiles",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/comparative_assessment.py": {
+      "purpose": "comparison and IRT",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/generalization.py": {
+      "purpose": "generalization matrices",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_learning.py",
+        "packages/grit_cognition/tests/test_transfer.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/knowledge_representation.py": {
+      "purpose": "concept graphs",
+      "created_by": "GRIT-P038",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_calibration_memory.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/learning_curves.py": {
+      "purpose": "learning curves",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_learning.py",
+        "packages/grit_cognition/tests/test_transfer.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/memory.py": {
+      "purpose": "memory models",
+      "created_by": "GRIT-P038",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_calibration_memory.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/metacognitive_calibration.py": {
+      "purpose": "calibration reports",
+      "created_by": "GRIT-P038",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_calibration_memory.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_profiles.py",
+        "packages/grit_cognition/tests/test_irt.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/reasoning/__init__.py": {
+      "purpose": "task generator registry",
+      "created_by": "GRIT-P039",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_reasoning.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/reasoning/checkers.py": {
+      "purpose": "independent answer checkers",
+      "created_by": "GRIT-P039",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_reasoning.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/reasoning/export.py": {
+      "purpose": "split export",
+      "created_by": "GRIT-P039",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_reasoning.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/reasoning/tasks.py": {
+      "purpose": "task families",
+      "created_by": "GRIT-P039",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_reasoning.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/retention.py": {
+      "purpose": "retention",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_learning.py",
+        "packages/grit_cognition/tests/test_transfer.py"
+      ]
+    },
+    "packages/grit_cognition/src/grit_cognition/transfer.py": {
+      "purpose": "transfer metrics",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_cognition/tests/test_learning.py",
+        "packages/grit_cognition/tests/test_transfer.py"
+      ]
+    },
+    "packages/grit_cognition/tests/test_calibration_memory.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P038",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/tests/test_irt.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/tests/test_learning.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/tests/test_profiles.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P036",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/tests/test_reasoning.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P039",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_cognition/tests/test_transfer.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P037",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/pyproject.toml": {
+      "purpose": "grit_core package metadata and dependencies",
+      "created_by": "GRIT-P001",
+      "modified_by": [
+        "GRIT-P004",
+        "GRIT-P007",
+        "GRIT-P008",
+        "GRIT-P012"
+      ],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/__init__.py": {
+      "purpose": "package root exposing __version__",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/algebra.py": {
+      "purpose": "linear algebra helpers",
+      "created_by": "GRIT-P011",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_algebra.py",
+        "packages/grit_core/tests/test_geometry.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/config.py": {
+      "purpose": "TOML config loading and hashing",
+      "created_by": "GRIT-P014",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_config.py",
+        "packages/grit_core/tests/test_provenance.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/errors.py": {
+      "purpose": "typed error hierarchy",
+      "created_by": "GRIT-P007",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_types.py",
+        "packages/grit_core/tests/test_hashing.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/geometry.py": {
+      "purpose": "distances, simplex projection, PCA",
+      "created_by": "GRIT-P011",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_algebra.py",
+        "packages/grit_core/tests/test_geometry.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/graphs.py": {
+      "purpose": "typed graph and DAG helpers",
+      "created_by": "GRIT-P012",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_graphs.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/hashing.py": {
+      "purpose": "canonical JSON and sha256 content hashing",
+      "created_by": "GRIT-P007",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_types.py",
+        "packages/grit_core/tests/test_hashing.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/information.py": {
+      "purpose": "information-theoretic measures",
+      "created_by": "GRIT-P016",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_information.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/numerics.py": {
+      "purpose": "stable primitives and solver wrappers",
+      "created_by": "GRIT-P010",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_numerics.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/optimization.py": {
+      "purpose": "optimization wrappers",
+      "created_by": "GRIT-P013",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_optimization.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/probability.py": {
+      "purpose": "seeding and distributions",
+      "created_by": "GRIT-P015",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_probability.py",
+        "tests/test_no_global_rng.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/provenance.py": {
+      "purpose": "provenance types and environment capture",
+      "created_by": "GRIT-P014",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_config.py",
+        "packages/grit_core/tests/test_provenance.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/py.typed": {
+      "purpose": "PEP 561 marker",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/statistics/__init__.py": {
+      "purpose": "statistics API",
+      "created_by": "GRIT-P017",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_statistics.py",
+        "packages/grit_core/tests/test_calibration.py",
+        "packages/grit_core/tests/test_ci_coverage.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/statistics/calibration.py": {
+      "purpose": "calibration metrics",
+      "created_by": "GRIT-P017",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_statistics.py",
+        "packages/grit_core/tests/test_calibration.py",
+        "packages/grit_core/tests/test_ci_coverage.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/testing/__init__.py": {
+      "purpose": "testing helpers package",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/testing/numeric.py": {
+      "purpose": "tolerance-aware comparison helpers",
+      "created_by": "GRIT-P005",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_testing_helpers.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/testing/strategies.py": {
+      "purpose": "shared Hypothesis strategies",
+      "created_by": "GRIT-P005",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_testing_helpers.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/testing/traceability.py": {
+      "purpose": "pytest plugin: traces marker and report",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/types.py": {
+      "purpose": "validated value types and array aliases",
+      "created_by": "GRIT-P007",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_types.py",
+        "packages/grit_core/tests/test_hashing.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/units.py": {
+      "purpose": "pint registry and boundary conversions",
+      "created_by": "GRIT-P008",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_units.py"
+      ]
+    },
+    "packages/grit_core/src/grit_core/validation.py": {
+      "purpose": "contracts and checks",
+      "created_by": "GRIT-P009",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_validation.py",
+        "packages/grit_core/tests/bench_validation.py"
+      ]
+    },
+    "packages/grit_core/tests/bench_validation.py": {
+      "purpose": "overhead micro-benchmark (marked bench)",
+      "created_by": "GRIT-P009",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/reference/cases.toml": {
+      "purpose": "reference cases with citations",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/reference/test_reference_cases.py": {
+      "purpose": "parametrized reference runner",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_algebra.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P011",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_calibration.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P017",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_ci_coverage.py": {
+      "purpose": "coverage simulation (marked slow)",
+      "created_by": "GRIT-P017",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_config.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P014",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_geometry.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P011",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_graphs.py": {
+      "purpose": "tests including textbook DAGs",
+      "created_by": "GRIT-P012",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_hashing.py": {
+      "purpose": "canonical hashing tests",
+      "created_by": "GRIT-P007",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_import.py": {
+      "purpose": "smoke test that the package imports and has a version",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_information.py": {
+      "purpose": "unit, property and reference tests",
+      "created_by": "GRIT-P016",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_numerics.py": {
+      "purpose": "unit, property and reference tests",
+      "created_by": "GRIT-P010",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_optimization.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P013",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_probability.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P015",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_provenance.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P014",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_statistics.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P017",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_testing_helpers.py": {
+      "purpose": "tests for the helpers",
+      "created_by": "GRIT-P005",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_types.py": {
+      "purpose": "value type tests",
+      "created_by": "GRIT-P007",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_units.py": {
+      "purpose": "conversion and dimension tests",
+      "created_by": "GRIT-P008",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_core/tests/test_validation.py": {
+      "purpose": "contract tests",
+      "created_by": "GRIT-P009",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P062",
+      "modified_by": [
+        "GRIT-P064",
+        "GRIT-P065",
+        "GRIT-P066"
+      ],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/__init__.py": {
+      "purpose": "package root",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/batching.py": {
+      "purpose": "resumable batch iterator",
+      "created_by": "GRIT-P066",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_batching.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/clean.py": {
+      "purpose": "normalization and filters",
+      "created_by": "GRIT-P063",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_dedup.py",
+        "packages/grit_data/tests/fixtures/planted_duplicates.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/cli.py": {
+      "purpose": "grit-data CLI",
+      "created_by": "GRIT-P064",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_splits_leakage.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/dedup.py": {
+      "purpose": "exact and near dedup",
+      "created_by": "GRIT-P063",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_dedup.py",
+        "packages/grit_data/tests/fixtures/planted_duplicates.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/ingest.py": {
+      "purpose": "checksummed ingestion",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/leakage.py": {
+      "purpose": "leakage check",
+      "created_by": "GRIT-P064",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_splits_leakage.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/license_gate.py": {
+      "purpose": "license gate",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/manifests.py": {
+      "purpose": "manifest schema",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/shards.py": {
+      "purpose": "token shards",
+      "created_by": "GRIT-P066",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_batching.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/splits.py": {
+      "purpose": "split assignment",
+      "created_by": "GRIT-P064",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_splits_leakage.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/tokenizers/__init__.py": {
+      "purpose": "tokenizer API",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/tokenizers/bpe.py": {
+      "purpose": "BPE training and loading",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/tokenizers/byte_level.py": {
+      "purpose": "byte tokenizer",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_tokenizers.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/torch_iter.py": {
+      "purpose": "optional torch adapter",
+      "created_by": "GRIT-P066",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_batching.py"
+      ]
+    },
+    "packages/grit_data/src/grit_data/versioning.py": {
+      "purpose": "processed dataset writer and version hash",
+      "created_by": "GRIT-P064",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_data/tests/test_splits_leakage.py"
+      ]
+    },
+    "packages/grit_data/tests/fixtures/planted_duplicates.py": {
+      "purpose": "fixture generator with planted exact and near duplicates",
+      "created_by": "GRIT-P063",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_batching.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P066",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_dedup.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P063",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_ingest.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_license_gate.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P062",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_splits_leakage.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P064",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_data/tests/test_tokenizers.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P065",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_discovery/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P043",
+      "modified_by": [
+        "GRIT-P044",
+        "GRIT-P045"
+      ],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/analogy_analysis.py": {
+      "purpose": "structure mapping",
+      "created_by": "GRIT-P044",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_graph_tools.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/causal_attribution.py": {
+      "purpose": "causal attribution",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/concept_graphs.py": {
+      "purpose": "concept graph analytics",
+      "created_by": "GRIT-P044",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_graph_tools.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/discovery_classification.py": {
+      "purpose": "classification",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/hypotheses.py": {
+      "purpose": "pre-registered hypotheses",
+      "created_by": "GRIT-P044",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_graph_tools.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/intellectual_lineage.py": {
+      "purpose": "lineage",
+      "created_by": "GRIT-P044",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_graph_tools.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/literature.py": {
+      "purpose": "bibliography",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/methodology_comparison.py": {
+      "purpose": "meta-analysis",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/productivity_measurement.py": {
+      "purpose": "indicators with caveats",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/provenance.py": {
+      "purpose": "PROV graph",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/research_complexity.py": {
+      "purpose": "complexity proxies",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_meta_analysis.py",
+        "packages/grit_discovery/tests/test_indicators.py"
+      ]
+    },
+    "packages/grit_discovery/src/grit_discovery/scientific_claims.py": {
+      "purpose": "claims and evidence",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_discovery/tests/test_literature.py",
+        "packages/grit_discovery/tests/test_claims.py"
+      ]
+    },
+    "packages/grit_discovery/tests/test_claims.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_discovery/tests/test_graph_tools.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P044",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_discovery/tests/test_indicators.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_discovery/tests/test_literature.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P043",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_discovery/tests/test_meta_analysis.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P045",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P024",
+      "modified_by": [
+        "GRIT-P028"
+      ],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P024",
+      "modified_by": [
+        "GRIT-P025",
+        "GRIT-P026",
+        "GRIT-P027",
+        "GRIT-P028"
+      ],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/attractors.py": {
+      "purpose": "attractor measures",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_stability.py",
+        "packages/grit_dynamics/tests/test_bifurcations.py",
+        "packages/grit_dynamics/tests/test_attractors.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/bifurcations.py": {
+      "purpose": "bifurcation sweeps and normal forms",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_stability.py",
+        "packages/grit_dynamics/tests/test_bifurcations.py",
+        "packages/grit_dynamics/tests/test_attractors.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/continuous.py": {
+      "purpose": "ODE systems",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/control.py": {
+      "purpose": "control",
+      "created_by": "GRIT-P027",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_control.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/discrete.py": {
+      "purpose": "maps",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/feedback.py": {
+      "purpose": "feedback motifs",
+      "created_by": "GRIT-P027",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_control.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/multiscale.py": {
+      "purpose": "fast-slow systems",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_scenarios.py",
+        "packages/grit_dynamics/tests/test_multiscale.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/resources.py": {
+      "purpose": "resource-constrained dynamics",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_scenarios.py",
+        "packages/grit_dynamics/tests/test_multiscale.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/scenarios.py": {
+      "purpose": "budgeted scenario runner",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_scenarios.py",
+        "packages/grit_dynamics/tests/test_multiscale.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/stability.py": {
+      "purpose": "equilibria and stability",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_stability.py",
+        "packages/grit_dynamics/tests/test_bifurcations.py",
+        "packages/grit_dynamics/tests/test_attractors.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/stochastic.py": {
+      "purpose": "stochastic processes",
+      "created_by": "GRIT-P025",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_stochastic.py"
+      ]
+    },
+    "packages/grit_dynamics/src/grit_dynamics/systems.py": {
+      "purpose": "system and trajectory types",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_dynamics/tests/test_discrete.py",
+        "packages/grit_dynamics/tests/test_continuous.py"
+      ]
+    },
+    "packages/grit_dynamics/tests/test_attractors.py": {
+      "purpose": "tests (some slow)",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_bifurcations.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_continuous.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_control.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P027",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_discrete.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P024",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_multiscale.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_scenarios.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P028",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_stability.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P026",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_dynamics/tests/test_stochastic.py": {
+      "purpose": "statistical tests",
+      "created_by": "GRIT-P025",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P047",
+      "modified_by": [
+        "GRIT-P053",
+        "GRIT-P098",
+        "GRIT-P099",
+        "GRIT-P106"
+      ],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P047",
+      "modified_by": [
+        "GRIT-P049",
+        "GRIT-P051",
+        "GRIT-P052",
+        "GRIT-P053"
+      ],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/artifacts.py": {
+      "purpose": "artifact store",
+      "created_by": "GRIT-P049",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_artifacts.py",
+        "packages/grit_lab/tests/test_run_records.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/artifacts_s3.py": {
+      "purpose": "S3 artifact store",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/audit.py": {
+      "purpose": "audit log",
+      "created_by": "GRIT-P050",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_audit.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/authorization/__init__.py": {
+      "purpose": "authorization",
+      "created_by": "GRIT-P051",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_authorization.py",
+        "packages/grit_lab/tests/test_review.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/authorization/policy.toml": {
+      "purpose": "role-action policy",
+      "created_by": "GRIT-P051",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_authorization.py",
+        "packages/grit_lab/tests/test_review.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/baselines.py": {
+      "purpose": "baselines registry",
+      "created_by": "GRIT-P053",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_cli.py",
+        "tests/integration/test_lab_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/bundles.py": {
+      "purpose": "signed job bundles",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/cli.py": {
+      "purpose": "grit lab CLI",
+      "created_by": "GRIT-P053",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_cli.py",
+        "tests/integration/test_lab_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/datasets.py": {
+      "purpose": "dataset references",
+      "created_by": "GRIT-P053",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_cli.py",
+        "tests/integration/test_lab_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/docker_executor.py": {
+      "purpose": "Docker execution backend",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/execution.py": {
+      "purpose": "local executor",
+      "created_by": "GRIT-P052",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_budgets.py",
+        "packages/grit_lab/tests/test_execution.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/experiment_specs.py": {
+      "purpose": "spec parsing and validation",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/gpu/__init__.py": {
+      "purpose": "GPU lifecycle package",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/gpu/cli.py": {
+      "purpose": "grit-gpu CLI",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/gpu/monitoring.py": {
+      "purpose": "nvidia-smi parsing and heartbeats",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/gpu/providers.py": {
+      "purpose": "provider adapters",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/human_review.py": {
+      "purpose": "review records",
+      "created_by": "GRIT-P051",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_authorization.py",
+        "packages/grit_lab/tests/test_review.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/isolated_execution.py": {
+      "purpose": "isolation helpers",
+      "created_by": "GRIT-P052",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_budgets.py",
+        "packages/grit_lab/tests/test_execution.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/provenance.py": {
+      "purpose": "run records",
+      "created_by": "GRIT-P049",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_artifacts.py",
+        "packages/grit_lab/tests/test_run_records.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/reporting.py": {
+      "purpose": "report generation",
+      "created_by": "GRIT-P053",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_cli.py",
+        "tests/integration/test_lab_lifecycle.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/resource_budgets.py": {
+      "purpose": "budgets and ledger",
+      "created_by": "GRIT-P052",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_budgets.py",
+        "packages/grit_lab/tests/test_execution.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/signing_keys.py": {
+      "purpose": "executor signing",
+      "created_by": "GRIT-P109",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_manifest_signing.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/states.py": {
+      "purpose": "pure state machine",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/__init__.py": {
+      "purpose": "store package",
+      "created_by": "GRIT-P048",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_store.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/db.py": {
+      "purpose": "connection and migration runner",
+      "created_by": "GRIT-P048",
+      "modified_by": [
+        "GRIT-P106"
+      ],
+      "tests": [
+        "packages/grit_lab/tests/test_store.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0001_initial.down.sql": {
+      "purpose": "rollback",
+      "created_by": "GRIT-P048",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_store.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0001_initial.sql": {
+      "purpose": "initial schema",
+      "created_by": "GRIT-P048",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_store.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0002_audit_index.down.sql": {
+      "purpose": "rollback",
+      "created_by": "GRIT-P050",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_audit.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0002_audit_index.sql": {
+      "purpose": "audit index table",
+      "created_by": "GRIT-P050",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_audit.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0003_progress.down.sql": {
+      "purpose": "rollback",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0003_progress.sql": {
+      "purpose": "progress table",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0004_users.down.sql": {
+      "purpose": "rollback",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_oidc.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0004_users.sql": {
+      "purpose": "users and role mapping",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_oidc.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0005_workspaces.down.sql": {
+      "purpose": "rollback",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_workspace_permissions.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/migrations/0005_workspaces.sql": {
+      "purpose": "workspace permissions",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_workspace_permissions.py"
+      ]
+    },
+    "packages/grit_lab/src/grit_lab/store/repositories.py": {
+      "purpose": "table repositories",
+      "created_by": "GRIT-P048",
+      "modified_by": [
+        "GRIT-P050"
+      ],
+      "tests": [
+        "packages/grit_lab/tests/test_store.py"
+      ]
+    },
+    "packages/grit_lab/tests/test_artifacts.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P049",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_artifacts_s3.py": {
+      "purpose": "tests against MinIO (integration)",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_audit.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P050",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_authorization.py": {
+      "purpose": "exhaustive matrix tests",
+      "created_by": "GRIT-P051",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_budgets.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P052",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_bundles.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P098",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_cli.py": {
+      "purpose": "CLI tests",
+      "created_by": "GRIT-P053",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_docker_executor.py": {
+      "purpose": "tests (skipped without Docker)",
+      "created_by": "GRIT-P097",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_execution.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P052",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_gpu_lifecycle.py": {
+      "purpose": "tests with fake provider",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_manifest_signing.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P109",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_review.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P051",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_run_records.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P049",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_specs.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_state_machine.py": {
+      "purpose": "exhaustive transition tests",
+      "created_by": "GRIT-P047",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_store.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P048",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_lab/tests/test_workspace_permissions.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_physics/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P040",
+      "modified_by": [
+        "GRIT-P041",
+        "GRIT-P042"
+      ],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/__init__.py": {
+      "purpose": "public API",
+      "created_by": "GRIT-P040",
+      "modified_by": [
+        "GRIT-P041",
+        "GRIT-P042"
+      ],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/cli.py": {
+      "purpose": "grit-bench CLI",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/computational_efficiency.py": {
+      "purpose": "efficiency metrics",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/compute_accounting.py": {
+      "purpose": "params, FLOPs, memory",
+      "created_by": "GRIT-P040",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/cost.py": {
+      "purpose": "cost estimation and CLI",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/energy_measurement.py": {
+      "purpose": "energy",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/hardware_profiles.py": {
+      "purpose": "hardware detection",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/latency.py": {
+      "purpose": "timing",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/memory_profiling.py": {
+      "purpose": "memory",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/pareto_analysis.py": {
+      "purpose": "Pareto analysis",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P040",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/scaling_laws.py": {
+      "purpose": "scaling law fitting",
+      "created_by": "GRIT-P040",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/thermodynamic_models.py": {
+      "purpose": "Landauer comparisons",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ]
+    },
+    "packages/grit_physics/src/grit_physics/throughput.py": {
+      "purpose": "throughput",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_physics/tests/test_measurement.py"
+      ]
+    },
+    "packages/grit_physics/tests/test_accounting.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P040",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_physics/tests/test_cost.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_physics/tests/test_measurement.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P041",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_physics/tests/test_pareto.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P042",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_physics/tests/test_scaling.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P040",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P046",
+      "modified_by": [
+        "GRIT-P057",
+        "GRIT-P058"
+      ],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/__init__.py": {
+      "purpose": "package root (exports only public types)",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/audit.py": {
+      "purpose": "independent audit verification",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_causal.py",
+        "packages/grit_verify/tests/test_audit_verify.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/calibration.py": {
+      "purpose": "calibration evaluation",
+      "created_by": "GRIT-P055",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_statistical_validation.py",
+        "packages/grit_verify/tests/test_replication.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/causal_inference.py": {
+      "purpose": "effect estimators",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_causal.py",
+        "packages/grit_verify/tests/test_audit_verify.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/cli.py": {
+      "purpose": "grit-verify CLI",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_causal.py",
+        "packages/grit_verify/tests/test_audit_verify.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/contamination.py": {
+      "purpose": "contamination checks",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_benchmarks.py",
+        "packages/grit_verify/tests/test_contamination.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/contracts.py": {
+      "purpose": "verification contracts",
+      "created_by": "GRIT-P054",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/formal_verification.py": {
+      "purpose": "checker runner",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_causal.py",
+        "packages/grit_verify/tests/test_audit_verify.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/holdouts.py": {
+      "purpose": "holdout store",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_benchmarks.py",
+        "packages/grit_verify/tests/test_contamination.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/independent_benchmarks.py": {
+      "purpose": "commitments",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_benchmarks.py",
+        "packages/grit_verify/tests/test_contamination.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/invariants.py": {
+      "purpose": "invariant suites",
+      "created_by": "GRIT-P054",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/__init__.py": {
+      "purpose": "model evaluation suites",
+      "created_by": "GRIT-P077",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_lm_suite.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/calibration_suite.py": {
+      "purpose": "calibration suite",
+      "created_by": "GRIT-P079",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_quality_suites.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/capability.py": {
+      "purpose": "capability suite",
+      "created_by": "GRIT-P078",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_capability_suite.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/comparison.py": {
+      "purpose": "comparisons",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/generalization.py": {
+      "purpose": "generalization suite",
+      "created_by": "GRIT-P079",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_quality_suites.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/lm.py": {
+      "purpose": "LM suite",
+      "created_by": "GRIT-P077",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_lm_suite.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/ngram_baselines.py": {
+      "purpose": "n-gram baselines",
+      "created_by": "GRIT-P077",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_lm_suite.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/regression.py": {
+      "purpose": "regression detection",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/report.py": {
+      "purpose": "evaluation reports",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/model_eval/robustness.py": {
+      "purpose": "robustness suite",
+      "created_by": "GRIT-P079",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_quality_suites.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/protocols.py": {
+      "purpose": "TextModel and TokenizerLike protocols",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/py.typed": {
+      "purpose": "marker",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/regression_testing.py": {
+      "purpose": "golden regression store",
+      "created_by": "GRIT-P054",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_regression.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/replication.py": {
+      "purpose": "replication checks",
+      "created_by": "GRIT-P055",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_statistical_validation.py",
+        "packages/grit_verify/tests/test_replication.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/runner.py": {
+      "purpose": "evaluation runner",
+      "created_by": "GRIT-P058",
+      "modified_by": [
+        "GRIT-P079"
+      ],
+      "tests": [
+        "packages/grit_verify/tests/test_runner.py",
+        "tests/integration/test_eval_roundtrip.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/signing.py": {
+      "purpose": "Ed25519 signing and verification",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/statistical_validation.py": {
+      "purpose": "plan execution",
+      "created_by": "GRIT-P055",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_statistical_validation.py",
+        "packages/grit_verify/tests/test_replication.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/suites.py": {
+      "purpose": "suite registry and selftest suite",
+      "created_by": "GRIT-P058",
+      "modified_by": [
+        "GRIT-P077",
+        "GRIT-P078",
+        "GRIT-P079",
+        "GRIT-P080"
+      ],
+      "tests": [
+        "packages/grit_verify/tests/test_runner.py",
+        "tests/integration/test_eval_roundtrip.py"
+      ]
+    },
+    "packages/grit_verify/src/grit_verify/types.py": {
+      "purpose": "protocol, request, result and commitment types",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_types.py",
+        "packages/grit_verify/tests/test_signing.py"
+      ]
+    },
+    "packages/grit_verify/tests/test_audit_verify.py": {
+      "purpose": "tests using lab-written fixture files",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_benchmarks.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_capability_suite.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P078",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_causal.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P057",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_comparison_regression.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P080",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_contamination.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_lm_suite.py": {
+      "purpose": "tests with a deterministic fake TextModel",
+      "created_by": "GRIT-P077",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_quality_suites.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P079",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_regression.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P054",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_replication.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P055",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_runner.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P058",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_signing.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_statistical_validation.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P055",
+      "modified_by": [],
+      "tests": []
+    },
+    "packages/grit_verify/tests/test_types.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P046",
+      "modified_by": [],
+      "tests": []
+    },
+    "prompts/acceptance.json": {
+      "purpose": "copied acceptance criteria",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "prompts/dependencies.json": {
+      "purpose": "copied DAG",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "prompts/files.json": {
+      "purpose": "copied file ownership map",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "prompts/prompts.json": {
+      "purpose": "copied prompt index",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "prompts/reports/README.md": {
+      "purpose": "report conventions",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "prompts/status.json": {
+      "purpose": "mutable execution status",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "pyproject.toml": {
+      "purpose": "uv workspace root, shared tool configuration",
+      "created_by": "GRIT-P001",
+      "modified_by": [
+        "GRIT-P005",
+        "GRIT-P018",
+        "GRIT-P094",
+        "GRIT-P107",
+        "GRIT-P108",
+        "GRIT-P111"
+      ],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    },
+    "renovate.json": {
+      "purpose": "dependency update policy",
+      "created_by": "GRIT-P109",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_manifest_signing.py"
+      ]
+    },
+    "scripts/bench_compare.py": {
+      "purpose": "compare benchmark JSON against a baseline",
+      "created_by": "GRIT-P018",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/reference/cases.toml",
+        "packages/grit_core/tests/reference/test_reference_cases.py"
+      ]
+    },
+    "scripts/check_config_immutability.py": {
+      "purpose": "config immutability check",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": [
+        "tests/integration/test_run_record_schema.py"
+      ]
+    },
+    "scripts/check_layers.py": {
+      "purpose": "AST-based import rule checker",
+      "created_by": "GRIT-P003",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_layers.py"
+      ]
+    },
+    "scripts/check_links.py": {
+      "purpose": "relative link and anchor checker",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_links.py"
+      ]
+    },
+    "scripts/check_registry.py": {
+      "purpose": "registry validator",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_check_registry.py"
+      ]
+    },
+    "scripts/commit_benchmark.py": {
+      "purpose": "one-time benchmark commitment script (evaluator identity)",
+      "created_by": "GRIT-P056",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_verify/tests/test_benchmarks.py",
+        "packages/grit_verify/tests/test_contamination.py"
+      ]
+    },
+    "scripts/doctor.py": {
+      "purpose": "environment checks",
+      "created_by": "GRIT-P096",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_doctor.py"
+      ]
+    },
+    "scripts/export_publication.py": {
+      "purpose": "publication export",
+      "created_by": "GRIT-P112",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_cards_traceability.py"
+      ]
+    },
+    "scripts/make_cards.py": {
+      "purpose": "card generator",
+      "created_by": "GRIT-P112",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_cards_traceability.py"
+      ]
+    },
+    "scripts/migrate_sqlite_to_pg.py": {
+      "purpose": "SQLite to PostgreSQL migration",
+      "created_by": "GRIT-P106",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_workspace_permissions.py"
+      ]
+    },
+    "scripts/prompt_status.py": {
+      "purpose": "status CLI",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_prompt_status.py"
+      ]
+    },
+    "scripts/restore_drill.sh": {
+      "purpose": "restore drill",
+      "created_by": "GRIT-P110",
+      "modified_by": [],
+      "tests": [
+        "tests/reliability/test_crash_resume.py",
+        "services/api/tests/test_rate_limit.py"
+      ]
+    },
+    "scripts/run_notebooks.py": {
+      "purpose": "notebook executor",
+      "created_by": "GRIT-P094",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/sbom.sh": {
+      "purpose": "SBOM generation",
+      "created_by": "GRIT-P109",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_manifest_signing.py"
+      ]
+    },
+    "scripts/tests/test_backup_scripts.py": {
+      "purpose": "backup/restore tests in Docker",
+      "created_by": "GRIT-P105",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_cards_traceability.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P112",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_check_layers.py": {
+      "purpose": "checker tests using temporary package trees",
+      "created_by": "GRIT-P003",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_check_links.py": {
+      "purpose": "tests for the link checker",
+      "created_by": "GRIT-P002",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_check_registry.py": {
+      "purpose": "validator tests",
+      "created_by": "GRIT-P004",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_doctor.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P096",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/tests/test_prompt_status.py": {
+      "purpose": "CLI tests",
+      "created_by": "GRIT-P006",
+      "modified_by": [],
+      "tests": []
+    },
+    "scripts/traceability.py": {
+      "purpose": "traceability matrix generator",
+      "created_by": "GRIT-P112",
+      "modified_by": [],
+      "tests": [
+        "scripts/tests/test_cards_traceability.py"
+      ]
+    },
+    "services/api/openapi.json": {
+      "purpose": "committed OpenAPI snapshot",
+      "created_by": "GRIT-P082",
+      "modified_by": [
+        "GRIT-P083",
+        "GRIT-P084",
+        "GRIT-P093"
+      ],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/pyproject.toml": {
+      "purpose": "package metadata",
+      "created_by": "GRIT-P082",
+      "modified_by": [
+        "GRIT-P095"
+      ],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/__init__.py": {
+      "purpose": "package root",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/app.py": {
+      "purpose": "app factory",
+      "created_by": "GRIT-P082",
+      "modified_by": [
+        "GRIT-P083",
+        "GRIT-P084",
+        "GRIT-P093",
+        "GRIT-P099",
+        "GRIT-P110"
+      ],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/auth.py": {
+      "purpose": "authorization dependency",
+      "created_by": "GRIT-P084",
+      "modified_by": [
+        "GRIT-P095"
+      ],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/errors.py": {
+      "purpose": "problem+json errors",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/__init__.py": {
+      "purpose": "instrument package",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/__init__.py": {
+      "purpose": "imports all manifests",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/biochemistry.py": {
+      "purpose": "BC1 to BC5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/cognition.py": {
+      "purpose": "CO1 to CO5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/dynamics.py": {
+      "purpose": "DY1 to DY5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/education.py": {
+      "purpose": "ED1 to ED5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/evolution.py": {
+      "purpose": "EV1 to EV5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/mathematics.py": {
+      "purpose": "MA1 to MA5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/metascience.py": {
+      "purpose": "MS1 to MS5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/neuroscience.py": {
+      "purpose": "NE1 to NE5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/physics.py": {
+      "purpose": "PH1 to PH5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/catalog/verification.py": {
+      "purpose": "VE1 to VE5",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/instruments/registry.py": {
+      "purpose": "registry and manifest type",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/logging.py": {
+      "purpose": "structured logging",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/oidc.py": {
+      "purpose": "OIDC login",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_oidc.py"
+      ]
+    },
+    "services/api/src/grit_api/rate_limit.py": {
+      "purpose": "rate limiting and quotas",
+      "created_by": "GRIT-P110",
+      "modified_by": [],
+      "tests": [
+        "tests/reliability/test_crash_resume.py",
+        "services/api/tests/test_rate_limit.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/__init__.py": {
+      "purpose": "routes",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/evaluations.py": {
+      "purpose": "evaluation routes",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/experiments.py": {
+      "purpose": "experiment routes",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/health.py": {
+      "purpose": "health and readiness",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/heartbeat.py": {
+      "purpose": "worker heartbeat endpoint",
+      "created_by": "GRIT-P099",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_lab/tests/test_gpu_lifecycle.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/instruments.py": {
+      "purpose": "instrument and compute routes",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_instruments_compute.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/models.py": {
+      "purpose": "model routes",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/progress.py": {
+      "purpose": "curriculum progress",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "services/api/src/grit_api/routes/publications.py": {
+      "purpose": "publication export",
+      "created_by": "GRIT-P093",
+      "modified_by": [],
+      "tests": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts"
+      ]
+    },
+    "services/api/src/grit_api/routes/registry.py": {
+      "purpose": "registry routes",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/routes/runs.py": {
+      "purpose": "run routes",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ]
+    },
+    "services/api/src/grit_api/settings.py": {
+      "purpose": "settings",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": [
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ]
+    },
+    "services/api/tests/test_authz_endpoints.py": {
+      "purpose": "authorization matrix over endpoints",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_experiment_endpoints.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_generate_endpoint.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P084",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_health.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_instruments_compute.py": {
+      "purpose": "every instrument computes with defaults",
+      "created_by": "GRIT-P083",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_oidc.py": {
+      "purpose": "tests with a mock issuer",
+      "created_by": "GRIT-P095",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_openapi_contract.py": {
+      "purpose": "OpenAPI snapshot test",
+      "created_by": "GRIT-P082",
+      "modified_by": [],
+      "tests": []
+    },
+    "services/api/tests/test_rate_limit.py": {
+      "purpose": "tests",
+      "created_by": "GRIT-P110",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/e2e/test_governance_bypass.py": {
+      "purpose": "bypass attempts",
+      "created_by": "GRIT-P115",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/e2e/test_model_path.py": {
+      "purpose": "model e2e",
+      "created_by": "GRIT-P114",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/e2e/test_scientific_paths.py": {
+      "purpose": "scientific e2e",
+      "created_by": "GRIT-P113",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/integration/test_authorized_training_run.py": {
+      "purpose": "lab-governed training integration test",
+      "created_by": "GRIT-P070",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/integration/test_eval_roundtrip.py": {
+      "purpose": "lab \u2194 evaluator round trip",
+      "created_by": "GRIT-P058",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/integration/test_lab_lifecycle.py": {
+      "purpose": "full lifecycle integration test",
+      "created_by": "GRIT-P053",
+      "modified_by": [
+        "GRIT-P058"
+      ],
+      "tests": []
+    },
+    "tests/integration/test_run_record_schema.py": {
+      "purpose": "alphalytica draft \u2194 grit_lab RunRecord compatibility",
+      "created_by": "GRIT-P067",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/integration/test_textmodel_protocol.py": {
+      "purpose": "provider satisfies grit_verify TextModel via entry point",
+      "created_by": "GRIT-P071",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/reliability/test_crash_resume.py": {
+      "purpose": "crash and resume tests",
+      "created_by": "GRIT-P110",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/security/test_api_fuzz.py": {
+      "purpose": "schema fuzzing",
+      "created_by": "GRIT-P108",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/security/test_authz_cli.py": {
+      "purpose": "CLI authorization tests",
+      "created_by": "GRIT-P108",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/security/test_traversal.py": {
+      "purpose": "path traversal tests",
+      "created_by": "GRIT-P108",
+      "modified_by": [],
+      "tests": []
+    },
+    "tests/test_no_global_rng.py": {
+      "purpose": "repository-wide global RNG ban",
+      "created_by": "GRIT-P015",
+      "modified_by": [],
+      "tests": []
+    },
+    "uv.lock": {
+      "purpose": "locked dependency graph (generated)",
+      "created_by": "GRIT-P001",
+      "modified_by": [],
+      "tests": [
+        "packages/grit_core/tests/test_import.py"
+      ]
+    }
+  }
+}

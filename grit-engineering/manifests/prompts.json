@@ -1,0 +1,4618 @@
+{
+  "version": 1,
+  "prompts": [
+    {
+      "id": "GRIT-P001",
+      "title": "Repository skeleton, workspace and toolchain",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P001-repository-skeleton-workspace-and-toolchain.md",
+      "phase": 0,
+      "wave": 1,
+      "dependencies": [],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/ci.yml",
+        ".gitignore",
+        ".python-version",
+        "AGENTS.md",
+        "Makefile",
+        "README.md",
+        "packages/grit_core/pyproject.toml",
+        "packages/grit_core/src/grit_core/__init__.py",
+        "packages/grit_core/src/grit_core/py.typed",
+        "packages/grit_core/tests/test_import.py",
+        "pyproject.toml",
+        "uv.lock"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "make check",
+        "uv run python -c \"import grit_core; print(grit_core.__version__)\""
+      ],
+      "acceptance_criteria": [
+        "`make check` exits 0 on a fresh clone on Linux and macOS (CI green on both).",
+        "`uv.lock` is committed and `uv sync --frozen` succeeds.",
+        "No dependencies other than numpy, scipy (grit_core) and pytest, hypothesis, ruff, mypy (dev).",
+        "AGENTS.md at the root is byte-identical to grit-engineering/AGENTS.md."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P002",
+      "title": "Architecture documents, ADRs and module contracts in the repository",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P002-architecture-documents-adrs-and-module-contracts-in-the-repo.md",
+      "phase": 0,
+      "wave": 2,
+      "dependencies": [
+        "GRIT-P001"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/README.md",
+        "docs/architecture/diagrams/",
+        "docs/architecture/overview.md",
+        "docs/decisions/",
+        "docs/specifications/",
+        "docs/templates/",
+        "scripts/check_links.py",
+        "scripts/tests/test_check_links.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "uv run python scripts/check_links.py",
+        "uv run pytest scripts/tests -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All 16 ADRs and all specification files present under docs/.",
+        "`make docs-links` exits 0; a planted broken link makes it exit 1."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P003",
+      "title": "Layer enforcement with the import checker",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P003-layer-enforcement-with-the-import-checker.md",
+      "phase": 0,
+      "wave": 2,
+      "dependencies": [
+        "GRIT-P001"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "architecture/layers.toml",
+        "scripts/check_layers.py",
+        "scripts/tests/test_check_layers.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "uv run python scripts/check_layers.py",
+        "uv run pytest scripts/tests/test_check_layers.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "`make layers` exits 0 on the repository and 1 on each planted violation in tests.",
+        "Checker runs in under 2 seconds on the repository."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P004",
+      "title": "Scientific traceability registry and validator",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P004-scientific-traceability-registry-and-validator.md",
+      "phase": 0,
+      "wave": 2,
+      "dependencies": [
+        "GRIT-P001"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/README.md",
+        "docs/registry/benchmarks.toml",
+        "docs/registry/concepts/grit_treatise.toml",
+        "packages/grit_core/src/grit_core/testing/__init__.py",
+        "packages/grit_core/src/grit_core/testing/traceability.py",
+        "scripts/check_registry.py",
+        "scripts/tests/test_check_registry.py"
+      ],
+      "modified_files": [
+        "Makefile",
+        "packages/grit_core/pyproject.toml"
+      ],
+      "test_commands": [
+        "make registry",
+        "uv run pytest scripts/tests/test_check_registry.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "`make registry` passes on the repository.",
+        "Each status rule has a failing fixture test.",
+        "ID block table documented in docs/registry/README.md."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P005",
+      "title": "Test infrastructure, markers and numerical tolerance policy",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P005-test-infrastructure-markers-and-numerical-tolerance-policy.md",
+      "phase": 0,
+      "wave": 3,
+      "dependencies": [
+        "GRIT-P001",
+        "GRIT-P004"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "conftest.py",
+        "docs/guides/testing.md",
+        "packages/grit_core/src/grit_core/testing/numeric.py",
+        "packages/grit_core/src/grit_core/testing/strategies.py",
+        "packages/grit_core/tests/test_testing_helpers.py"
+      ],
+      "modified_files": [
+        ".github/workflows/ci.yml",
+        "Makefile",
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "make test-fast",
+        "HYPOTHESIS_PROFILE=thorough uv run pytest packages/grit_core/tests/test_testing_helpers.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All markers registered; `--strict-markers` active.",
+        "`make test-fast` excludes slow/bench/gpu/e2e (verified by a marked dummy test that would fail).",
+        "Policy documented in docs/guides/testing.md."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P006",
+      "title": "Prompt execution tracking and resumability",
+      "group": "A",
+      "group_name": "Architecture and repository foundations",
+      "folder": "00-foundations",
+      "path": "prompts/00-foundations/GRIT-P006-prompt-execution-tracking-and-resumability.md",
+      "phase": 0,
+      "wave": 2,
+      "dependencies": [
+        "GRIT-P001"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "prompts/acceptance.json",
+        "prompts/dependencies.json",
+        "prompts/files.json",
+        "prompts/prompts.json",
+        "prompts/reports/README.md",
+        "prompts/status.json",
+        "scripts/prompt_status.py",
+        "scripts/tests/test_prompt_status.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "uv run python scripts/prompt_status.py check",
+        "uv run python scripts/prompt_status.py next",
+        "uv run pytest scripts/tests/test_prompt_status.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "`prompt_status.py next` after this prompt lists P007 and other wave-1 prompts whose deps are done.",
+        "`make prompts-check` passes and fails on a planted inconsistency.",
+        "Reports for P001 to P006 exist in prompts/reports/."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P007",
+      "title": "Core types, error hierarchy and canonical hashing",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P007-core-types-error-hierarchy-and-canonical-hashing.md",
+      "phase": 1,
+      "wave": 4,
+      "dependencies": [
+        "GRIT-P001",
+        "GRIT-P004",
+        "GRIT-P005"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_core.toml",
+        "packages/grit_core/src/grit_core/errors.py",
+        "packages/grit_core/src/grit_core/hashing.py",
+        "packages/grit_core/src/grit_core/types.py",
+        "packages/grit_core/tests/test_hashing.py",
+        "packages/grit_core/tests/test_types.py"
+      ],
+      "modified_files": [
+        "packages/grit_core/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "mypy strict passes with no `type: ignore`.",
+        "Golden hash committed and stable on Linux and macOS CI.",
+        "Registry entries validated by `make registry`."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P008",
+      "title": "Units at boundaries",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P008-units-at-boundaries.md",
+      "phase": 1,
+      "wave": 5,
+      "dependencies": [
+        "GRIT-P007"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/units.py",
+        "packages/grit_core/tests/test_units.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml",
+        "packages/grit_core/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_units.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All conversion table cases pass.",
+        "`parse_quantity` never invokes pint's expression parser on unvalidated input (verified by test with a patched parser)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P009",
+      "title": "Runtime validation contracts",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P009-runtime-validation-contracts.md",
+      "phase": 1,
+      "wave": 5,
+      "dependencies": [
+        "GRIT-P007"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/validation.py",
+        "packages/grit_core/tests/bench_validation.py",
+        "packages/grit_core/tests/test_validation.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_validation.py -q",
+        "uv run pytest packages/grit_core/tests/bench_validation.py -m bench -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Overhead at `boundary` < 5% on a 1e5-element vector function (bench output in report).",
+        "No global state other than the contract level."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P010",
+      "title": "Stable numerics and solver wrappers",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P010-stable-numerics-and-solver-wrappers.md",
+      "phase": 1,
+      "wave": 6,
+      "dependencies": [
+        "GRIT-P007",
+        "GRIT-P009"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/numerics.py",
+        "packages/grit_core/tests/test_numerics.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_numerics.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every wrapper returns a result object with `converged`.",
+        "All reference tolerances commented with their source."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P011",
+      "title": "Linear algebra and geometry helpers",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P011-linear-algebra-and-geometry-helpers.md",
+      "phase": 1,
+      "wave": 6,
+      "dependencies": [
+        "GRIT-P007",
+        "GRIT-P009"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/algebra.py",
+        "packages/grit_core/src/grit_core/geometry.py",
+        "packages/grit_core/tests/test_algebra.py",
+        "packages/grit_core/tests/test_geometry.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_algebra.py packages/grit_core/tests/test_geometry.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Conditioning failures raise with the condition number in the message.",
+        "Property tests pass under the `thorough` profile."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P012",
+      "title": "Graph primitives and causal DAG tools",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P012-graph-primitives-and-causal-dag-tools.md",
+      "phase": 1,
+      "wave": 5,
+      "dependencies": [
+        "GRIT-P007"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/graphs.py",
+        "packages/grit_core/tests/test_graphs.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml",
+        "packages/grit_core/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_graphs.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All reference DAG answers match.",
+        "M-bias case correctly excludes the collider from adjustment sets."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P013",
+      "title": "Optimization wrappers and gradient checking",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P013-optimization-wrappers-and-gradient-checking.md",
+      "phase": 1,
+      "wave": 7,
+      "dependencies": [
+        "GRIT-P010"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/optimization.py",
+        "packages/grit_core/tests/test_optimization.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_optimization.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Standard errors match closed form.",
+        "Non-converged fits return `converged=False` with SciPy's message."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P014",
+      "title": "Immutable configs and environment provenance capture",
+      "group": "B",
+      "group_name": "Scientific types and mathematical primitives",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P014-immutable-configs-and-environment-provenance-capture.md",
+      "phase": 1,
+      "wave": 6,
+      "dependencies": [
+        "GRIT-P007",
+        "GRIT-P008"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/config.py",
+        "packages/grit_core/src/grit_core/provenance.py",
+        "packages/grit_core/tests/test_config.py",
+        "packages/grit_core/tests/test_provenance.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_config.py packages/grit_core/tests/test_provenance.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Config hash stable across platforms (golden test).",
+        "No subprocess uses `shell=True`."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P015",
+      "title": "Probability distributions and seeding",
+      "group": "C",
+      "group_name": "Information theory and statistics",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P015-probability-distributions-and-seeding.md",
+      "phase": 1,
+      "wave": 6,
+      "dependencies": [
+        "GRIT-P007",
+        "GRIT-P009"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/probability.py",
+        "packages/grit_core/tests/test_probability.py",
+        "tests/test_no_global_rng.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_probability.py tests/test_no_global_rng.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Global RNG ban active in CI.",
+        "Every distribution has mean/var/log_prob tests."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P016",
+      "title": "Information theory",
+      "group": "C",
+      "group_name": "Information theory and statistics",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P016-information-theory.md",
+      "phase": 1,
+      "wave": 7,
+      "dependencies": [
+        "GRIT-P007",
+        "GRIT-P015"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/information.py",
+        "packages/grit_core/tests/test_information.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_information.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All properties pass under `thorough` profile.",
+        "No NaN for any valid ProbVector input including zeros."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P017",
+      "title": "Statistics, uncertainty, scoring rules and calibration math",
+      "group": "C",
+      "group_name": "Information theory and statistics",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P017-statistics-uncertainty-scoring-rules-and-calibration-math.md",
+      "phase": 1,
+      "wave": 7,
+      "dependencies": [
+        "GRIT-P015"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_core/src/grit_core/statistics/__init__.py",
+        "packages/grit_core/src/grit_core/statistics/calibration.py",
+        "packages/grit_core/tests/test_calibration.py",
+        "packages/grit_core/tests/test_ci_coverage.py",
+        "packages/grit_core/tests/test_statistics.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_core.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/test_statistics.py packages/grit_core/tests/test_calibration.py -q",
+        "uv run pytest packages/grit_core/tests/test_ci_coverage.py -m slow -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Coverage simulation passes.",
+        "Every test function returns a result object with effect size and CI, not only a p-value."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P018",
+      "title": "Numerical reference suite and micro-benchmarks (milestone M1)",
+      "group": "C",
+      "group_name": "Information theory and statistics",
+      "folder": "01-core",
+      "path": "prompts/01-core/GRIT-P018-numerical-reference-suite-and-micro-benchmarks-milestone-m1.md",
+      "phase": 1,
+      "wave": 8,
+      "dependencies": [
+        "GRIT-P008",
+        "GRIT-P010",
+        "GRIT-P011",
+        "GRIT-P012",
+        "GRIT-P013",
+        "GRIT-P014",
+        "GRIT-P016",
+        "GRIT-P017"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "benchmarks/baselines/README.md",
+        "benchmarks/core/bench_core.py",
+        "docs/milestones/M1.md",
+        "packages/grit_core/tests/reference/cases.toml",
+        "packages/grit_core/tests/reference/test_reference_cases.py",
+        "scripts/bench_compare.py"
+      ],
+      "modified_files": [
+        "Makefile",
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_core/tests/reference -q",
+        "make bench",
+        "uv run python scripts/bench_compare.py --baseline benchmarks/baselines/<hardware-id>.json",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "\u2265 30 reference cases, each with a citation.",
+        "Baseline JSON committed with hardware profile.",
+        "M1 report lists every grit_core module with test counts."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P019",
+      "title": "State spaces, typed operators, composition and higher-order functions",
+      "group": "D",
+      "group_name": "Algebra and formal mathematical representations",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P019-state-spaces-typed-operators-composition-and-higher-order-fu.md",
+      "phase": 2,
+      "wave": 9,
+      "dependencies": [
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_algebra.toml",
+        "packages/grit_algebra/pyproject.toml",
+        "packages/grit_algebra/src/grit_algebra/__init__.py",
+        "packages/grit_algebra/src/grit_algebra/composition.py",
+        "packages/grit_algebra/src/grit_algebra/examples.py",
+        "packages/grit_algebra/src/grit_algebra/higher_order.py",
+        "packages/grit_algebra/src/grit_algebra/operators.py",
+        "packages/grit_algebra/src/grit_algebra/py.typed",
+        "packages/grit_algebra/src/grit_algebra/state_spaces.py",
+        "packages/grit_algebra/tests/test_composition.py",
+        "packages/grit_algebra/tests/test_spaces_operators.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_algebra -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Category laws hold as property tests.",
+        "`make layers` passes with the new package declared."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P020",
+      "title": "Relations, equivalence and invariants",
+      "group": "D",
+      "group_name": "Algebra and formal mathematical representations",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P020-relations-equivalence-and-invariants.md",
+      "phase": 2,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P019"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_algebra/src/grit_algebra/equivalence.py",
+        "packages/grit_algebra/src/grit_algebra/invariants.py",
+        "packages/grit_algebra/src/grit_algebra/relations.py",
+        "packages/grit_algebra/tests/test_invariants.py",
+        "packages/grit_algebra/tests/test_relations.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_algebra.toml",
+        "packages/grit_algebra/src/grit_algebra/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_algebra -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Warshall closure on 500 elements < 1 s.",
+        "Counterexamples reported with inputs and outputs."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P021",
+      "title": "Fixed points and capability metrics (provisional)",
+      "group": "D",
+      "group_name": "Algebra and formal mathematical representations",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P021-fixed-points-and-capability-metrics-provisional.md",
+      "phase": 2,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P020"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_algebra/src/grit_algebra/capability_metrics.py",
+        "packages/grit_algebra/src/grit_algebra/fixed_points.py",
+        "packages/grit_algebra/tests/test_capability_metrics.py",
+        "packages/grit_algebra/tests/test_fixed_points.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_algebra.toml",
+        "packages/grit_algebra/src/grit_algebra/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_algebra -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Capability metric registry entries are `provisional` with notes.",
+        "Non-contractive maps reported as such, not silently iterated."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P022",
+      "title": "Symbolic mathematics with a safe expression parser",
+      "group": "D",
+      "group_name": "Algebra and formal mathematical representations",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P022-symbolic-mathematics-with-a-safe-expression-parser.md",
+      "phase": 2,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P019"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_algebra/src/grit_algebra/symbolic_math.py",
+        "packages/grit_algebra/tests/fixtures/malicious_expressions.txt",
+        "packages/grit_algebra/tests/test_symbolic_math.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_algebra.toml",
+        "packages/grit_algebra/pyproject.toml",
+        "packages/grit_algebra/src/grit_algebra/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_algebra/tests/test_symbolic_math.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Zero uses of eval/sympify/parse_expr in the module.",
+        "Fuzz test passes under `thorough` profile.",
+        "Security review recorded."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P023",
+      "title": "Formal verification adapters (optional Z3 and Lean export)",
+      "group": "D",
+      "group_name": "Algebra and formal mathematical representations",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P023-formal-verification-adapters-optional-z3-and-lean-export.md",
+      "phase": 2,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P020"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_algebra/src/grit_algebra/formal/__init__.py",
+        "packages/grit_algebra/src/grit_algebra/formal/lean_export.py",
+        "packages/grit_algebra/src/grit_algebra/formal/z3_adapter.py",
+        "packages/grit_algebra/tests/test_formal.py"
+      ],
+      "modified_files": [
+        "packages/grit_algebra/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_algebra/tests/test_formal.py -q",
+        "uv run --extra formal pytest packages/grit_algebra/tests/test_formal.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Core install doesn't pull z3.",
+        "Timeouts enforced."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P024",
+      "title": "Discrete and continuous dynamical systems",
+      "group": "E",
+      "group_name": "Dynamical systems and control",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P024-discrete-and-continuous-dynamical-systems.md",
+      "phase": 2,
+      "wave": 9,
+      "dependencies": [
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_dynamics.toml",
+        "packages/grit_dynamics/pyproject.toml",
+        "packages/grit_dynamics/src/grit_dynamics/__init__.py",
+        "packages/grit_dynamics/src/grit_dynamics/continuous.py",
+        "packages/grit_dynamics/src/grit_dynamics/discrete.py",
+        "packages/grit_dynamics/src/grit_dynamics/py.typed",
+        "packages/grit_dynamics/src/grit_dynamics/systems.py",
+        "packages/grit_dynamics/tests/test_continuous.py",
+        "packages/grit_dynamics/tests/test_discrete.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_dynamics -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All reference systems have a citation in the registry.",
+        "Every trajectory carries units and params."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P025",
+      "title": "Stochastic processes",
+      "group": "E",
+      "group_name": "Dynamical systems and control",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P025-stochastic-processes.md",
+      "phase": 2,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P024",
+        "GRIT-P015"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_dynamics/src/grit_dynamics/stochastic.py",
+        "packages/grit_dynamics/tests/test_stochastic.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_dynamics.toml",
+        "packages/grit_dynamics/src/grit_dynamics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_dynamics/tests/test_stochastic.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All functions require `rng`.",
+        "`max_events` enforced."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P026",
+      "title": "Stability, attractors and bifurcations",
+      "group": "E",
+      "group_name": "Dynamical systems and control",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P026-stability-attractors-and-bifurcations.md",
+      "phase": 2,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P024"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_dynamics/src/grit_dynamics/attractors.py",
+        "packages/grit_dynamics/src/grit_dynamics/bifurcations.py",
+        "packages/grit_dynamics/src/grit_dynamics/stability.py",
+        "packages/grit_dynamics/tests/test_attractors.py",
+        "packages/grit_dynamics/tests/test_bifurcations.py",
+        "packages/grit_dynamics/tests/test_stability.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_dynamics.toml",
+        "packages/grit_dynamics/src/grit_dynamics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_dynamics -q",
+        "uv run pytest packages/grit_dynamics -m slow -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All reference values within stated tolerance with citations.",
+        "Sweeps respect step caps."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P027",
+      "title": "Control and feedback",
+      "group": "E",
+      "group_name": "Dynamical systems and control",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P027-control-and-feedback.md",
+      "phase": 2,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P024"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_dynamics/src/grit_dynamics/control.py",
+        "packages/grit_dynamics/src/grit_dynamics/feedback.py",
+        "packages/grit_dynamics/tests/test_control.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_dynamics.toml",
+        "packages/grit_dynamics/src/grit_dynamics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_dynamics/tests/test_control.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "LQR matches reference to 1e-8."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P028",
+      "title": "Multiscale models, resource constraints and scenario simulation",
+      "group": "E",
+      "group_name": "Dynamical systems and control",
+      "folder": "02-mathematics",
+      "path": "prompts/02-mathematics/GRIT-P028-multiscale-models-resource-constraints-and-scenario-simulati.md",
+      "phase": 2,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P025",
+        "GRIT-P026"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/milestones/M2.md",
+        "packages/grit_dynamics/src/grit_dynamics/multiscale.py",
+        "packages/grit_dynamics/src/grit_dynamics/resources.py",
+        "packages/grit_dynamics/src/grit_dynamics/scenarios.py",
+        "packages/grit_dynamics/tests/test_multiscale.py",
+        "packages/grit_dynamics/tests/test_scenarios.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_dynamics.toml",
+        "packages/grit_dynamics/pyproject.toml",
+        "packages/grit_dynamics/src/grit_dynamics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_dynamics -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "M2 report lists \u2265 10 reference results with tolerances.",
+        "Budget pre-check enforced."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P029",
+      "title": "Biochemistry, reaction kinetics and catalysis",
+      "group": "F",
+      "group_name": "Biological and evolutionary simulations",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P029-biochemistry-reaction-kinetics-and-catalysis.md",
+      "phase": 3,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P028",
+        "GRIT-P011",
+        "GRIT-P013"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/pyproject.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py",
+        "packages/grit_bio/src/grit_bio/biochemistry.py",
+        "packages/grit_bio/src/grit_bio/catalysis.py",
+        "packages/grit_bio/src/grit_bio/parameters/README.md",
+        "packages/grit_bio/src/grit_bio/py.typed",
+        "packages/grit_bio/src/grit_bio/reaction_kinetics.py",
+        "packages/grit_bio/tests/test_biochemistry.py",
+        "packages/grit_bio/tests/test_catalysis.py",
+        "packages/grit_bio/tests/test_kinetics.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_bio -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every literature parameter has a citation.",
+        "Invalid networks rejected with named species."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P030",
+      "title": "Regulatory networks, systems biology and homeostasis",
+      "group": "F",
+      "group_name": "Biological and evolutionary simulations",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P030-regulatory-networks-systems-biology-and-homeostasis.md",
+      "phase": 3,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P029",
+        "GRIT-P027"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_bio/src/grit_bio/homeostasis.py",
+        "packages/grit_bio/src/grit_bio/regulatory_networks.py",
+        "packages/grit_bio/src/grit_bio/systems_biology.py",
+        "packages/grit_bio/tests/test_homeostasis.py",
+        "packages/grit_bio/tests/test_regulatory.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Each motif reproduces its cited qualitative behavior in a test."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P031",
+      "title": "Genetics and population dynamics",
+      "group": "F",
+      "group_name": "Biological and evolutionary simulations",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P031-genetics-and-population-dynamics.md",
+      "phase": 3,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P029",
+        "GRIT-P025"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_bio/src/grit_bio/genetics.py",
+        "packages/grit_bio/src/grit_bio/population_dynamics.py",
+        "packages/grit_bio/tests/test_genetics.py",
+        "packages/grit_bio/tests/test_population.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio -q",
+        "uv run pytest packages/grit_bio -m slow -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Educational framing in SIR docstrings (not for forecasting)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P032",
+      "title": "Evolutionary landscapes and comparative biology",
+      "group": "F",
+      "group_name": "Biological and evolutionary simulations",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P032-evolutionary-landscapes-and-comparative-biology.md",
+      "phase": 3,
+      "wave": 14,
+      "dependencies": [
+        "GRIT-P031",
+        "GRIT-P011",
+        "GRIT-P017"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_bio/src/grit_bio/comparative_biology.py",
+        "packages/grit_bio/src/grit_bio/evolutionary_landscapes.py",
+        "packages/grit_bio/tests/test_comparative.py",
+        "packages/grit_bio/tests/test_landscapes.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Landscape statistics match published NK trends (mean local optima increase with K) in a seeded test."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P033",
+      "title": "Neuron models",
+      "group": "G",
+      "group_name": "Computational neuroscience",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P033-neuron-models.md",
+      "phase": 3,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P029"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_bio/src/grit_bio/neuron_models.py",
+        "packages/grit_bio/tests/test_neuron_models.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio/tests/test_neuron_models.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Units: mV, ms, pA/nA, documented per model."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P034",
+      "title": "Synaptic dynamics and plasticity",
+      "group": "G",
+      "group_name": "Computational neuroscience",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P034-synaptic-dynamics-and-plasticity.md",
+      "phase": 3,
+      "wave": 14,
+      "dependencies": [
+        "GRIT-P033"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_bio/src/grit_bio/plasticity.py",
+        "packages/grit_bio/src/grit_bio/synaptic_dynamics.py",
+        "packages/grit_bio/tests/test_plasticity.py",
+        "packages/grit_bio/tests/test_synapses.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Each rule has a convergence or shape test."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P035",
+      "title": "Neural circuits and network simulation (milestone M3)",
+      "group": "G",
+      "group_name": "Computational neuroscience",
+      "folder": "03-biology",
+      "path": "prompts/03-biology/GRIT-P035-neural-circuits-and-network-simulation-milestone-m3.md",
+      "phase": 3,
+      "wave": 15,
+      "dependencies": [
+        "GRIT-P034",
+        "GRIT-P026"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "benchmarks/bio/bench_spiking.py",
+        "docs/milestones/M3.md",
+        "packages/grit_bio/src/grit_bio/computational_neuroscience.py",
+        "packages/grit_bio/tests/test_circuits.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_bio.toml",
+        "packages/grit_bio/src/grit_bio/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_bio -q",
+        "uv run pytest benchmarks/bio -m bench -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Benchmark < 10 s on the development MacBook (result in M3 report with hardware profile).",
+        "All bio models reproduce cited behavior (M3 table)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P036",
+      "title": "Capability profiles and comparative assessment",
+      "group": "H",
+      "group_name": "Cognition and intelligence measurement",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P036-capability-profiles-and-comparative-assessment.md",
+      "phase": 4,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P018",
+        "GRIT-P024"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/capability-taxonomy.toml",
+        "docs/registry/concepts/grit_cognition.toml",
+        "packages/grit_cognition/pyproject.toml",
+        "packages/grit_cognition/src/grit_cognition/__init__.py",
+        "packages/grit_cognition/src/grit_cognition/capability_profiles.py",
+        "packages/grit_cognition/src/grit_cognition/comparative_assessment.py",
+        "packages/grit_cognition/src/grit_cognition/py.typed",
+        "packages/grit_cognition/tests/test_irt.py",
+        "packages/grit_cognition/tests/test_profiles.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_cognition -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Taxonomy file validated and marked provisional.",
+        "Every score has a CI."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P037",
+      "title": "Learning curves, retention, generalization and transfer",
+      "group": "H",
+      "group_name": "Cognition and intelligence measurement",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P037-learning-curves-retention-generalization-and-transfer.md",
+      "phase": 4,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P036",
+        "GRIT-P013"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_cognition/src/grit_cognition/generalization.py",
+        "packages/grit_cognition/src/grit_cognition/learning_curves.py",
+        "packages/grit_cognition/src/grit_cognition/retention.py",
+        "packages/grit_cognition/src/grit_cognition/transfer.py",
+        "packages/grit_cognition/tests/test_learning.py",
+        "packages/grit_cognition/tests/test_transfer.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_cognition.toml",
+        "packages/grit_cognition/src/grit_cognition/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_cognition -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Extrapolation beyond 2x observed range requires an explicit flag."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P038",
+      "title": "Metacognitive calibration, memory and attention models",
+      "group": "H",
+      "group_name": "Cognition and intelligence measurement",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P038-metacognitive-calibration-memory-and-attention-models.md",
+      "phase": 4,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P036",
+        "GRIT-P017"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_cognition/src/grit_cognition/attention.py",
+        "packages/grit_cognition/src/grit_cognition/knowledge_representation.py",
+        "packages/grit_cognition/src/grit_cognition/memory.py",
+        "packages/grit_cognition/src/grit_cognition/metacognitive_calibration.py",
+        "packages/grit_cognition/tests/test_calibration_memory.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_cognition.toml",
+        "packages/grit_cognition/src/grit_cognition/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_cognition -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Calibration uses grit_core.statistics.calibration (no duplicate implementation)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P039",
+      "title": "Reasoning task generators with independent answer checkers",
+      "group": "H",
+      "group_name": "Cognition and intelligence measurement",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P039-reasoning-task-generators-with-independent-answer-checkers.md",
+      "phase": 4,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P036",
+        "GRIT-P015"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_cognition/src/grit_cognition/reasoning/__init__.py",
+        "packages/grit_cognition/src/grit_cognition/reasoning/checkers.py",
+        "packages/grit_cognition/src/grit_cognition/reasoning/export.py",
+        "packages/grit_cognition/src/grit_cognition/reasoning/tasks.py",
+        "packages/grit_cognition/tests/test_reasoning.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_cognition.toml",
+        "packages/grit_cognition/src/grit_cognition/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_cognition/tests/test_reasoning.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "\u2265 9 task families with checkers.",
+        "Exported manifests verify."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific",
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P040",
+      "title": "Compute accounting and scaling laws",
+      "group": "I",
+      "group_name": "Computational physics and resource accounting",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P040-compute-accounting-and-scaling-laws.md",
+      "phase": 4,
+      "wave": 9,
+      "dependencies": [
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_physics.toml",
+        "packages/grit_physics/pyproject.toml",
+        "packages/grit_physics/src/grit_physics/__init__.py",
+        "packages/grit_physics/src/grit_physics/compute_accounting.py",
+        "packages/grit_physics/src/grit_physics/py.typed",
+        "packages/grit_physics/src/grit_physics/scaling_laws.py",
+        "packages/grit_physics/tests/test_accounting.py",
+        "packages/grit_physics/tests/test_scaling.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_physics -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Exact parameter counts committed for the four reference configs.",
+        "Formulas documented with derivations in docstrings."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P041",
+      "title": "Hardware profiles and measurement: latency, throughput, memory, energy",
+      "group": "I",
+      "group_name": "Computational physics and resource accounting",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P041-hardware-profiles-and-measurement-latency-throughput-memory.md",
+      "phase": 4,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P040"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/hardware_peaks.toml",
+        "packages/grit_physics/src/grit_physics/cli.py",
+        "packages/grit_physics/src/grit_physics/energy_measurement.py",
+        "packages/grit_physics/src/grit_physics/hardware_profiles.py",
+        "packages/grit_physics/src/grit_physics/latency.py",
+        "packages/grit_physics/src/grit_physics/memory_profiling.py",
+        "packages/grit_physics/src/grit_physics/throughput.py",
+        "packages/grit_physics/tests/test_measurement.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_physics.toml",
+        "packages/grit_physics/pyproject.toml",
+        "packages/grit_physics/src/grit_physics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_physics -q",
+        "uv run grit-bench hardware",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every entry in hardware_peaks.toml has a citation URL and date.",
+        "No sudo or daemons."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P042",
+      "title": "Efficiency, thermodynamic limits, Pareto analysis and the cost estimator",
+      "group": "I",
+      "group_name": "Computational physics and resource accounting",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P042-efficiency-thermodynamic-limits-pareto-analysis-and-the-cost.md",
+      "phase": 4,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P041"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/prices.toml",
+        "packages/grit_physics/src/grit_physics/computational_efficiency.py",
+        "packages/grit_physics/src/grit_physics/cost.py",
+        "packages/grit_physics/src/grit_physics/pareto_analysis.py",
+        "packages/grit_physics/src/grit_physics/thermodynamic_models.py",
+        "packages/grit_physics/tests/test_cost.py",
+        "packages/grit_physics/tests/test_pareto.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_physics.toml",
+        "packages/grit_physics/pyproject.toml",
+        "packages/grit_physics/src/grit_physics/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_physics -q",
+        "uv run grit-cost estimate --help",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Estimator output includes every assumption and `method: estimated`.",
+        "No hard-coded prices."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P043",
+      "title": "Literature, scientific claims and provenance",
+      "group": "J",
+      "group_name": "Scientific discovery and metascience",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P043-literature-scientific-claims-and-provenance.md",
+      "phase": 4,
+      "wave": 9,
+      "dependencies": [
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_discovery.toml",
+        "packages/grit_discovery/pyproject.toml",
+        "packages/grit_discovery/src/grit_discovery/__init__.py",
+        "packages/grit_discovery/src/grit_discovery/literature.py",
+        "packages/grit_discovery/src/grit_discovery/provenance.py",
+        "packages/grit_discovery/src/grit_discovery/py.typed",
+        "packages/grit_discovery/src/grit_discovery/scientific_claims.py",
+        "packages/grit_discovery/tests/test_claims.py",
+        "packages/grit_discovery/tests/test_literature.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_discovery -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Claim kinds match the registry's kinds."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P044",
+      "title": "Hypotheses, concept graphs, analogy and intellectual lineage",
+      "group": "J",
+      "group_name": "Scientific discovery and metascience",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P044-hypotheses-concept-graphs-analogy-and-intellectual-lineage.md",
+      "phase": 4,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P043",
+        "GRIT-P012"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_discovery/src/grit_discovery/analogy_analysis.py",
+        "packages/grit_discovery/src/grit_discovery/concept_graphs.py",
+        "packages/grit_discovery/src/grit_discovery/hypotheses.py",
+        "packages/grit_discovery/src/grit_discovery/intellectual_lineage.py",
+        "packages/grit_discovery/tests/test_graph_tools.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_discovery.toml",
+        "packages/grit_discovery/src/grit_discovery/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_discovery -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Analogy search bounded in time and size."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P045",
+      "title": "Classification, complexity, productivity, meta-analysis and causal attribution (milestone M4)",
+      "group": "J",
+      "group_name": "Scientific discovery and metascience",
+      "folder": "04-cognition",
+      "path": "prompts/04-cognition/GRIT-P045-classification-complexity-productivity-meta-analysis-and-cau.md",
+      "phase": 4,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P044",
+        "GRIT-P017",
+        "GRIT-P037",
+        "GRIT-P038",
+        "GRIT-P039",
+        "GRIT-P042"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/milestones/M4.md",
+        "packages/grit_discovery/src/grit_discovery/causal_attribution.py",
+        "packages/grit_discovery/src/grit_discovery/discovery_classification.py",
+        "packages/grit_discovery/src/grit_discovery/methodology_comparison.py",
+        "packages/grit_discovery/src/grit_discovery/productivity_measurement.py",
+        "packages/grit_discovery/src/grit_discovery/research_complexity.py",
+        "packages/grit_discovery/tests/test_indicators.py",
+        "packages/grit_discovery/tests/test_meta_analysis.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_discovery.toml",
+        "packages/grit_discovery/src/grit_discovery/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_discovery -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "M4 report complete.",
+        "Provisional schemes flagged in the registry."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P046",
+      "title": "grit_verify public types, protocols and signing",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P046-grit-verify-public-types-protocols-and-signing.md",
+      "phase": 5,
+      "wave": 9,
+      "dependencies": [
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_verify.toml",
+        "docs/security/evaluator-keys.md",
+        "packages/grit_verify/pyproject.toml",
+        "packages/grit_verify/src/grit_verify/__init__.py",
+        "packages/grit_verify/src/grit_verify/protocols.py",
+        "packages/grit_verify/src/grit_verify/py.typed",
+        "packages/grit_verify/src/grit_verify/signing.py",
+        "packages/grit_verify/src/grit_verify/types.py",
+        "packages/grit_verify/tests/test_signing.py",
+        "packages/grit_verify/tests/test_types.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Signing round trip works; tamper detection test passes.",
+        "No torch, no grit_lab imports."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P047",
+      "title": "Experiment specifications and the state machine",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P047-experiment-specifications-and-the-state-machine.md",
+      "phase": 5,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P046",
+        "GRIT-P014"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/registry/concepts/grit_lab.toml",
+        "experiments/README.md",
+        "experiments/examples/core-entropy-estimator.toml",
+        "packages/grit_lab/pyproject.toml",
+        "packages/grit_lab/src/grit_lab/__init__.py",
+        "packages/grit_lab/src/grit_lab/experiment_specs.py",
+        "packages/grit_lab/src/grit_lab/py.typed",
+        "packages/grit_lab/src/grit_lab/states.py",
+        "packages/grit_lab/tests/test_specs.py",
+        "packages/grit_lab/tests/test_state_machine.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_lab -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Transition table in docs matches the code (test parses the Mermaid diagram edges from docs/architecture/overview.md).",
+        "All 8 required spec fields enforced."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P048",
+      "title": "Metadata store: SQLite schema and migrations",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P048-metadata-store-sqlite-schema-and-migrations.md",
+      "phase": 5,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P047"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_lab/src/grit_lab/store/__init__.py",
+        "packages/grit_lab/src/grit_lab/store/db.py",
+        "packages/grit_lab/src/grit_lab/store/migrations/0001_initial.down.sql",
+        "packages/grit_lab/src/grit_lab/store/migrations/0001_initial.sql",
+        "packages/grit_lab/src/grit_lab/store/repositories.py",
+        "packages/grit_lab/tests/test_store.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_store.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "No string-formatted SQL with user values (parameters only; test greps).",
+        "Migrations idempotent."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P049",
+      "title": "Content-addressed artifact store and run provenance records",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P049-content-addressed-artifact-store-and-run-provenance-records.md",
+      "phase": 5,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P048"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_lab/src/grit_lab/artifacts.py",
+        "packages/grit_lab/src/grit_lab/provenance.py",
+        "packages/grit_lab/tests/test_artifacts.py",
+        "packages/grit_lab/tests/test_run_records.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_lab.toml",
+        "packages/grit_lab/src/grit_lab/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Atomic writes proven by a kill-during-write test (subprocess killed mid-write leaves no partial artifact)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P050",
+      "title": "Hash-chained audit log",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P050-hash-chained-audit-log.md",
+      "phase": 5,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P048"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/specifications/audit-format.md",
+        "packages/grit_lab/src/grit_lab/audit.py",
+        "packages/grit_lab/src/grit_lab/store/migrations/0002_audit_index.down.sql",
+        "packages/grit_lab/src/grit_lab/store/migrations/0002_audit_index.sql",
+        "packages/grit_lab/tests/test_audit.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/src/grit_lab/store/repositories.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_audit.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every state-changing repository function writes an audit event (test enumerates them)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P051",
+      "title": "Authorization and human review",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P051-authorization-and-human-review.md",
+      "phase": 5,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P050"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_lab/src/grit_lab/authorization/__init__.py",
+        "packages/grit_lab/src/grit_lab/authorization/policy.toml",
+        "packages/grit_lab/src/grit_lab/human_review.py",
+        "packages/grit_lab/tests/test_authorization.py",
+        "packages/grit_lab/tests/test_review.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/src/grit_lab/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_authorization.py packages/grit_lab/tests/test_review.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Deny by default proven: an unknown action is denied.",
+        "Policy file validated at load."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P052",
+      "title": "Resource budgets and isolated local execution",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P052-resource-budgets-and-isolated-local-execution.md",
+      "phase": 5,
+      "wave": 14,
+      "dependencies": [
+        "GRIT-P049",
+        "GRIT-P051"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_lab/src/grit_lab/execution.py",
+        "packages/grit_lab/src/grit_lab/isolated_execution.py",
+        "packages/grit_lab/src/grit_lab/resource_budgets.py",
+        "packages/grit_lab/tests/test_budgets.py",
+        "packages/grit_lab/tests/test_execution.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/src/grit_lab/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_budgets.py packages/grit_lab/tests/test_execution.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Executor never uses shell=True.",
+        "Isolation limitations documented in module docstring and security docs."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P053",
+      "title": "Lab CLI, datasets and baselines registry, and reporting",
+      "group": "K",
+      "group_name": "Experimental infrastructure",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P053-lab-cli-datasets-and-baselines-registry-and-reporting.md",
+      "phase": 5,
+      "wave": 15,
+      "dependencies": [
+        "GRIT-P052"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_lab/src/grit_lab/baselines.py",
+        "packages/grit_lab/src/grit_lab/cli.py",
+        "packages/grit_lab/src/grit_lab/datasets.py",
+        "packages/grit_lab/src/grit_lab/reporting.py",
+        "packages/grit_lab/tests/test_cli.py",
+        "tests/integration/test_lab_lifecycle.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/pyproject.toml",
+        "packages/grit_lab/src/grit_lab/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab tests/integration/test_lab_lifecycle.py -q",
+        "uv run grit lab --help",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "A human can run the example experiment end to end following experiments/README.md."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P054",
+      "title": "Verification contracts, invariant suites and regression testing",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P054-verification-contracts-invariant-suites-and-regression-testi.md",
+      "phase": 5,
+      "wave": 10,
+      "dependencies": [
+        "GRIT-P046",
+        "GRIT-P018"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/contracts.py",
+        "packages/grit_verify/src/grit_verify/invariants.py",
+        "packages/grit_verify/src/grit_verify/regression_testing.py",
+        "packages/grit_verify/tests/test_regression.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_verify.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Regression reports are canonical JSON (hashable)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P055",
+      "title": "Statistical validation, calibration evaluation and replication",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P055-statistical-validation-calibration-evaluation-and-replicatio.md",
+      "phase": 5,
+      "wave": 11,
+      "dependencies": [
+        "GRIT-P054",
+        "GRIT-P017"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/calibration.py",
+        "packages/grit_verify/src/grit_verify/replication.py",
+        "packages/grit_verify/src/grit_verify/statistical_validation.py",
+        "packages/grit_verify/tests/test_replication.py",
+        "packages/grit_verify/tests/test_statistical_validation.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_verify.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Decisions reproducible from inputs (hash test)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P056",
+      "title": "Independent benchmarks, protected holdouts and contamination checks",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P056-independent-benchmarks-protected-holdouts-and-contamination.md",
+      "phase": 5,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P055",
+        "GRIT-P039"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/contamination.py",
+        "packages/grit_verify/src/grit_verify/holdouts.py",
+        "packages/grit_verify/src/grit_verify/independent_benchmarks.py",
+        "packages/grit_verify/tests/test_benchmarks.py",
+        "packages/grit_verify/tests/test_contamination.py",
+        "scripts/commit_benchmark.py"
+      ],
+      "modified_files": [
+        "docs/registry/benchmarks.toml",
+        "docs/registry/concepts/grit_verify.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "bench-algorithmic-v1 committed with Merkle root in registry and audit log.",
+        "Test split absent from the repository (only hashes committed)."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P057",
+      "title": "Causal inference, formal verification runner and independent audit verification",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P057-causal-inference-formal-verification-runner-and-independent.md",
+      "phase": 5,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P055",
+        "GRIT-P012",
+        "GRIT-P050"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/audit.py",
+        "packages/grit_verify/src/grit_verify/causal_inference.py",
+        "packages/grit_verify/src/grit_verify/cli.py",
+        "packages/grit_verify/src/grit_verify/formal_verification.py",
+        "packages/grit_verify/tests/test_audit_verify.py",
+        "packages/grit_verify/tests/test_causal.py"
+      ],
+      "modified_files": [
+        "docs/registry/concepts/grit_verify.toml",
+        "packages/grit_verify/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "uv run grit-verify audit verify --help",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Audit verifier has no import of grit_lab (layer check).",
+        "Fixture audit files generated by grit_lab in a test are verified by grit_verify."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P058",
+      "title": "Evaluator process boundary and signed results (milestone M5)",
+      "group": "L",
+      "group_name": "Independent verification",
+      "folder": "05-experiments",
+      "path": "prompts/05-experiments/GRIT-P058-evaluator-process-boundary-and-signed-results-milestone-m5.md",
+      "phase": 5,
+      "wave": 16,
+      "dependencies": [
+        "GRIT-P056",
+        "GRIT-P057",
+        "GRIT-P053"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/milestones/M5.md",
+        "packages/grit_verify/src/grit_verify/runner.py",
+        "packages/grit_verify/src/grit_verify/suites.py",
+        "packages/grit_verify/tests/test_runner.py",
+        "tests/integration/test_eval_roundtrip.py"
+      ],
+      "modified_files": [
+        "packages/grit_verify/pyproject.toml",
+        "tests/integration/test_lab_lifecycle.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify tests/integration -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Evaluator receives only hashes (API test).",
+        "M5 report records every bypass attempt tested and its outcome."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P059",
+      "title": "Alphalytica package, ModelConfig and exact parameter counting",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P059-alphalytica-package-modelconfig-and-exact-parameter-counting.md",
+      "phase": 6,
+      "wave": 12,
+      "dependencies": [
+        "GRIT-P042",
+        "GRIT-P046"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/architecture/g0-base-v1.toml",
+        "configs/architecture/g1-base-v1.toml",
+        "configs/architecture/g2-ref-v1.toml",
+        "configs/architecture/g3-ref-v1.toml",
+        "docs/registry/concepts/alphalytica.toml",
+        "models/alphalytica/README.md",
+        "models/alphalytica/pyproject.toml",
+        "models/alphalytica/src/alphalytica/__init__.py",
+        "models/alphalytica/src/alphalytica/arch/__init__.py",
+        "models/alphalytica/src/alphalytica/arch/config.py",
+        "models/alphalytica/src/alphalytica/py.typed",
+        "models/alphalytica/tests/test_config.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest models/alphalytica -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Four reference configs load and validate.",
+        "Layer check passes (alphalytica imports only allowed packages)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P060",
+      "title": "Generation 0 reference decoder-only Transformer",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P060-generation-0-reference-decoder-only-transformer.md",
+      "phase": 6,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P059"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/arch/layers.py",
+        "models/alphalytica/src/alphalytica/arch/model.py",
+        "models/alphalytica/tests/test_model.py",
+        "models/alphalytica/tests/test_param_count.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/arch/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Parameter counts exact for G0 to G3.",
+        "Tests run in < 30 s on CPU."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P061",
+      "title": "Generation 1 component variants: attention, position, normalization, feedforward",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P061-generation-1-component-variants-attention-position-normaliza.md",
+      "phase": 6,
+      "wave": 14,
+      "dependencies": [
+        "GRIT-P060"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/arch/matching.py",
+        "models/alphalytica/tests/test_variants.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/arch/layers.py",
+        "models/alphalytica/src/alphalytica/arch/model.py",
+        "models/alphalytica/tests/test_param_count.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every variant has a defining-property test.",
+        "Parameter counts still exact for every variant."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P062",
+      "title": "grit_data: dataset manifests, checksummed ingestion and the license gate",
+      "group": "N",
+      "group_name": "Dataset and tokenizer infrastructure",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P062-grit-data-dataset-manifests-checksummed-ingestion-and-the-li.md",
+      "phase": 6,
+      "wave": 13,
+      "dependencies": [
+        "GRIT-P014",
+        "GRIT-P049"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "datasets/license-policy.toml",
+        "datasets/manifests/fixture-synthetic-v1.toml",
+        "datasets/schemas/manifest.schema.md",
+        "docs/registry/concepts/grit_data.toml",
+        "packages/grit_data/pyproject.toml",
+        "packages/grit_data/src/grit_data/__init__.py",
+        "packages/grit_data/src/grit_data/ingest.py",
+        "packages/grit_data/src/grit_data/license_gate.py",
+        "packages/grit_data/src/grit_data/manifests.py",
+        "packages/grit_data/src/grit_data/py.typed",
+        "packages/grit_data/tests/test_ingest.py",
+        "packages/grit_data/tests/test_license_gate.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest packages/grit_data -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "No code path trains on data that hasn't passed the gate (gate decision hash required by later pipeline stages).",
+        "License policy file requires owner review (listed in human review checklist)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P063",
+      "title": "Text normalization, filtering and deduplication",
+      "group": "N",
+      "group_name": "Dataset and tokenizer infrastructure",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P063-text-normalization-filtering-and-deduplication.md",
+      "phase": 6,
+      "wave": 14,
+      "dependencies": [
+        "GRIT-P062"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_data/src/grit_data/clean.py",
+        "packages/grit_data/src/grit_data/dedup.py",
+        "packages/grit_data/tests/fixtures/planted_duplicates.py",
+        "packages/grit_data/tests/test_dedup.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest packages/grit_data -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Dedup report includes counts, thresholds and parameters.",
+        "Recall and false-merge rates printed in the completion report."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P064",
+      "title": "Leakage-safe splits and dataset versioning",
+      "group": "N",
+      "group_name": "Dataset and tokenizer infrastructure",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P064-leakage-safe-splits-and-dataset-versioning.md",
+      "phase": 6,
+      "wave": 15,
+      "dependencies": [
+        "GRIT-P063"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_data/src/grit_data/cli.py",
+        "packages/grit_data/src/grit_data/leakage.py",
+        "packages/grit_data/src/grit_data/splits.py",
+        "packages/grit_data/src/grit_data/versioning.py",
+        "packages/grit_data/tests/test_splits_leakage.py"
+      ],
+      "modified_files": [
+        "packages/grit_data/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_data -q",
+        "uv run grit-data process datasets/manifests/fixture-synthetic-v1.toml --dry-run",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Processing refuses data that failed the gate.",
+        "Leakage check runs automatically at the end of processing and fails the command on any leak."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P065",
+      "title": "Tokenizers: byte-level reference and byte-level BPE",
+      "group": "N",
+      "group_name": "Dataset and tokenizer infrastructure",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P065-tokenizers-byte-level-reference-and-byte-level-bpe.md",
+      "phase": 6,
+      "wave": 16,
+      "dependencies": [
+        "GRIT-P064"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/tokenization/bpe16k-v1.toml",
+        "configs/tokenization/bpe32k-v1.toml",
+        "configs/tokenization/bpe4k-v1.toml",
+        "configs/tokenization/byte-v1.toml",
+        "packages/grit_data/src/grit_data/tokenizers/__init__.py",
+        "packages/grit_data/src/grit_data/tokenizers/bpe.py",
+        "packages/grit_data/src/grit_data/tokenizers/byte_level.py",
+        "packages/grit_data/tests/test_tokenizers.py"
+      ],
+      "modified_files": [
+        "packages/grit_data/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_data/tests/test_tokenizers.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Round-trip property passes under `thorough` profile.",
+        "Tokenizer artifacts content-addressed."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P066",
+      "title": "Tokenized shards, sequence packing and resumable batching",
+      "group": "N",
+      "group_name": "Dataset and tokenizer infrastructure",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P066-tokenized-shards-sequence-packing-and-resumable-batching.md",
+      "phase": 6,
+      "wave": 17,
+      "dependencies": [
+        "GRIT-P065"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/milestones/data-pipeline.md",
+        "packages/grit_data/src/grit_data/batching.py",
+        "packages/grit_data/src/grit_data/shards.py",
+        "packages/grit_data/src/grit_data/torch_iter.py",
+        "packages/grit_data/tests/test_batching.py"
+      ],
+      "modified_files": [
+        "packages/grit_data/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_data -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Resume identity test passes.",
+        "Throughput \u2265 1M tokens/s from mmap on the laptop (bench in report)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P067",
+      "title": "Training configuration and run record integration",
+      "group": "O",
+      "group_name": "Model training",
+      "folder": "07-training",
+      "path": "prompts/07-training/GRIT-P067-training-configuration-and-run-record-integration.md",
+      "phase": 6,
+      "wave": 18,
+      "dependencies": [
+        "GRIT-P061",
+        "GRIT-P066",
+        "GRIT-P053"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/training/g0-base-v1.toml",
+        "configs/training/tiny-test-v1.toml",
+        "models/alphalytica/src/alphalytica/train/__init__.py",
+        "models/alphalytica/src/alphalytica/train/config.py",
+        "models/alphalytica/src/alphalytica/train/run_record.py",
+        "scripts/check_config_immutability.py",
+        "tests/integration/test_run_record_schema.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica tests/integration/test_run_record_schema.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every required run record field populated or explicitly null with reason."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P068",
+      "title": "Training loop: optimizer, schedule, accumulation, clipping, precision, determinism",
+      "group": "O",
+      "group_name": "Model training",
+      "folder": "07-training",
+      "path": "prompts/07-training/GRIT-P068-training-loop-optimizer-schedule-accumulation-clipping-preci.md",
+      "phase": 6,
+      "wave": 19,
+      "dependencies": [
+        "GRIT-P067"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/train/device.py",
+        "models/alphalytica/src/alphalytica/train/loop.py",
+        "models/alphalytica/src/alphalytica/train/optim.py",
+        "models/alphalytica/tests/test_training_loop.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/train/__init__.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_training_loop.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All loop requirements in training.md have a passing test."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P069",
+      "title": "Checkpointing and bit-identical resume",
+      "group": "O",
+      "group_name": "Model training",
+      "folder": "07-training",
+      "path": "prompts/07-training/GRIT-P069-checkpointing-and-bit-identical-resume.md",
+      "phase": 6,
+      "wave": 20,
+      "dependencies": [
+        "GRIT-P068"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/train/checkpoint.py",
+        "models/alphalytica/tests/test_checkpoint_resume.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/train/loop.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_checkpoint_resume.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Bit-identical resume on CPU.",
+        "MPS resume within 1e-6 relative (documented if MPS unavailable in CI)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P070",
+      "title": "Metrics, profiling, budget watchdog and lab-governed runs",
+      "group": "O",
+      "group_name": "Model training",
+      "folder": "07-training",
+      "path": "prompts/07-training/GRIT-P070-metrics-profiling-budget-watchdog-and-lab-governed-runs.md",
+      "phase": 6,
+      "wave": 21,
+      "dependencies": [
+        "GRIT-P069",
+        "GRIT-P041"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/train/cli.py",
+        "models/alphalytica/src/alphalytica/train/metrics.py",
+        "models/alphalytica/src/alphalytica/train/watchdog.py",
+        "models/alphalytica/tests/test_watchdog.py",
+        "tests/integration/test_authorized_training_run.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/pyproject.toml",
+        "models/alphalytica/src/alphalytica/train/loop.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica tests/integration/test_authorized_training_run.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "A training run can't start without an AUTHORIZED experiment.",
+        "Run record complete for the integration run."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P071",
+      "title": "Inference provider interface and local PyTorch backend",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P071-inference-provider-interface-and-local-pytorch-backend.md",
+      "phase": 6,
+      "wave": 21,
+      "dependencies": [
+        "GRIT-P069",
+        "GRIT-P058"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/infer/__init__.py",
+        "models/alphalytica/src/alphalytica/infer/provider.py",
+        "models/alphalytica/src/alphalytica/infer/torch_local.py",
+        "models/alphalytica/tests/test_inference.py",
+        "tests/integration/test_textmodel_protocol.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_inference.py tests/integration/test_textmodel_protocol.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Provider usable by grit-eval selftest suite.",
+        "No `torch.load` at inference."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P072",
+      "title": "KV cache, streaming, cancellation and context management",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P072-kv-cache-streaming-cancellation-and-context-management.md",
+      "phase": 6,
+      "wave": 22,
+      "dependencies": [
+        "GRIT-P071"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/infer/streaming.py",
+        "models/alphalytica/tests/test_kv_cache.py",
+        "models/alphalytica/tests/test_streaming.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/arch/layers.py",
+        "models/alphalytica/src/alphalytica/infer/torch_local.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Decode speedup \u2265 3x at 512 tokens on CPU (bench in report)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P073",
+      "title": "Batch inference, memory accounting and resource limits",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P073-batch-inference-memory-accounting-and-resource-limits.md",
+      "phase": 6,
+      "wave": 23,
+      "dependencies": [
+        "GRIT-P072",
+        "GRIT-P042"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/infer/limits.py",
+        "models/alphalytica/tests/test_batching_limits.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/src/alphalytica/infer/torch_local.py"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Limits enforced in provider, not only in the API."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P074",
+      "title": "Inference benchmark suite",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P074-inference-benchmark-suite.md",
+      "phase": 6,
+      "wave": 24,
+      "dependencies": [
+        "GRIT-P073"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "benchmarks/inference/README.md",
+        "benchmarks/inference/run.py",
+        "models/alphalytica/tests/test_bench_runner.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_bench_runner.py -q",
+        "uv run alphalytica-bench --model tiny --quick",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Results include hardware profile, code commit and model hash."
+      ],
+      "complexity": "M",
+      "resources": "CPU/MPS, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P075",
+      "title": "Quantization adapters and Hugging Face-compatible export",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P075-quantization-adapters-and-hugging-face-compatible-export.md",
+      "phase": 6,
+      "wave": 25,
+      "dependencies": [
+        "GRIT-P074"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/infer/hf_export.py",
+        "models/alphalytica/src/alphalytica/infer/quantize.py",
+        "models/alphalytica/tests/test_quantize_export.py"
+      ],
+      "modified_files": [
+        "benchmarks/inference/run.py",
+        "models/alphalytica/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run --extra hf pytest models/alphalytica/tests/test_quantize_export.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Quantization never labeled lossless; \u0394 reported."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P076",
+      "title": "Authorized external API provider",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P076-authorized-external-api-provider.md",
+      "phase": 6,
+      "wave": 22,
+      "dependencies": [
+        "GRIT-P071",
+        "GRIT-P056"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/providers/README.md",
+        "models/alphalytica/src/alphalytica/infer/external_api.py",
+        "models/alphalytica/tests/test_external_api.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_external_api.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "No real API call in CI.",
+        "Security review recorded."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P077",
+      "title": "Language modeling evaluation suite",
+      "group": "Q",
+      "group_name": "Model evaluation",
+      "folder": "09-evaluation",
+      "path": "prompts/09-evaluation/GRIT-P077-language-modeling-evaluation-suite.md",
+      "phase": 6,
+      "wave": 17,
+      "dependencies": [
+        "GRIT-P058",
+        "GRIT-P016",
+        "GRIT-P017"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/model_eval/__init__.py",
+        "packages/grit_verify/src/grit_verify/model_eval/lm.py",
+        "packages/grit_verify/src/grit_verify/model_eval/ngram_baselines.py",
+        "packages/grit_verify/tests/test_lm_suite.py"
+      ],
+      "modified_files": [
+        "packages/grit_verify/src/grit_verify/suites.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Suite deterministic given model and data.",
+        "No torch import in grit_verify."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P078",
+      "title": "Capability task suite",
+      "group": "Q",
+      "group_name": "Model evaluation",
+      "folder": "09-evaluation",
+      "path": "prompts/09-evaluation/GRIT-P078-capability-task-suite.md",
+      "phase": 6,
+      "wave": 18,
+      "dependencies": [
+        "GRIT-P077"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/model_eval/capability.py",
+        "packages/grit_verify/tests/test_capability_suite.py"
+      ],
+      "modified_files": [
+        "packages/grit_verify/src/grit_verify/suites.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Output is a profile keyed by taxonomy dimension with CIs."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P079",
+      "title": "Calibration, robustness, generalization and contamination suites",
+      "group": "Q",
+      "group_name": "Model evaluation",
+      "folder": "09-evaluation",
+      "path": "prompts/09-evaluation/GRIT-P079-calibration-robustness-generalization-and-contamination-suit.md",
+      "phase": 6,
+      "wave": 19,
+      "dependencies": [
+        "GRIT-P078"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "packages/grit_verify/src/grit_verify/model_eval/calibration_suite.py",
+        "packages/grit_verify/src/grit_verify/model_eval/generalization.py",
+        "packages/grit_verify/src/grit_verify/model_eval/robustness.py",
+        "packages/grit_verify/tests/test_quality_suites.py"
+      ],
+      "modified_files": [
+        "packages/grit_verify/src/grit_verify/runner.py",
+        "packages/grit_verify/src/grit_verify/suites.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Contamination gate on by default in protocols."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P080",
+      "title": "Resource-normalized comparison, regression detection and evaluation reports",
+      "group": "Q",
+      "group_name": "Model evaluation",
+      "folder": "09-evaluation",
+      "path": "prompts/09-evaluation/GRIT-P080-resource-normalized-comparison-regression-detection-and-eval.md",
+      "phase": 6,
+      "wave": 20,
+      "dependencies": [
+        "GRIT-P079",
+        "GRIT-P055"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/evaluation/eval-lm-v1.toml",
+        "docs/milestones/evaluation-suites.md",
+        "packages/grit_verify/src/grit_verify/model_eval/comparison.py",
+        "packages/grit_verify/src/grit_verify/model_eval/regression.py",
+        "packages/grit_verify/src/grit_verify/model_eval/report.py",
+        "packages/grit_verify/tests/test_comparison_regression.py"
+      ],
+      "modified_files": [
+        "packages/grit_verify/src/grit_verify/suites.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_verify -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "eval-lm-v1 committed and its hash recorded in the registry."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P081",
+      "title": "Generation 0 end-to-end run, profiling and model card (milestone M6)",
+      "group": "O",
+      "group_name": "Model training",
+      "folder": "07-training",
+      "path": "prompts/07-training/GRIT-P081-generation-0-end-to-end-run-profiling-and-model-card-milesto.md",
+      "phase": 6,
+      "wave": 26,
+      "dependencies": [
+        "GRIT-P070",
+        "GRIT-P075",
+        "GRIT-P080",
+        "GRIT-P064"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "datasets/manifests/g0-corpus-v1.toml",
+        "docs/datasets/g0-corpus@v1.md",
+        "docs/milestones/M6.md",
+        "docs/models/alphalytica-g0@v1.md",
+        "experiments/model_research/ALPHA-G0-base.toml"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit lab status ALPHA-G0-base",
+        "uv run grit-verify signature verify <signed-result>",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Experiment ARCHIVED with VERIFIED result or an honest RESULT_REJECTED and explanation.",
+        "Model card contains measured results only.",
+        "M6 states MPS tokens/s and the recommendation for G1 hardware."
+      ],
+      "complexity": "XL",
+      "resources": "Laptop MPS/CPU, ~3 h training plus processing",
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P082",
+      "title": "API service skeleton",
+      "group": "T",
+      "group_name": "API and application integration",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P082-api-service-skeleton.md",
+      "phase": 8,
+      "wave": 17,
+      "dependencies": [
+        "GRIT-P053",
+        "GRIT-P058"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "services/api/openapi.json",
+        "services/api/pyproject.toml",
+        "services/api/src/grit_api/__init__.py",
+        "services/api/src/grit_api/app.py",
+        "services/api/src/grit_api/errors.py",
+        "services/api/src/grit_api/logging.py",
+        "services/api/src/grit_api/routes/__init__.py",
+        "services/api/src/grit_api/routes/health.py",
+        "services/api/src/grit_api/settings.py",
+        "services/api/tests/test_health.py",
+        "services/api/tests/test_openapi_contract.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "uv sync --all-packages",
+        "uv run pytest services/api -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "OpenAPI snapshot test in CI.",
+        "Logs are JSON with request id."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P083",
+      "title": "Instrument registry and compute endpoints",
+      "group": "T",
+      "group_name": "API and application integration",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P083-instrument-registry-and-compute-endpoints.md",
+      "phase": 8,
+      "wave": 18,
+      "dependencies": [
+        "GRIT-P082",
+        "GRIT-P028",
+        "GRIT-P035",
+        "GRIT-P039",
+        "GRIT-P042",
+        "GRIT-P045",
+        "GRIT-P022"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "services/api/src/grit_api/instruments/__init__.py",
+        "services/api/src/grit_api/instruments/catalog/__init__.py",
+        "services/api/src/grit_api/instruments/catalog/biochemistry.py",
+        "services/api/src/grit_api/instruments/catalog/cognition.py",
+        "services/api/src/grit_api/instruments/catalog/dynamics.py",
+        "services/api/src/grit_api/instruments/catalog/education.py",
+        "services/api/src/grit_api/instruments/catalog/evolution.py",
+        "services/api/src/grit_api/instruments/catalog/mathematics.py",
+        "services/api/src/grit_api/instruments/catalog/metascience.py",
+        "services/api/src/grit_api/instruments/catalog/neuroscience.py",
+        "services/api/src/grit_api/instruments/catalog/physics.py",
+        "services/api/src/grit_api/instruments/catalog/verification.py",
+        "services/api/src/grit_api/instruments/registry.py",
+        "services/api/src/grit_api/routes/instruments.py",
+        "services/api/tests/test_instruments_compute.py"
+      ],
+      "modified_files": [
+        "services/api/openapi.json",
+        "services/api/src/grit_api/app.py"
+      ],
+      "test_commands": [
+        "uv run pytest services/api -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "50 manifests registered, each with concept ids, units, assumptions and synthetic flag.",
+        "Symbolic inputs go through grit_algebra's safe parser only."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P084",
+      "title": "Experiment, run, evaluation, registry and model endpoints",
+      "group": "T",
+      "group_name": "API and application integration",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P084-experiment-run-evaluation-registry-and-model-endpoints.md",
+      "phase": 8,
+      "wave": 22,
+      "dependencies": [
+        "GRIT-P083",
+        "GRIT-P071"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "services/api/src/grit_api/auth.py",
+        "services/api/src/grit_api/routes/evaluations.py",
+        "services/api/src/grit_api/routes/experiments.py",
+        "services/api/src/grit_api/routes/models.py",
+        "services/api/src/grit_api/routes/registry.py",
+        "services/api/src/grit_api/routes/runs.py",
+        "services/api/tests/test_authz_endpoints.py",
+        "services/api/tests/test_experiment_endpoints.py",
+        "services/api/tests/test_generate_endpoint.py"
+      ],
+      "modified_files": [
+        "services/api/openapi.json",
+        "services/api/src/grit_api/app.py"
+      ],
+      "test_commands": [
+        "uv run pytest services/api -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Endpoint authorization matrix test covers 100% of write routes."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P085",
+      "title": "Observatory frontend scaffold, design tokens and shell",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P085-observatory-frontend-scaffold-design-tokens-and-shell.md",
+      "phase": 8,
+      "wave": 18,
+      "dependencies": [
+        "GRIT-P082"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/observatory.yml",
+        "apps/observatory/e2e/shell.spec.ts",
+        "apps/observatory/eslint.config.js",
+        "apps/observatory/index.html",
+        "apps/observatory/package-lock.json",
+        "apps/observatory/package.json",
+        "apps/observatory/playwright.config.ts",
+        "apps/observatory/public/fonts/README.md",
+        "apps/observatory/src/App.tsx",
+        "apps/observatory/src/api/client.ts",
+        "apps/observatory/src/api/schema.ts",
+        "apps/observatory/src/main.tsx",
+        "apps/observatory/src/shell/Shell.tsx",
+        "apps/observatory/src/theme/palette.test.ts",
+        "apps/observatory/src/theme/tokens.css",
+        "apps/observatory/tsconfig.json",
+        "apps/observatory/vite.config.ts"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "cd apps/observatory && npm ci && npm run typecheck && npm run lint && npm test && npx playwright test",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Shell JS < 200 KB gzipped.",
+        "Both themes pass contrast tests."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P086",
+      "title": "Board navigation, command palette, keyboard model and workspace routing",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P086-board-navigation-command-palette-keyboard-model-and-workspac.md",
+      "phase": 8,
+      "wave": 19,
+      "dependencies": [
+        "GRIT-P085"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/keyboard.spec.ts",
+        "apps/observatory/src/board/Board.test.tsx",
+        "apps/observatory/src/board/Board.tsx",
+        "apps/observatory/src/keyboard/shortcuts.ts",
+        "apps/observatory/src/palette/CommandPalette.tsx",
+        "apps/observatory/src/routes.tsx"
+      ],
+      "modified_files": [
+        "apps/observatory/src/App.tsx"
+      ],
+      "test_commands": [
+        "cd apps/observatory && npm test && npx playwright test e2e/keyboard.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "Every action reachable without a mouse."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P087",
+      "title": "Instrument framework: parameter panels, result views and provenance",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P087-instrument-framework-parameter-panels-result-views-and-prove.md",
+      "phase": 8,
+      "wave": 20,
+      "dependencies": [
+        "GRIT-P086",
+        "GRIT-P083"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/instruments.spec.ts",
+        "apps/observatory/src/instruments/ExportMenu.tsx",
+        "apps/observatory/src/instruments/InstrumentPage.tsx",
+        "apps/observatory/src/instruments/ParameterPanel.tsx",
+        "apps/observatory/src/instruments/ProvenanceDrawer.tsx",
+        "apps/observatory/src/instruments/ResultView.tsx",
+        "apps/observatory/src/instruments/instruments.test.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npm test && npx playwright test e2e/instruments.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "No result renders without provenance (type-level and test)."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P088",
+      "title": "Scientific visualization primitives",
+      "group": "S",
+      "group_name": "Scientific visualization",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P088-scientific-visualization-primitives.md",
+      "phase": 8,
+      "wave": 21,
+      "dependencies": [
+        "GRIT-P087"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/viz.spec.ts",
+        "apps/observatory/src/dev/VizGallery.tsx",
+        "apps/observatory/src/viz/Axis.tsx",
+        "apps/observatory/src/viz/BifurcationPlot.tsx",
+        "apps/observatory/src/viz/Figure.tsx",
+        "apps/observatory/src/viz/Heatmap.tsx",
+        "apps/observatory/src/viz/Histogram.tsx",
+        "apps/observatory/src/viz/LinePlot.tsx",
+        "apps/observatory/src/viz/NetworkGraph.tsx",
+        "apps/observatory/src/viz/PhasePortrait.tsx",
+        "apps/observatory/src/viz/Raster.tsx",
+        "apps/observatory/src/viz/ReliabilityDiagram.tsx",
+        "apps/observatory/src/viz/Scatter.tsx",
+        "apps/observatory/src/viz/lttb.ts",
+        "apps/observatory/src/viz/viz.test.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npm run typecheck && npm test && npx playwright test e2e/viz.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "Performance budgets met (observatory.md).",
+        "Screenshots committed as baselines."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P089",
+      "title": "Instruments: Mathematics, Physics and Dynamical Systems labs",
+      "group": "S",
+      "group_name": "Scientific visualization",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P089-instruments-mathematics-physics-and-dynamical-systems-labs.md",
+      "phase": 8,
+      "wave": 22,
+      "dependencies": [
+        "GRIT-P088"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/labs-math-physics-dynamics.spec.ts",
+        "apps/observatory/src/labs/dynamics/index.tsx",
+        "apps/observatory/src/labs/mathematics/index.tsx",
+        "apps/observatory/src/labs/physics/index.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npx playwright test e2e/labs-math-physics-dynamics.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "15 instruments usable standalone at their URLs."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P090",
+      "title": "Instruments: Biochemistry, Evolution and Neuroscience labs",
+      "group": "S",
+      "group_name": "Scientific visualization",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P090-instruments-biochemistry-evolution-and-neuroscience-labs.md",
+      "phase": 8,
+      "wave": 22,
+      "dependencies": [
+        "GRIT-P088"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/labs-bio-neuro.spec.ts",
+        "apps/observatory/src/labs/biochemistry/index.tsx",
+        "apps/observatory/src/labs/evolution/index.tsx",
+        "apps/observatory/src/labs/neuroscience/index.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npx playwright test e2e/labs-bio-neuro.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "15 instruments usable standalone."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P091",
+      "title": "Instruments: Cognition, Metascience, Verification and Education labs",
+      "group": "S",
+      "group_name": "Scientific visualization",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P091-instruments-cognition-metascience-verification-and-education.md",
+      "phase": 8,
+      "wave": 23,
+      "dependencies": [
+        "GRIT-P088",
+        "GRIT-P084"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/labs-cog-meta-verify-edu.spec.ts",
+        "apps/observatory/src/labs/cognition/index.tsx",
+        "apps/observatory/src/labs/education/index.tsx",
+        "apps/observatory/src/labs/metascience/index.tsx",
+        "apps/observatory/src/labs/verification/index.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npx playwright test e2e/labs-cog-meta-verify-edu.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "All 50 instruments now usable."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P092",
+      "title": "Model Laboratory, Training Dashboard, Inference Benchmarking and Experiment Registry workspaces",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P092-model-laboratory-training-dashboard-inference-benchmarking-a.md",
+      "phase": 8,
+      "wave": 25,
+      "dependencies": [
+        "GRIT-P088",
+        "GRIT-P084",
+        "GRIT-P074"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/workspaces-model.spec.ts",
+        "apps/observatory/src/workspaces/experiments/ExperimentRegistry.tsx",
+        "apps/observatory/src/workspaces/inference/InferenceBench.tsx",
+        "apps/observatory/src/workspaces/models/ModelLab.tsx",
+        "apps/observatory/src/workspaces/training/TrainingDashboard.tsx"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "cd apps/observatory && npx playwright test e2e/workspaces-model.spec.ts"
+      ],
+      "acceptance_criteria": [
+        "G0 run from P081 fully browsable."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P093",
+      "title": "Library, Knowledge Graph, Publication Studio and Learning workspaces",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P093-library-knowledge-graph-publication-studio-and-learning-work.md",
+      "phase": 8,
+      "wave": 23,
+      "dependencies": [
+        "GRIT-P088",
+        "GRIT-P084"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/workspaces-knowledge.spec.ts",
+        "apps/observatory/src/workspaces/graph/KnowledgeGraph.tsx",
+        "apps/observatory/src/workspaces/learn/Learning.tsx",
+        "apps/observatory/src/workspaces/library/Library.tsx",
+        "apps/observatory/src/workspaces/publish/PublicationStudio.tsx",
+        "curricula/dynamics-to-neurons.toml",
+        "curricula/entropy-to-learning.toml",
+        "packages/grit_lab/src/grit_lab/store/migrations/0003_progress.down.sql",
+        "packages/grit_lab/src/grit_lab/store/migrations/0003_progress.sql",
+        "services/api/src/grit_api/routes/progress.py",
+        "services/api/src/grit_api/routes/publications.py"
+      ],
+      "modified_files": [
+        "services/api/openapi.json",
+        "services/api/src/grit_api/app.py"
+      ],
+      "test_commands": [
+        "uv run pytest services/api -q",
+        "cd apps/observatory && npx playwright test e2e/workspaces-knowledge.spec.ts",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All 12 workspaces functional (milestone M7 with P094)."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P094",
+      "title": "Reproducible notebooks and tutorials (milestone M7)",
+      "group": "R",
+      "group_name": "Research Studio frontend",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P094-reproducible-notebooks-and-tutorials-milestone-m7.md",
+      "phase": 8,
+      "wave": 26,
+      "dependencies": [
+        "GRIT-P093",
+        "GRIT-P091",
+        "GRIT-P089",
+        "GRIT-P090",
+        "GRIT-P092"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".pre-commit-config.yaml",
+        "docs/milestones/M7.md",
+        "notebooks/README.md",
+        "notebooks/tutorials/01-entropy.ipynb",
+        "notebooks/tutorials/02-dynamics.ipynb",
+        "notebooks/tutorials/03-neurons.ipynb",
+        "notebooks/tutorials/04-learning-curves.ipynb",
+        "notebooks/tutorials/05-reading-an-evaluation.ipynb",
+        "scripts/run_notebooks.py"
+      ],
+      "modified_files": [
+        ".github/workflows/ci.yml",
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run --group notebooks python scripts/run_notebooks.py",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "M7: 50 instruments, 12 workspaces, a11y clean, budgets met, 5 tutorials executing."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P095",
+      "title": "Grand Chessboard integration: OIDC, module manifest and shared tokens",
+      "group": "T",
+      "group_name": "API and application integration",
+      "folder": "10-observatory",
+      "path": "prompts/10-observatory/GRIT-P095-grand-chessboard-integration-oidc-module-manifest-and-shared.md",
+      "phase": 9,
+      "wave": 27,
+      "dependencies": [
+        "GRIT-P094",
+        "GRIT-P084"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/scripts/module-manifest.mjs",
+        "docs/guides/grand-chessboard-integration.md",
+        "packages/grit_lab/src/grit_lab/store/migrations/0004_users.down.sql",
+        "packages/grit_lab/src/grit_lab/store/migrations/0004_users.sql",
+        "services/api/src/grit_api/oidc.py",
+        "services/api/tests/test_oidc.py"
+      ],
+      "modified_files": [
+        "apps/observatory/package.json",
+        "services/api/pyproject.toml",
+        "services/api/src/grit_api/auth.py"
+      ],
+      "test_commands": [
+        "uv run pytest services/api -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "GRIT works standalone with OIDC and embedded via manifest.",
+        "Security review recorded."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P096",
+      "title": "Local development profile",
+      "group": "U",
+      "group_name": "Local deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P096-local-development-profile.md",
+      "phase": 9,
+      "wave": 28,
+      "dependencies": [
+        "GRIT-P095"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".env.example",
+        "docs/guides/local-development.md",
+        "scripts/doctor.py",
+        "scripts/tests/test_doctor.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "make doctor",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "A fresh-clone walkthrough by a human completes in < 15 minutes (recorded in report)."
+      ],
+      "complexity": "S",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P097",
+      "title": "Container images and single-server deployment (Profile 2)",
+      "group": "U",
+      "group_name": "Local deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P097-container-images-and-single-server-deployment-profile-2.md",
+      "phase": 9,
+      "wave": 29,
+      "dependencies": [
+        "GRIT-P096"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/images.yml",
+        "docs/guides/single-server.md",
+        "infrastructure/compose/Caddyfile",
+        "infrastructure/compose/compose.yml",
+        "infrastructure/docker/api.Dockerfile",
+        "infrastructure/docker/eval.Dockerfile",
+        "infrastructure/docker/worker.Dockerfile",
+        "packages/grit_lab/src/grit_lab/docker_executor.py",
+        "packages/grit_lab/tests/test_docker_executor.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "docker compose -f infrastructure/compose/compose.yml config",
+        "uv run pytest packages/grit_lab/tests/test_docker_executor.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Images contain no secrets (trivy or grype scan clean of embedded credentials).",
+        "Smoke test green in CI."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P098",
+      "title": "GPU worker image, signed job bundles and object storage",
+      "group": "V",
+      "group_name": "GPU research deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P098-gpu-worker-image-signed-job-bundles-and-object-storage.md",
+      "phase": 7,
+      "wave": 30,
+      "dependencies": [
+        "GRIT-P070",
+        "GRIT-P097"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/guides/gpu-workers.md",
+        "infrastructure/gpu/Dockerfile",
+        "infrastructure/gpu/bootstrap.sh",
+        "infrastructure/gpu/worker_main.py",
+        "packages/grit_lab/src/grit_lab/artifacts_s3.py",
+        "packages/grit_lab/src/grit_lab/bundles.py",
+        "packages/grit_lab/tests/test_artifacts_s3.py",
+        "packages/grit_lab/tests/test_bundles.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_bundles.py -q",
+        "uv run --extra s3 pytest packages/grit_lab/tests/test_artifacts_s3.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "End-to-end CPU dry run through MinIO in CI.",
+        "No credential with wider scope than one run on the worker."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P099",
+      "title": "GPU lifecycle: provisioning runbook, monitoring, cost ledger and guaranteed shutdown",
+      "group": "V",
+      "group_name": "GPU research deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P099-gpu-lifecycle-provisioning-runbook-monitoring-cost-ledger-an.md",
+      "phase": 7,
+      "wave": 31,
+      "dependencies": [
+        "GRIT-P098",
+        "GRIT-P042"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/runbooks/gpu-run.md",
+        "infrastructure/gpu/grit-deadline.service",
+        "infrastructure/gpu/grit-deadline.timer",
+        "packages/grit_lab/src/grit_lab/gpu/__init__.py",
+        "packages/grit_lab/src/grit_lab/gpu/cli.py",
+        "packages/grit_lab/src/grit_lab/gpu/monitoring.py",
+        "packages/grit_lab/src/grit_lab/gpu/providers.py",
+        "packages/grit_lab/tests/test_gpu_lifecycle.py",
+        "services/api/src/grit_api/routes/heartbeat.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/pyproject.toml",
+        "services/api/src/grit_api/app.py"
+      ],
+      "test_commands": [
+        "uv run pytest packages/grit_lab/tests/test_gpu_lifecycle.py -q",
+        "uv run grit-gpu plan --help",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Real dry run completed under \u2264 1 GPU-hour approved budget; instance confirmed terminated by human; ledger matches provider bill within 10%.",
+        "Runbook followed and annotated."
+      ],
+      "complexity": "L",
+      "resources": "1 rented NVIDIA GPU, \u2264 1 GPU-hour (approved)",
+      "review": [
+        "security",
+        "human-approval",
+        "budget"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P100",
+      "title": "Generation 1 controlled architecture studies",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P100-generation-1-controlled-architecture-studies.md",
+      "phase": 7,
+      "wave": 32,
+      "dependencies": [
+        "GRIT-P081",
+        "GRIT-P099",
+        "GRIT-P061"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/research/g1-synthesis.md",
+        "experiments/model_research/ALPHA-G1-S1-attention.toml",
+        "experiments/model_research/ALPHA-G1-S2-position.toml",
+        "experiments/model_research/ALPHA-G1-S3-normalization.toml",
+        "experiments/model_research/ALPHA-G1-S4-feedforward.toml",
+        "experiments/model_research/ALPHA-G1-S5-size.toml"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit lab status ALPHA-G1-S1-attention",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All five studies ARCHIVED with VERIFIED or RESULT_REJECTED and reasons.",
+        "Synthesis lists effect sizes with CIs and the reviewed G2 baseline choice."
+      ],
+      "complexity": "XL",
+      "resources": "MPS or 1 rented GPU; budget per study approved separately",
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P101",
+      "title": "Generation 2 larger experimental baselines",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P101-generation-2-larger-experimental-baselines.md",
+      "phase": 7,
+      "wave": 33,
+      "dependencies": [
+        "GRIT-P100"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/models/alphalytica-g2@v1.md",
+        "docs/research/g2-report.md",
+        "experiments/model_research/ALPHA-G2-base.toml"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit lab status ALPHA-G2-base",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "G2 VERIFIED or honestly rejected.",
+        "Measured MFU and $/run recorded.",
+        "Scaling fit with CIs and its prediction for G3."
+      ],
+      "complexity": "XL",
+      "resources": "1 rented 24 to 80 GB GPU; budget approved",
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P102",
+      "title": "Alternative architecture experiments: MoE, state-space, recurrent, local attention, hierarchical",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P102-alternative-architecture-experiments-moe-state-space-recurre.md",
+      "phase": 7,
+      "wave": 33,
+      "dependencies": [
+        "GRIT-P100"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/research/alternatives-report.md",
+        "docs/research/proposals/README.md",
+        "models/alphalytica/src/alphalytica/arch/alternatives/__init__.py",
+        "models/alphalytica/tests/test_alternatives.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest models/alphalytica/tests/test_alternatives.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Each approved family has a VERIFIED or rejected experiment and a report section."
+      ],
+      "complexity": "XL",
+      "resources": "MPS or 1 rented GPU per approved study",
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ],
+      "conditional": "the owner approves a written proposal for at least one alternative family (docs/research/proposals/)."
+    },
+    {
+      "id": "GRIT-P103",
+      "title": "Generation 3 feasibility study and specification (no training)",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P103-generation-3-feasibility-study-and-specification-no-training.md",
+      "phase": 7,
+      "wave": 34,
+      "dependencies": [
+        "GRIT-P101"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "configs/architecture/g3-v1.toml",
+        "configs/evaluation/eval-g3-v1.toml",
+        "docs/research/g3-cost-estimate.json",
+        "docs/research/g3-specification.md"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit-cost estimate --config configs/architecture/g3-v1.toml --tokens <planned> --hardware <chosen> --assume-mfu <measured G2 MFU> --prices configs/prices.toml",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Owner records go or no-go with reasons in the spec document."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "human-approval",
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P104",
+      "title": "Generation 3 Alphalytica research model training",
+      "group": "M",
+      "group_name": "Baseline model architecture and model research",
+      "folder": "06-models",
+      "path": "prompts/06-models/GRIT-P104-generation-3-alphalytica-research-model-training.md",
+      "phase": 7,
+      "wave": 35,
+      "dependencies": [
+        "GRIT-P103"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/models/alphalytica-g3@v1.md",
+        "docs/research/g3-report.md",
+        "docs/research/g3-reproducibility.md",
+        "experiments/model_research/ALPHA-G3-v1.toml"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit lab status ALPHA-G3-v1",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Model card lists measured results only, limitations and intended use.",
+        "Reproducibility bundle complete."
+      ],
+      "complexity": "XL",
+      "resources": "1 rented 80 GB GPU (~70 GPU-hours estimated; approved budget governs)",
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ],
+      "conditional": "the owner recorded a go decision in docs/research/g3-specification.md and approved the budget."
+    },
+    {
+      "id": "GRIT-P105",
+      "title": "Production single-server hardening: backups, monitoring, rollback, incident response",
+      "group": "W",
+      "group_name": "Production deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P105-production-single-server-hardening-backups-monitoring-rollba.md",
+      "phase": 9,
+      "wave": 30,
+      "dependencies": [
+        "GRIT-P097",
+        "GRIT-P057"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/decisions/ADR-0017-production-secrets.md",
+        "docs/runbooks/deploy.md",
+        "docs/runbooks/incident-response.md",
+        "docs/runbooks/key-rotation.md",
+        "docs/runbooks/rollback.md",
+        "infrastructure/prod/backup.sh",
+        "infrastructure/prod/grit-audit-verify.timer",
+        "infrastructure/prod/grit-backup.timer",
+        "infrastructure/prod/restore.sh",
+        "scripts/tests/test_backup_scripts.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest scripts/tests/test_backup_scripts.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Restore tested end to end.",
+        "Runbooks reviewed by a human."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P106",
+      "title": "Multi-user production: PostgreSQL, per-workspace permissions, network isolation",
+      "group": "W",
+      "group_name": "Production deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P106-multi-user-production-postgresql-per-workspace-permissions-n.md",
+      "phase": 9,
+      "wave": 31,
+      "dependencies": [
+        "GRIT-P105",
+        "GRIT-P095"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/postgres.yml",
+        "docs/guides/multi-user-production.md",
+        "packages/grit_lab/src/grit_lab/store/migrations/0005_workspaces.down.sql",
+        "packages/grit_lab/src/grit_lab/store/migrations/0005_workspaces.sql",
+        "packages/grit_lab/tests/test_workspace_permissions.py",
+        "scripts/migrate_sqlite_to_pg.py"
+      ],
+      "modified_files": [
+        "packages/grit_lab/pyproject.toml",
+        "packages/grit_lab/src/grit_lab/store/db.py"
+      ],
+      "test_commands": [
+        "uv run --extra postgres pytest packages/grit_lab -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Zero data loss migration verified.",
+        "Evaluation host unreachable from GPU worker network (documented test)."
+      ],
+      "complexity": "XL",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": "the ADR-0011 trigger for PostgreSQL or multi-host has fired (measured and recorded)."
+    },
+    {
+      "id": "GRIT-P107",
+      "title": "Horizontal scaling plan and load test harness",
+      "group": "W",
+      "group_name": "Production deployment",
+      "folder": "11-deployment",
+      "path": "prompts/11-deployment/GRIT-P107-horizontal-scaling-plan-and-load-test-harness.md",
+      "phase": 9,
+      "wave": 32,
+      "dependencies": [
+        "GRIT-P106"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "benchmarks/load/README.md",
+        "benchmarks/load/locustfile.py",
+        "docs/architecture/scaling-plan.md"
+      ],
+      "modified_files": [
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run --group load-test locust -f benchmarks/load/locustfile.py --headless -u 5 -r 1 -t 30s --host http://localhost:8000",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Measured p95 and throughput recorded with hardware.",
+        "Plan states the next trigger concretely."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": "multi-user production (P106) is live, so there is real load to measure."
+    },
+    {
+      "id": "GRIT-P108",
+      "title": "Threat model in the repository and the security test suite",
+      "group": "X",
+      "group_name": "Security and reliability",
+      "folder": "12-security",
+      "path": "prompts/12-security/GRIT-P108-threat-model-in-the-repository-and-the-security-test-suite.md",
+      "phase": 10,
+      "wave": 28,
+      "dependencies": [
+        "GRIT-P095",
+        "GRIT-P084"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/security.yml",
+        "apps/observatory/e2e/xss.spec.ts",
+        "docs/security/threat-model.md",
+        "tests/security/test_api_fuzz.py",
+        "tests/security/test_authz_cli.py",
+        "tests/security/test_traversal.py"
+      ],
+      "modified_files": [
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run pytest tests/security -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Threat model lists every trust boundary with control and test reference.",
+        "No open high-severity findings."
+      ],
+      "complexity": "L",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P109",
+      "title": "Supply chain integrity: SBOM, pinning, signing of checkpoints and datasets",
+      "group": "X",
+      "group_name": "Security and reliability",
+      "folder": "12-security",
+      "path": "prompts/12-security/GRIT-P109-supply-chain-integrity-sbom-pinning-signing-of-checkpoints-a.md",
+      "phase": 10,
+      "wave": 31,
+      "dependencies": [
+        "GRIT-P108",
+        "GRIT-P098"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/security/supply-chain.md",
+        "packages/grit_lab/src/grit_lab/signing_keys.py",
+        "packages/grit_lab/tests/test_manifest_signing.py",
+        "renovate.json",
+        "scripts/sbom.sh"
+      ],
+      "modified_files": [
+        ".github/workflows/security.yml"
+      ],
+      "test_commands": [
+        "bash scripts/sbom.sh",
+        "uv run pytest packages/grit_lab/tests/test_manifest_signing.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "All actions pinned by SHA (CI check).",
+        "SBOMs attached to releases."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P110",
+      "title": "Reliability drills: restore, crash-resume, rate limits and quotas",
+      "group": "X",
+      "group_name": "Security and reliability",
+      "folder": "12-security",
+      "path": "prompts/12-security/GRIT-P110-reliability-drills-restore-crash-resume-rate-limits-and-quot.md",
+      "phase": 10,
+      "wave": 32,
+      "dependencies": [
+        "GRIT-P105",
+        "GRIT-P109"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/runbooks/restore-drill.md",
+        "scripts/restore_drill.sh",
+        "services/api/src/grit_api/rate_limit.py",
+        "services/api/tests/test_rate_limit.py",
+        "tests/reliability/test_crash_resume.py"
+      ],
+      "modified_files": [
+        "services/api/src/grit_api/app.py"
+      ],
+      "test_commands": [
+        "uv run pytest tests/reliability services/api/tests/test_rate_limit.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "First restore drill logged with duration and verification result."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P111",
+      "title": "Documentation site: API, math and developer guides",
+      "group": "Y",
+      "group_name": "Documentation and publication",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P111-documentation-site-api-math-and-developer-guides.md",
+      "phase": 10,
+      "wave": 29,
+      "dependencies": [
+        "GRIT-P094",
+        "GRIT-P108"
+      ],
+      "status": "pending",
+      "expected_files": [
+        ".github/workflows/docs.yml",
+        "docs/guides/contributing.md",
+        "docs/index.md",
+        "docs/math/README.md",
+        "mkdocs.yml"
+      ],
+      "modified_files": [
+        "Makefile",
+        "pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run --group docs mkdocs build --strict",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Every public function appears in API reference.",
+        "Strict build in CI."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P112",
+      "title": "Model cards, dataset cards, traceability report and publication export",
+      "group": "Y",
+      "group_name": "Documentation and publication",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P112-model-cards-dataset-cards-traceability-report-and-publicatio.md",
+      "phase": 10,
+      "wave": 30,
+      "dependencies": [
+        "GRIT-P111",
+        "GRIT-P081"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/traceability.md",
+        "scripts/export_publication.py",
+        "scripts/make_cards.py",
+        "scripts/tests/test_cards_traceability.py",
+        "scripts/traceability.py"
+      ],
+      "modified_files": [
+        "Makefile"
+      ],
+      "test_commands": [
+        "make traceability",
+        "uv run pytest scripts/tests/test_cards_traceability.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "G0 cards regenerated from data match the human-edited versions except narrative sections."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P113",
+      "title": "End-to-end scientific path",
+      "group": "Z",
+      "group_name": "End-to-end integration and acceptance testing",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P113-end-to-end-scientific-path.md",
+      "phase": 10,
+      "wave": 31,
+      "dependencies": [
+        "GRIT-P112",
+        "GRIT-P094"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "apps/observatory/e2e/scientific-paths.spec.ts",
+        "tests/e2e/test_scientific_paths.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest tests/e2e/test_scientific_paths.py -m e2e -q"
+      ],
+      "acceptance_criteria": [
+        "UI values equal library values to displayed precision."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P114",
+      "title": "End-to-end model path",
+      "group": "Z",
+      "group_name": "End-to-end integration and acceptance testing",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P114-end-to-end-model-path.md",
+      "phase": 10,
+      "wave": 31,
+      "dependencies": [
+        "GRIT-P112",
+        "GRIT-P080"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "tests/e2e/test_model_path.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest tests/e2e/test_model_path.py -m e2e -q"
+      ],
+      "acceptance_criteria": [
+        "Runs nightly in CI under 10 minutes."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P115",
+      "title": "Governance bypass acceptance tests",
+      "group": "Z",
+      "group_name": "End-to-end integration and acceptance testing",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P115-governance-bypass-acceptance-tests.md",
+      "phase": 10,
+      "wave": 33,
+      "dependencies": [
+        "GRIT-P114",
+        "GRIT-P110"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/security/governance-acceptance.md",
+        "tests/e2e/test_governance_bypass.py"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run pytest tests/e2e/test_governance_bypass.py -m e2e -q"
+      ],
+      "acceptance_criteria": [
+        "All attempts denied; denials audited.",
+        "Results table reviewed by a human."
+      ],
+      "complexity": "M",
+      "resources": "CPU, laptop",
+      "review": [
+        "security",
+        "human-approval"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P116",
+      "title": "Independent replication and final acceptance (milestone M10)",
+      "group": "Z",
+      "group_name": "End-to-end integration and acceptance testing",
+      "folder": "13-integration",
+      "path": "prompts/13-integration/GRIT-P116-independent-replication-and-final-acceptance-milestone-m10.md",
+      "phase": 10,
+      "wave": 34,
+      "dependencies": [
+        "GRIT-P115",
+        "GRIT-P113"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "docs/milestones/M10.md",
+        "docs/research/g0-replication-protocol.md",
+        "docs/research/g0-replication-report.md",
+        "experiments/model_research/ALPHA-G0-replication.toml"
+      ],
+      "modified_files": [],
+      "test_commands": [
+        "uv run grit lab status ALPHA-G0-replication",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Replication result VERIFIED (or failure documented with cause).",
+        "Every milestone M0 to M10 has evidence links."
+      ],
+      "complexity": "L",
+      "resources": "Second machine (clean), laptop-class",
+      "review": [
+        "human-approval",
+        "scientific"
+      ],
+      "conditional": null
+    },
+    {
+      "id": "GRIT-P117",
+      "title": "Optional MLX backend for Apple Silicon",
+      "group": "P",
+      "group_name": "Model inference",
+      "folder": "08-inference",
+      "path": "prompts/08-inference/GRIT-P117-optional-mlx-backend-for-apple-silicon.md",
+      "phase": 7,
+      "wave": 27,
+      "dependencies": [
+        "GRIT-P081",
+        "GRIT-P074"
+      ],
+      "status": "pending",
+      "expected_files": [
+        "models/alphalytica/src/alphalytica/mlx/__init__.py",
+        "models/alphalytica/tests/test_mlx_parity.py"
+      ],
+      "modified_files": [
+        "models/alphalytica/pyproject.toml"
+      ],
+      "test_commands": [
+        "uv run --extra mlx pytest models/alphalytica/tests/test_mlx_parity.py -q",
+        "make check"
+      ],
+      "acceptance_criteria": [
+        "Parity within tolerance; measured speedup reported."
+      ],
+      "complexity": "M",
+      "resources": "Apple Silicon laptop",
+      "review": [
+        "none"
+      ],
+      "conditional": "the M6 profiling (P081) plus an MLX microbenchmark show PyTorch MPS throughput below 50% of MLX for G0/G1 training or inference."
+    }
+  ]
+}

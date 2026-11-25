@@ -1,0 +1,25 @@
+%% Allowed import edges between GRIT packages (architecture/layers.toml). Dotted = restricted to public submodules.
+flowchart BT
+  core[grit_core L1]
+  alg[grit_algebra L2] --> core
+  dyn[grit_dynamics L2] --> core
+  bio[grit_bio L2] --> core
+  bio --> dyn
+  cog[grit_cognition L2] --> core
+  cog --> dyn
+  phy[grit_physics L2] --> core
+  dis[grit_discovery L2] --> core
+  ver[grit_verify L5] --> core
+  lab[grit_lab L3] --> core
+  lab -. protocols, types, signing .-> ver
+  data[grit_data L4] --> core
+  alpha[alphalytica L4] --> core
+  alpha --> data
+  alpha --> phy
+  alpha -. protocols, types .-> ver
+  api[grit_api L7] --> lab
+  api --> ver
+  api --> alg & dyn & bio & cog & phy & dis
+  api --> data
+  api --> alpha
+  obs[apps/observatory L6] -->|HTTP /api/v1 only| api

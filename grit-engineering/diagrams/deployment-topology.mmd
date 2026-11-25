@@ -1,0 +1,23 @@
+%% Profiles 1 to 4 (specifications/deployment.md). Profile 5 documented only.
+flowchart TB
+  subgraph P1[Profile 1: MacBook Air 16 GB]
+    DEV[uv run API + Vite] --- SQL1[(SQLite)] --- ART1[(./.grit/artifacts)]
+  end
+  subgraph P2[Profile 2: single VM]
+    CADDY[Caddy TLS] --> API2[API container]
+    CADDY --> STATIC[Static frontend]
+    API2 --- SQL2[(SQLite volume)]
+    JOBS2[Jobs container: no network]
+    EVAL2[Evaluator container]
+  end
+  subgraph P3[Profile 3: + rented GPU]
+    GPU[GPU worker: pull signed bundle, self-terminate] -->|pre-signed PUT| OBJ[(Object storage)]
+  end
+  subgraph P4[Profile 4: multi-user]
+    LB[Caddy] --> APIS[API x2]
+    APIS --> PG[(PostgreSQL)]
+    APIS --> OBJ4[(Object storage)]
+    EVH[Evaluation host: private] --> HB[(Holdout bucket)]
+  end
+  P1 --> P2 --> P3 --> P4
+  GC[The Grand Chessboard] -->|OIDC + /api/v1| LB

@@ -1,0 +1,1166 @@
+{
+  "version": 1,
+  "acceptance": {
+    "GRIT-P001": {
+      "title": "Repository skeleton, workspace and toolchain",
+      "criteria": [
+        "`make check` exits 0 on a fresh clone on Linux and macOS (CI green on both).",
+        "`uv.lock` is committed and `uv sync --frozen` succeeds.",
+        "No dependencies other than numpy, scipy (grit_core) and pytest, hypothesis, ruff, mypy (dev).",
+        "AGENTS.md at the root is byte-identical to grit-engineering/AGENTS.md."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P002": {
+      "title": "Architecture documents, ADRs and module contracts in the repository",
+      "criteria": [
+        "All 16 ADRs and all specification files present under docs/.",
+        "`make docs-links` exits 0; a planted broken link makes it exit 1."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P003": {
+      "title": "Layer enforcement with the import checker",
+      "criteria": [
+        "`make layers` exits 0 on the repository and 1 on each planted violation in tests.",
+        "Checker runs in under 2 seconds on the repository."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P004": {
+      "title": "Scientific traceability registry and validator",
+      "criteria": [
+        "`make registry` passes on the repository.",
+        "Each status rule has a failing fixture test.",
+        "ID block table documented in docs/registry/README.md."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P005": {
+      "title": "Test infrastructure, markers and numerical tolerance policy",
+      "criteria": [
+        "All markers registered; `--strict-markers` active.",
+        "`make test-fast` excludes slow/bench/gpu/e2e (verified by a marked dummy test that would fail).",
+        "Policy documented in docs/guides/testing.md."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P006": {
+      "title": "Prompt execution tracking and resumability",
+      "criteria": [
+        "`prompt_status.py next` after this prompt lists P007 and other wave-1 prompts whose deps are done.",
+        "`make prompts-check` passes and fails on a planted inconsistency.",
+        "Reports for P001 to P006 exist in prompts/reports/."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P007": {
+      "title": "Core types, error hierarchy and canonical hashing",
+      "criteria": [
+        "mypy strict passes with no `type: ignore`.",
+        "Golden hash committed and stable on Linux and macOS CI.",
+        "Registry entries validated by `make registry`."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P008": {
+      "title": "Units at boundaries",
+      "criteria": [
+        "All conversion table cases pass.",
+        "`parse_quantity` never invokes pint's expression parser on unvalidated input (verified by test with a patched parser)."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P009": {
+      "title": "Runtime validation contracts",
+      "criteria": [
+        "Overhead at `boundary` < 5% on a 1e5-element vector function (bench output in report).",
+        "No global state other than the contract level."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P010": {
+      "title": "Stable numerics and solver wrappers",
+      "criteria": [
+        "Every wrapper returns a result object with `converged`.",
+        "All reference tolerances commented with their source."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P011": {
+      "title": "Linear algebra and geometry helpers",
+      "criteria": [
+        "Conditioning failures raise with the condition number in the message.",
+        "Property tests pass under the `thorough` profile."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P012": {
+      "title": "Graph primitives and causal DAG tools",
+      "criteria": [
+        "All reference DAG answers match.",
+        "M-bias case correctly excludes the collider from adjustment sets."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P013": {
+      "title": "Optimization wrappers and gradient checking",
+      "criteria": [
+        "Standard errors match closed form.",
+        "Non-converged fits return `converged=False` with SciPy's message."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P014": {
+      "title": "Immutable configs and environment provenance capture",
+      "criteria": [
+        "Config hash stable across platforms (golden test).",
+        "No subprocess uses `shell=True`."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P015": {
+      "title": "Probability distributions and seeding",
+      "criteria": [
+        "Global RNG ban active in CI.",
+        "Every distribution has mean/var/log_prob tests."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P016": {
+      "title": "Information theory",
+      "criteria": [
+        "All properties pass under `thorough` profile.",
+        "No NaN for any valid ProbVector input including zeros."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P017": {
+      "title": "Statistics, uncertainty, scoring rules and calibration math",
+      "criteria": [
+        "Coverage simulation passes.",
+        "Every test function returns a result object with effect size and CI, not only a p-value."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P018": {
+      "title": "Numerical reference suite and micro-benchmarks (milestone M1)",
+      "criteria": [
+        "\u2265 30 reference cases, each with a citation.",
+        "Baseline JSON committed with hardware profile.",
+        "M1 report lists every grit_core module with test counts."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P019": {
+      "title": "State spaces, typed operators, composition and higher-order functions",
+      "criteria": [
+        "Category laws hold as property tests.",
+        "`make layers` passes with the new package declared."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P020": {
+      "title": "Relations, equivalence and invariants",
+      "criteria": [
+        "Warshall closure on 500 elements < 1 s.",
+        "Counterexamples reported with inputs and outputs."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P021": {
+      "title": "Fixed points and capability metrics (provisional)",
+      "criteria": [
+        "Capability metric registry entries are `provisional` with notes.",
+        "Non-contractive maps reported as such, not silently iterated."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P022": {
+      "title": "Symbolic mathematics with a safe expression parser",
+      "criteria": [
+        "Zero uses of eval/sympify/parse_expr in the module.",
+        "Fuzz test passes under `thorough` profile.",
+        "Security review recorded."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P023": {
+      "title": "Formal verification adapters (optional Z3 and Lean export)",
+      "criteria": [
+        "Core install doesn't pull z3.",
+        "Timeouts enforced."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P024": {
+      "title": "Discrete and continuous dynamical systems",
+      "criteria": [
+        "All reference systems have a citation in the registry.",
+        "Every trajectory carries units and params."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P025": {
+      "title": "Stochastic processes",
+      "criteria": [
+        "All functions require `rng`.",
+        "`max_events` enforced."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P026": {
+      "title": "Stability, attractors and bifurcations",
+      "criteria": [
+        "All reference values within stated tolerance with citations.",
+        "Sweeps respect step caps."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P027": {
+      "title": "Control and feedback",
+      "criteria": [
+        "LQR matches reference to 1e-8."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P028": {
+      "title": "Multiscale models, resource constraints and scenario simulation",
+      "criteria": [
+        "M2 report lists \u2265 10 reference results with tolerances.",
+        "Budget pre-check enforced."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P029": {
+      "title": "Biochemistry, reaction kinetics and catalysis",
+      "criteria": [
+        "Every literature parameter has a citation.",
+        "Invalid networks rejected with named species."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P030": {
+      "title": "Regulatory networks, systems biology and homeostasis",
+      "criteria": [
+        "Each motif reproduces its cited qualitative behavior in a test."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P031": {
+      "title": "Genetics and population dynamics",
+      "criteria": [
+        "Educational framing in SIR docstrings (not for forecasting)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P032": {
+      "title": "Evolutionary landscapes and comparative biology",
+      "criteria": [
+        "Landscape statistics match published NK trends (mean local optima increase with K) in a seeded test."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P033": {
+      "title": "Neuron models",
+      "criteria": [
+        "Units: mV, ms, pA/nA, documented per model."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P034": {
+      "title": "Synaptic dynamics and plasticity",
+      "criteria": [
+        "Each rule has a convergence or shape test."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P035": {
+      "title": "Neural circuits and network simulation (milestone M3)",
+      "criteria": [
+        "Benchmark < 10 s on the development MacBook (result in M3 report with hardware profile).",
+        "All bio models reproduce cited behavior (M3 table)."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P036": {
+      "title": "Capability profiles and comparative assessment",
+      "criteria": [
+        "Taxonomy file validated and marked provisional.",
+        "Every score has a CI."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P037": {
+      "title": "Learning curves, retention, generalization and transfer",
+      "criteria": [
+        "Extrapolation beyond 2x observed range requires an explicit flag."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P038": {
+      "title": "Metacognitive calibration, memory and attention models",
+      "criteria": [
+        "Calibration uses grit_core.statistics.calibration (no duplicate implementation)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P039": {
+      "title": "Reasoning task generators with independent answer checkers",
+      "criteria": [
+        "\u2265 9 task families with checkers.",
+        "Exported manifests verify."
+      ],
+      "review": [
+        "scientific",
+        "security"
+      ]
+    },
+    "GRIT-P040": {
+      "title": "Compute accounting and scaling laws",
+      "criteria": [
+        "Exact parameter counts committed for the four reference configs.",
+        "Formulas documented with derivations in docstrings."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P041": {
+      "title": "Hardware profiles and measurement: latency, throughput, memory, energy",
+      "criteria": [
+        "Every entry in hardware_peaks.toml has a citation URL and date.",
+        "No sudo or daemons."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P042": {
+      "title": "Efficiency, thermodynamic limits, Pareto analysis and the cost estimator",
+      "criteria": [
+        "Estimator output includes every assumption and `method: estimated`.",
+        "No hard-coded prices."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P043": {
+      "title": "Literature, scientific claims and provenance",
+      "criteria": [
+        "Claim kinds match the registry's kinds."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P044": {
+      "title": "Hypotheses, concept graphs, analogy and intellectual lineage",
+      "criteria": [
+        "Analogy search bounded in time and size."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P045": {
+      "title": "Classification, complexity, productivity, meta-analysis and causal attribution (milestone M4)",
+      "criteria": [
+        "M4 report complete.",
+        "Provisional schemes flagged in the registry."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P046": {
+      "title": "grit_verify public types, protocols and signing",
+      "criteria": [
+        "Signing round trip works; tamper detection test passes.",
+        "No torch, no grit_lab imports."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P047": {
+      "title": "Experiment specifications and the state machine",
+      "criteria": [
+        "Transition table in docs matches the code (test parses the Mermaid diagram edges from docs/architecture/overview.md).",
+        "All 8 required spec fields enforced."
+      ],
+      "review": [
+        "security",
+        "scientific"
+      ]
+    },
+    "GRIT-P048": {
+      "title": "Metadata store: SQLite schema and migrations",
+      "criteria": [
+        "No string-formatted SQL with user values (parameters only; test greps).",
+        "Migrations idempotent."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P049": {
+      "title": "Content-addressed artifact store and run provenance records",
+      "criteria": [
+        "Atomic writes proven by a kill-during-write test (subprocess killed mid-write leaves no partial artifact)."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P050": {
+      "title": "Hash-chained audit log",
+      "criteria": [
+        "Every state-changing repository function writes an audit event (test enumerates them)."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P051": {
+      "title": "Authorization and human review",
+      "criteria": [
+        "Deny by default proven: an unknown action is denied.",
+        "Policy file validated at load."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P052": {
+      "title": "Resource budgets and isolated local execution",
+      "criteria": [
+        "Executor never uses shell=True.",
+        "Isolation limitations documented in module docstring and security docs."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P053": {
+      "title": "Lab CLI, datasets and baselines registry, and reporting",
+      "criteria": [
+        "A human can run the example experiment end to end following experiments/README.md."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P054": {
+      "title": "Verification contracts, invariant suites and regression testing",
+      "criteria": [
+        "Regression reports are canonical JSON (hashable)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P055": {
+      "title": "Statistical validation, calibration evaluation and replication",
+      "criteria": [
+        "Decisions reproducible from inputs (hash test)."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P056": {
+      "title": "Independent benchmarks, protected holdouts and contamination checks",
+      "criteria": [
+        "bench-algorithmic-v1 committed with Merkle root in registry and audit log.",
+        "Test split absent from the repository (only hashes committed)."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P057": {
+      "title": "Causal inference, formal verification runner and independent audit verification",
+      "criteria": [
+        "Audit verifier has no import of grit_lab (layer check).",
+        "Fixture audit files generated by grit_lab in a test are verified by grit_verify."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P058": {
+      "title": "Evaluator process boundary and signed results (milestone M5)",
+      "criteria": [
+        "Evaluator receives only hashes (API test).",
+        "M5 report records every bypass attempt tested and its outcome."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P059": {
+      "title": "Alphalytica package, ModelConfig and exact parameter counting",
+      "criteria": [
+        "Four reference configs load and validate.",
+        "Layer check passes (alphalytica imports only allowed packages)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P060": {
+      "title": "Generation 0 reference decoder-only Transformer",
+      "criteria": [
+        "Parameter counts exact for G0 to G3.",
+        "Tests run in < 30 s on CPU."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P061": {
+      "title": "Generation 1 component variants: attention, position, normalization, feedforward",
+      "criteria": [
+        "Every variant has a defining-property test.",
+        "Parameter counts still exact for every variant."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P062": {
+      "title": "grit_data: dataset manifests, checksummed ingestion and the license gate",
+      "criteria": [
+        "No code path trains on data that hasn't passed the gate (gate decision hash required by later pipeline stages).",
+        "License policy file requires owner review (listed in human review checklist)."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P063": {
+      "title": "Text normalization, filtering and deduplication",
+      "criteria": [
+        "Dedup report includes counts, thresholds and parameters.",
+        "Recall and false-merge rates printed in the completion report."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P064": {
+      "title": "Leakage-safe splits and dataset versioning",
+      "criteria": [
+        "Processing refuses data that failed the gate.",
+        "Leakage check runs automatically at the end of processing and fails the command on any leak."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P065": {
+      "title": "Tokenizers: byte-level reference and byte-level BPE",
+      "criteria": [
+        "Round-trip property passes under `thorough` profile.",
+        "Tokenizer artifacts content-addressed."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P066": {
+      "title": "Tokenized shards, sequence packing and resumable batching",
+      "criteria": [
+        "Resume identity test passes.",
+        "Throughput \u2265 1M tokens/s from mmap on the laptop (bench in report)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P067": {
+      "title": "Training configuration and run record integration",
+      "criteria": [
+        "Every required run record field populated or explicitly null with reason."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P068": {
+      "title": "Training loop: optimizer, schedule, accumulation, clipping, precision, determinism",
+      "criteria": [
+        "All loop requirements in training.md have a passing test."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P069": {
+      "title": "Checkpointing and bit-identical resume",
+      "criteria": [
+        "Bit-identical resume on CPU.",
+        "MPS resume within 1e-6 relative (documented if MPS unavailable in CI)."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P070": {
+      "title": "Metrics, profiling, budget watchdog and lab-governed runs",
+      "criteria": [
+        "A training run can't start without an AUTHORIZED experiment.",
+        "Run record complete for the integration run."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P071": {
+      "title": "Inference provider interface and local PyTorch backend",
+      "criteria": [
+        "Provider usable by grit-eval selftest suite.",
+        "No `torch.load` at inference."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P072": {
+      "title": "KV cache, streaming, cancellation and context management",
+      "criteria": [
+        "Decode speedup \u2265 3x at 512 tokens on CPU (bench in report)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P073": {
+      "title": "Batch inference, memory accounting and resource limits",
+      "criteria": [
+        "Limits enforced in provider, not only in the API."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P074": {
+      "title": "Inference benchmark suite",
+      "criteria": [
+        "Results include hardware profile, code commit and model hash."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P075": {
+      "title": "Quantization adapters and Hugging Face-compatible export",
+      "criteria": [
+        "Quantization never labeled lossless; \u0394 reported."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P076": {
+      "title": "Authorized external API provider",
+      "criteria": [
+        "No real API call in CI.",
+        "Security review recorded."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P077": {
+      "title": "Language modeling evaluation suite",
+      "criteria": [
+        "Suite deterministic given model and data.",
+        "No torch import in grit_verify."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P078": {
+      "title": "Capability task suite",
+      "criteria": [
+        "Output is a profile keyed by taxonomy dimension with CIs."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P079": {
+      "title": "Calibration, robustness, generalization and contamination suites",
+      "criteria": [
+        "Contamination gate on by default in protocols."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P080": {
+      "title": "Resource-normalized comparison, regression detection and evaluation reports",
+      "criteria": [
+        "eval-lm-v1 committed and its hash recorded in the registry."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P081": {
+      "title": "Generation 0 end-to-end run, profiling and model card (milestone M6)",
+      "criteria": [
+        "Experiment ARCHIVED with VERIFIED result or an honest RESULT_REJECTED and explanation.",
+        "Model card contains measured results only.",
+        "M6 states MPS tokens/s and the recommendation for G1 hardware."
+      ],
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ]
+    },
+    "GRIT-P082": {
+      "title": "API service skeleton",
+      "criteria": [
+        "OpenAPI snapshot test in CI.",
+        "Logs are JSON with request id."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P083": {
+      "title": "Instrument registry and compute endpoints",
+      "criteria": [
+        "50 manifests registered, each with concept ids, units, assumptions and synthetic flag.",
+        "Symbolic inputs go through grit_algebra's safe parser only."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P084": {
+      "title": "Experiment, run, evaluation, registry and model endpoints",
+      "criteria": [
+        "Endpoint authorization matrix test covers 100% of write routes."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P085": {
+      "title": "Observatory frontend scaffold, design tokens and shell",
+      "criteria": [
+        "Shell JS < 200 KB gzipped.",
+        "Both themes pass contrast tests."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P086": {
+      "title": "Board navigation, command palette, keyboard model and workspace routing",
+      "criteria": [
+        "Every action reachable without a mouse."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P087": {
+      "title": "Instrument framework: parameter panels, result views and provenance",
+      "criteria": [
+        "No result renders without provenance (type-level and test)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P088": {
+      "title": "Scientific visualization primitives",
+      "criteria": [
+        "Performance budgets met (observatory.md).",
+        "Screenshots committed as baselines."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P089": {
+      "title": "Instruments: Mathematics, Physics and Dynamical Systems labs",
+      "criteria": [
+        "15 instruments usable standalone at their URLs."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P090": {
+      "title": "Instruments: Biochemistry, Evolution and Neuroscience labs",
+      "criteria": [
+        "15 instruments usable standalone."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P091": {
+      "title": "Instruments: Cognition, Metascience, Verification and Education labs",
+      "criteria": [
+        "All 50 instruments now usable."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P092": {
+      "title": "Model Laboratory, Training Dashboard, Inference Benchmarking and Experiment Registry workspaces",
+      "criteria": [
+        "G0 run from P081 fully browsable."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P093": {
+      "title": "Library, Knowledge Graph, Publication Studio and Learning workspaces",
+      "criteria": [
+        "All 12 workspaces functional (milestone M7 with P094)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P094": {
+      "title": "Reproducible notebooks and tutorials (milestone M7)",
+      "criteria": [
+        "M7: 50 instruments, 12 workspaces, a11y clean, budgets met, 5 tutorials executing."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P095": {
+      "title": "Grand Chessboard integration: OIDC, module manifest and shared tokens",
+      "criteria": [
+        "GRIT works standalone with OIDC and embedded via manifest.",
+        "Security review recorded."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P096": {
+      "title": "Local development profile",
+      "criteria": [
+        "A fresh-clone walkthrough by a human completes in < 15 minutes (recorded in report)."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P097": {
+      "title": "Container images and single-server deployment (Profile 2)",
+      "criteria": [
+        "Images contain no secrets (trivy or grype scan clean of embedded credentials).",
+        "Smoke test green in CI."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P098": {
+      "title": "GPU worker image, signed job bundles and object storage",
+      "criteria": [
+        "End-to-end CPU dry run through MinIO in CI.",
+        "No credential with wider scope than one run on the worker."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P099": {
+      "title": "GPU lifecycle: provisioning runbook, monitoring, cost ledger and guaranteed shutdown",
+      "criteria": [
+        "Real dry run completed under \u2264 1 GPU-hour approved budget; instance confirmed terminated by human; ledger matches provider bill within 10%.",
+        "Runbook followed and annotated."
+      ],
+      "review": [
+        "security",
+        "human-approval",
+        "budget"
+      ]
+    },
+    "GRIT-P100": {
+      "title": "Generation 1 controlled architecture studies",
+      "criteria": [
+        "All five studies ARCHIVED with VERIFIED or RESULT_REJECTED and reasons.",
+        "Synthesis lists effect sizes with CIs and the reviewed G2 baseline choice."
+      ],
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ]
+    },
+    "GRIT-P101": {
+      "title": "Generation 2 larger experimental baselines",
+      "criteria": [
+        "G2 VERIFIED or honestly rejected.",
+        "Measured MFU and $/run recorded.",
+        "Scaling fit with CIs and its prediction for G3."
+      ],
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ]
+    },
+    "GRIT-P102": {
+      "title": "Alternative architecture experiments: MoE, state-space, recurrent, local attention, hierarchical",
+      "criteria": [
+        "Each approved family has a VERIFIED or rejected experiment and a report section."
+      ],
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ]
+    },
+    "GRIT-P103": {
+      "title": "Generation 3 feasibility study and specification (no training)",
+      "criteria": [
+        "Owner records go or no-go with reasons in the spec document."
+      ],
+      "review": [
+        "human-approval",
+        "scientific"
+      ]
+    },
+    "GRIT-P104": {
+      "title": "Generation 3 Alphalytica research model training",
+      "criteria": [
+        "Model card lists measured results only, limitations and intended use.",
+        "Reproducibility bundle complete."
+      ],
+      "review": [
+        "human-approval",
+        "scientific",
+        "budget"
+      ]
+    },
+    "GRIT-P105": {
+      "title": "Production single-server hardening: backups, monitoring, rollback, incident response",
+      "criteria": [
+        "Restore tested end to end.",
+        "Runbooks reviewed by a human."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P106": {
+      "title": "Multi-user production: PostgreSQL, per-workspace permissions, network isolation",
+      "criteria": [
+        "Zero data loss migration verified.",
+        "Evaluation host unreachable from GPU worker network (documented test)."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P107": {
+      "title": "Horizontal scaling plan and load test harness",
+      "criteria": [
+        "Measured p95 and throughput recorded with hardware.",
+        "Plan states the next trigger concretely."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P108": {
+      "title": "Threat model in the repository and the security test suite",
+      "criteria": [
+        "Threat model lists every trust boundary with control and test reference.",
+        "No open high-severity findings."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P109": {
+      "title": "Supply chain integrity: SBOM, pinning, signing of checkpoints and datasets",
+      "criteria": [
+        "All actions pinned by SHA (CI check).",
+        "SBOMs attached to releases."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P110": {
+      "title": "Reliability drills: restore, crash-resume, rate limits and quotas",
+      "criteria": [
+        "First restore drill logged with duration and verification result."
+      ],
+      "review": [
+        "security"
+      ]
+    },
+    "GRIT-P111": {
+      "title": "Documentation site: API, math and developer guides",
+      "criteria": [
+        "Every public function appears in API reference.",
+        "Strict build in CI."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P112": {
+      "title": "Model cards, dataset cards, traceability report and publication export",
+      "criteria": [
+        "G0 cards regenerated from data match the human-edited versions except narrative sections."
+      ],
+      "review": [
+        "scientific"
+      ]
+    },
+    "GRIT-P113": {
+      "title": "End-to-end scientific path",
+      "criteria": [
+        "UI values equal library values to displayed precision."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P114": {
+      "title": "End-to-end model path",
+      "criteria": [
+        "Runs nightly in CI under 10 minutes."
+      ],
+      "review": [
+        "none"
+      ]
+    },
+    "GRIT-P115": {
+      "title": "Governance bypass acceptance tests",
+      "criteria": [
+        "All attempts denied; denials audited.",
+        "Results table reviewed by a human."
+      ],
+      "review": [
+        "security",
+        "human-approval"
+      ]
+    },
+    "GRIT-P116": {
+      "title": "Independent replication and final acceptance (milestone M10)",
+      "criteria": [
+        "Replication result VERIFIED (or failure documented with cause).",
+        "Every milestone M0 to M10 has evidence links."
+      ],
+      "review": [
+        "human-approval",
+        "scientific"
+      ]
+    },
+    "GRIT-P117": {
+      "title": "Optional MLX backend for Apple Silicon",
+      "criteria": [
+        "Parity within tolerance; measured speedup reported."
+      ],
+      "review": [
+        "none"
+      ]
+    }
+  }
+}
