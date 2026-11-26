@@ -186,7 +186,12 @@ try {
   }
 
   const book = timings.find(([k]) => k === 'book')?.[1];
-  check('40-leg book inside the 90ms budget in-browser', book.elapsedMs < 90,
+  // The first repricing after choosing the book is one cold sample. PRD 7.1 bounds a
+  // single interaction by the 300ms hard ceiling and the distribution by the 90ms p95;
+  // this check used to hold the one cold sample to the p95, and on an idle machine here
+  // it took 95.5ms while the p95 of forty runs was 83.2ms. The cold run now has to clear
+  // the ceiling and is counted in the distribution below.
+  check('40-leg book: the first, cold repricing inside the 300ms hard ceiling', book.elapsedMs < 300,
     `${book.elapsedMs.toFixed(1)}ms`);
   // One run is one sample. PRD 7.1 states this interaction as a distribution: p50 40ms,
   // p95 90ms, a hard ceiling of 300ms. Forty more repricings of the same book give the p95
@@ -201,10 +206,10 @@ try {
     }
     return out;
   });
-  const sorted = [...samples].sort((a, b) => a - b);
+  const sorted = [book.elapsedMs, ...samples].sort((a, b) => a - b);
   const rank = (q) => sorted[Math.ceil(q * sorted.length) - 1];
   const [p50, p95, worst] = [rank(0.5), rank(0.95), sorted.at(-1)];
-  check('40-leg book: p95 of 40 repricings inside the 90ms budget', p95 < 90, `p50 ${p50.toFixed(1)}ms, p95 ${p95.toFixed(1)}ms`);
+  check('40-leg book: p95 of 41 repricings, the cold one included, inside the 90ms budget', p95 < 90, `p50 ${p50.toFixed(1)}ms, p95 ${p95.toFixed(1)}ms`);
   check('40-leg book: no repricing over the 300ms hard ceiling', worst < 300, `slowest ${worst.toFixed(1)}ms`);
   console.log(`     PRD 7.1's p50 target for this interaction is 40ms: ${p50 <= 40 ? 'met' : 'not met'} at ${p50.toFixed(1)}ms`);
   check('the guard ran on the mixed-exercise book',
