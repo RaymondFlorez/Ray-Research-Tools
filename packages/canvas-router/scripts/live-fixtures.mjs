@@ -28,6 +28,7 @@ export const ROUTES = {
   'smollm2-360m': { provider: 'local-360m', model: 'smollm2-360m' },
   'smollm2-1.7b': { provider: 'local-1-7b', model: 'smollm2-1.7b' },
   'qwen2.5-1.5b': { provider: 'local-1-5b', model: 'qwen2.5-1.5b' },
+  'phi3-mini': { provider: 'local-phi3', model: 'phi3-mini' },
   'frontier-a': { provider: 'openrouter', model: 'any' },
 };
 

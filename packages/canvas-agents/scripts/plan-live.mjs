@@ -13,6 +13,10 @@
  * are pinned (temperature 0, seed 1): a rerun reproduces the run.
  *
  *   GATEWAY_URL=http://127.0.0.1:8750 node packages/canvas-agents/scripts/plan-live.mjs
+ *
+ * PLAN_TIERS=phi3-mini (comma-separated, cheapest first) plans with those models
+ * only, so one model can be measured on its own; the default is the three-model
+ * ladder. phi3-mini needs a provider local-phi3 at the gateway.
  */
 
 import { cascade, DEFAULT_POLICY, gatewayDispatch, GatewayClient, route } from '@picasso/canvas-router';
@@ -24,9 +28,16 @@ const withPlanning = (m, q) => ({ ...m, quality: { 'plan.decompose': q } });
 const POLICY = {
   version: 'plan-live', updatedAt: '2026-11-24', lambdaCost: 1, lambdaLatency: 1,
   // An ordering by size, not a measurement.
-  models: [withPlanning(local('smollm2-360m', 0.36, 0.5, 0.001), 0.5), withPlanning(local('smollm2-1.7b', 1.7, 0.6, 0.004), 0.6), withPlanning(local('qwen2.5-1.5b', 1.5, 0.7, 0.004), 0.7)],
-  entries: [{ taskClass: 'plan.decompose', slo: { kind: 'p95', ms: 60_000 }, primary: ['smollm2-360m'], fallback: ['smollm2-1.7b', 'qwen2.5-1.5b'], escalateAfterFailures: 1 }],
+  models: [
+    withPlanning(local('smollm2-360m', 0.36, 0.5, 0.001), 0.5), withPlanning(local('smollm2-1.7b', 1.7, 0.6, 0.004), 0.6),
+    withPlanning(local('qwen2.5-1.5b', 1.5, 0.7, 0.004), 0.7), withPlanning(local('phi3-mini', 3.8, 0.8, 0.008), 0.8),
+  ],
+  entries: [],
 };
+const TIERS = (process.env.PLAN_TIERS ?? 'smollm2-360m,smollm2-1.7b,qwen2.5-1.5b').split(',').map((t) => t.trim()).filter(Boolean);
+for (const t of TIERS) if (!POLICY.models.some((m) => m.id === t)) throw new Error(`PLAN_TIERS names ${t}, which is not a model here`);
+POLICY.models = POLICY.models.filter((m) => TIERS.includes(m.id));
+POLICY.entries = [{ taskClass: 'plan.decompose', slo: { kind: 'p95', ms: 120_000 }, primary: [TIERS[0]], fallback: TIERS.slice(1), escalateAfterFailures: 1 }];
 
 // The reference layer, as far as these questions need one.
 const REFERENCE = {
@@ -80,7 +91,7 @@ const verify = (answer) => {
 
 const client = new GatewayClient({ baseUrl: BASE, user: 'pm' });
 const providers = await client.providers();
-const features = { taskClass: 'plan.decompose', inputTokens: 400, expectedOutputTokens: 400, modalities: ['text'], toolsRequired: [], rigorFlag: false, dataSensitivity: 'positions', costCeilingCents: 100, latencyBudgetMs: 60_000, determinismRequired: true, priorFailures: [] };
+const features = { taskClass: 'plan.decompose', inputTokens: 400, expectedOutputTokens: 400, modalities: ['text'], toolsRequired: [], rigorFlag: false, dataSensitivity: 'positions', costCeilingCents: 100, latencyBudgetMs: 120_000, determinismRequired: true, priorFailures: [] };
 
 const tally = {};
 const problems = {};
@@ -90,7 +101,7 @@ for (const question of QUESTIONS) {
   const scoped = scope({ question, resolve });
   const prompt = { system: SYSTEM, messages: [{ role: 'user', text: question }], maxTokens: 500, dataClass: 'positions', purpose: 'plan.decompose', pinned: { seed: 1 } };
   const started = performance.now();
-  const r = await cascade(POLICY, features, gatewayDispatch(client, ROUTES, providers, prompt), verify, { maxTiers: 3 });
+  const r = await cascade(POLICY, features, gatewayDispatch(client, ROUTES, providers, prompt), verify, { maxTiers: TIERS.length });
   const ms = performance.now() - started;
   for (const st of r.steps) {
     const id = st.decision.model.id;
