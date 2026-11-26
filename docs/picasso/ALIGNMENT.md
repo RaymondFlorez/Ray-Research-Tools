@@ -121,7 +121,7 @@ Refused: **ScoringNode** frameworks ERQ-12, AXM-8, SIV, BPS — named, never def
 | 5.5 liquidation clusters, MEV, node RPC/indexer | Infra | Data-dependent; nothing to fit without feeds |
 | 5.6 de-vigging (four methods), probability curves, calibration, weights | Built | `canvas-markets` |
 | 5.6 venue order books | Infra | Polymarket, Kalshi feeds |
-| 5.7 QueryNode plan, execution as nodes, reconcile, critique, synthesize | Built | `canvas-agents`, walkthrough in `canvas-integration`; a model's plan is read and refused if it cannot run (`readPlan`); three local models planned 12 questions through the gateway, 5 runnable, all from Qwen2.5-1.5B, and those read as poor plans (`plan-live.mjs`) |
+| 5.7 QueryNode plan, execution as nodes, reconcile, critique, synthesize | Built | `canvas-agents`, walkthrough in `canvas-integration`; a model's plan is read and refused if it cannot run (`readPlan`); three local models planned 12 questions through the gateway, 5 runnable, all from Qwen2.5-1.5B, and Phi-3-mini (3.8B) alone 8 of 12 once its prompt was delivered (its template drops a system role; the gateway's `systemAsUser`); the runnable plans still read as poor ones (`plan-live.mjs`) |
 | 5.7 shock defaulting to the hawkish-conditional shape | Built | `canvas-pricing` shockShape |
 | 5.8 Monte Carlo: GBM, Heston, Merton, bootstraps, Gaussian and t copulas | Built | `pricing-core` portfolio, resample, copula |
 | 3.3 OptimizerNode over Monte Carlo scenarios | Built | `canvas-pricing` optimizer, lp; `canvas-integration/test/optimizer.test.ts` |

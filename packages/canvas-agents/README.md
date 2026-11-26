@@ -310,6 +310,19 @@ The first run found 2 of 12, and 22 of its faults were the reader's own: it
 required ids in lower case starting with a letter, and Qwen numbers its steps
 `1`, `2`. An id now only has to be a short printable label, unique.
 
+**A larger model, and a fault in the delivery.** Phi-3-mini-4k-instruct (3.8B,
+MIT), alone over the same 12 questions (`PLAN_TIERS=phi3-mini`), first came back
+0 of 12, every answer prose. Its chat template has no system role and llama.cpp
+dropped the system prompt without an error, so the model never saw its
+instructions; asked to plan "how did the book perform", it wrote about a library
+book. With the gateway's `systemAsUser` on that provider (measured 26 November
+2026): 8 of 12 runnable, against Qwen2.5-1.5B's 5 of 12 rerun alone under the
+same script as the control, which reproduced its earlier plans exactly. The other
+three models' templates take a system role, so their figures stand. Phi-3's
+plans are better formed and still not good: reading an earnings call is assigned
+to the quant agent through `embed`, and a final assessment is dispatched as
+`plan.decompose`.
+
 **Runnable is not good.** The plans that passed are the shape of a plan, and
 read as poor ones: "read the last AAPL call" is a single retrieval step tagged
 `intent.classify`; "which positions lost the most since Friday" is six chained
