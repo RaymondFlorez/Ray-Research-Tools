@@ -8,9 +8,12 @@ Research tooling for the Alphalytica / Grand Chessboard platform.
 
 ## Packages
 
-Sixteen workspace packages and one Rust crate. Every phase in the PRD's
-Appendix B exits on a measurement rather than an assertion; each package's
-README carries the figure it was measured at and the gaps it does not close.
+Sixteen workspace packages and one Rust crate. Every exit criterion in the PRD's
+Appendix B is backed by a measurement rather than an assertion, and where the
+measurement covers only part of the criterion (a simulated model fleet, a CPU
+rasterizer, native rather than in-browser) `docs/picasso/ALIGNMENT.md` says so.
+Each package's README carries the figure it was measured at and the gaps it does
+not close.
 
 ### The canvas
 
@@ -53,10 +56,10 @@ README carries the figure it was measured at and the gaps it does not close.
 
 | Service | Description |
 |---|---|
-| [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter, none yet run against the real source. |
-| [`gateway`](services/gateway) | Go: the model gateway. Any model, open or closed, through three adapters (Anthropic's official SDK, Chat Completions for OpenAI, OpenRouter and every open-weight server, and Gemini). Each user calls on their own account, by OpenRouter sign-in or by an API key sealed per user. Positions and MNPI-risk data never reach a vendor's API. |
+| [`dataplane`](services/dataplane) | Go: `stream-ingest` and `data-access` — point-in-time facts on Postgres with append-only enforced by the database, entitlement-filtered reads, sequence-gap and staleness tracking, and a live stream conflated to 4Hz. Held to `canvas-data`'s TypeScript by a shared conformance file. Loaders for free market data (SEC EDGAR, Treasury, FRED/ALFRED, Stooq) and a live Coinbase adapter; the Treasury curve and Coinbase's live feed have loaded from the real sources, Stooq refuses automated requests, and SEC and FRED wait on a contact and a key. |
+| [`gateway`](services/gateway) | Go: the model gateway. Any model, open or closed, through three adapters (Anthropic's official SDK, Chat Completions for OpenAI, OpenRouter and every open-weight server, and Gemini). Each user calls on their own account, by OpenRouter sign-in or by an API key sealed per user. Positions and MNPI-risk data never reach a vendor's API. Real open-weight models on llama.cpp answer through it, pinned at temperature 0 and a seed where asked (CI calls one on every push); no vendor's model has answered yet, for want of a key. |
 | [`collab`](services/collab) | TypeScript: `picasso-collab`. The canvas's Yjs document synced over Hocuspocus. Every update is logged to Postgres, with 90-day retention held by the database. Snapshots are taken at most 30 s apart while editing and on idle. Named versions are immutable and record the dataset snapshot ids the canvas cites. Users open only their own tenant's canvases. |
-| [`auth`](services/auth) | TypeScript: `picasso-auth`. Sign-in against any OpenID provider, with PKCE, nonce and browser binding. Requires MFA in tenants that hold positions. Issues 15-minute Ed25519 session tokens with silent refresh, which the data plane, gateway and collab server verify. A shared token contract holds the Go and TypeScript verifiers to the same verdicts. Tested against a stand-in provider, not a real one. |
+| [`auth`](services/auth) | TypeScript: `picasso-auth`. Sign-in against any OpenID provider, with PKCE, nonce and browser binding. Requires MFA in tenants that hold positions. Issues 15-minute Ed25519 session tokens with silent refresh, which the data plane, gateway and collab server verify. A shared token contract holds the Go and TypeScript verifiers to the same verdicts. Tested against a stand-in and against `oidc-provider`, an OpenID Certified implementation run locally; not yet against a hosted provider. |
 
 ## Apps
 
