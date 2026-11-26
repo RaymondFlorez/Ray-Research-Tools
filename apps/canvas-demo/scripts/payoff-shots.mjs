@@ -188,6 +188,25 @@ try {
   const book = timings.find(([k]) => k === 'book')?.[1];
   check('40-leg book inside the 90ms budget in-browser', book.elapsedMs < 90,
     `${book.elapsedMs.toFixed(1)}ms`);
+  // One run is one sample. PRD 7.1 states this interaction as a distribution: p50 40ms,
+  // p95 90ms, a hard ceiling of 300ms. Forty more repricings of the same book give the p95
+  // and the ceiling as checks, and the p50 against its target as a printed figure.
+  await page.selectOption('#strategy', 'book');
+  await page.waitForTimeout(150);
+  const samples = await page.evaluate(() => {
+    const out = [];
+    for (let i = 0; i < 40; i += 1) {
+      window.__recompute();
+      out.push(window.__payoff().elapsedMs);
+    }
+    return out;
+  });
+  const sorted = [...samples].sort((a, b) => a - b);
+  const rank = (q) => sorted[Math.ceil(q * sorted.length) - 1];
+  const [p50, p95, worst] = [rank(0.5), rank(0.95), sorted.at(-1)];
+  check('40-leg book: p95 of 40 repricings inside the 90ms budget', p95 < 90, `p50 ${p50.toFixed(1)}ms, p95 ${p95.toFixed(1)}ms`);
+  check('40-leg book: no repricing over the 300ms hard ceiling', worst < 300, `slowest ${worst.toFixed(1)}ms`);
+  console.log(`     PRD 7.1's p50 target for this interaction is 40ms: ${p50 <= 40 ? 'met' : 'not met'} at ${p50.toFixed(1)}ms`);
   check('the guard ran on the mixed-exercise book',
     book.guard.outcome === 'passed' || book.guard.outcome === 'escalated',
     `${book.guard.outcome}: ${book.guard.badge}`);
