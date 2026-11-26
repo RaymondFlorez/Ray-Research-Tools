@@ -6,7 +6,7 @@ model a task goes to; this is what makes the call.
 
 ```bash
 cd services/gateway
-go test -race ./...                       # 33 tests; three live and five on Postgres, skipped by default
+go test -race ./...                       # 35 tests; three live and five on Postgres, skipped by default
 GATEWAY_LIVE=1 go test ./provider/        # adds one call to api.anthropic.com with an invalid key
 GATEWAY_LOCAL_MODEL_URL=http://127.0.0.1:8081/v1 GATEWAY_LOCAL_MODEL=smollm2-360m \
   go test ./server/ -run "LocalModel|RealModel" -v    # a real open-weight model, behind any Chat Completions server
@@ -123,6 +123,13 @@ Anthropic's API is the other provider host this environment reaches. Measured:
   other sends one pinned request three times and requires one answer (unpinned, the same
   question got $15, $0 and $35 on three calls).
 - **Text in, text out.** No streaming, tools, images, structured output or thinking controls.
+- **A model with no system role needs `systemAsUser`.** Some open-weight chat templates
+  render only user and assistant turns, and the server drops a system message without an
+  error. Phi-3-mini's does: through the gateway it answered every planning question as if it
+  had no instructions, and with the same instructions in the user message it wrote plans.
+  `systemAsUser: true` on a Chat Completions provider puts the system prompt at the head of
+  the first user message. The gateway cannot detect the drop, so the operator sets it per
+  model; it is refused on Anthropic and Gemini providers, where it would do nothing.
 - **Pinned means temperature 0 and a seed, or a refusal.** A request with `pinned: {seed}`
   sends `temperature: 0` and the seed to Chat Completions servers and to Gemini, and records
   the seed on the trail. Claude takes neither (Opus 5.5 returns a 400 for any sampling
