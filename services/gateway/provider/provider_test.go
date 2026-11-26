@@ -242,3 +242,26 @@ func TestPinnedRequestsArePinnedOrRefused(t *testing.T) {
 		t.Error("CanPin")
 	}
 }
+
+// A model with no system role (Phi-3-mini's template renders only user and
+// assistant turns) gets the system prompt at the head of the first user
+// message; every other provider keeps the system message.
+func TestTheSystemPromptReachesAModelWithNoSystemRole(t *testing.T) {
+	answer := `{"model":"m","choices":[{"message":{"content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}`
+	folded, fs := standIn(t, 200, answer)
+	if _, err := (OpenAICompatible{BaseURL: folded.URL, SystemAsUser: true}).Chat(context.Background(), "", req); err != nil {
+		t.Fatal(err)
+	}
+	msgs := fs.body["messages"].([]any)
+	first := msgs[0].(map[string]any)
+	if len(msgs) != 3 || first["role"] != "user" || first["content"] != "Be brief.\n\nHi" || msgs[1].(map[string]any)["content"] != "Hello." {
+		t.Errorf("folded: %v", msgs)
+	}
+	plain, ps := standIn(t, 200, answer)
+	if _, err := (OpenAICompatible{BaseURL: plain.URL}).Chat(context.Background(), "", req); err != nil {
+		t.Fatal(err)
+	}
+	if m := ps.body["messages"].([]any); len(m) != 4 || m[0].(map[string]any)["role"] != "system" {
+		t.Errorf("unfolded: %v", m)
+	}
+}

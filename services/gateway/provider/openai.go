@@ -23,7 +23,14 @@ type OpenAICompatible struct {
 	// Headers the operator adds to every request, such as the attribution
 	// headers some aggregators ask for.
 	Headers map[string]string
-	Client  *http.Client
+	// SystemAsUser folds the system prompt into the first user message, for a
+	// model whose chat template has no system role. Phi-3-mini's renders only
+	// user and assistant turns, so a system message sent to it is dropped
+	// without an error and the model answers a question it was never framed
+	// for: asked to plan as JSON, it wrote prose about a library book. The
+	// server cannot say it dropped anything, so this is the operator's setting.
+	SystemAsUser bool
+	Client       *http.Client
 }
 
 type chatCompletion struct {
@@ -49,11 +56,15 @@ func (o OpenAICompatible) Chat(ctx context.Context, credential string, req Reque
 		return Response{}, err
 	}
 	messages := []map[string]string{}
-	if req.System != "" {
+	if req.System != "" && !o.SystemAsUser {
 		messages = append(messages, map[string]string{"role": "system", "content": req.System})
 	}
-	for _, m := range req.Messages {
-		messages = append(messages, map[string]string{"role": m.Role, "content": m.Text})
+	for i, m := range req.Messages {
+		content := m.Text
+		if i == 0 && req.System != "" && o.SystemAsUser {
+			content = req.System + "\n\n" + m.Text
+		}
+		messages = append(messages, map[string]string{"role": m.Role, "content": content})
 	}
 	field := o.MaxTokensField
 	if field == "" {

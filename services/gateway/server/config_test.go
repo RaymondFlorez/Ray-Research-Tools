@@ -25,3 +25,16 @@ func TestTheShippedProviderFileIsValid(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// systemAsUser does something only to Chat Completions requests; anywhere
+// else it would be a setting that silently does nothing, so it is refused.
+func TestSystemAsUserIsRefusedWhereItWouldDoNothing(t *testing.T) {
+	p := Provider{ID: "claude", Name: "Claude", Kind: "anthropic", Placement: Vendor, Auth: AuthAPIKey, SystemAsUser: true}
+	if err := p.Validate(); err == nil {
+		t.Error("systemAsUser on an Anthropic provider was accepted")
+	}
+	p = Provider{ID: "phi", Name: "Phi-3", Kind: "openai", BaseURL: "http://127.0.0.1:8084/v1", Placement: SelfHosted, Auth: AuthNone, SystemAsUser: true}
+	if err := p.Validate(); err != nil {
+		t.Errorf("systemAsUser on a Chat Completions provider: %v", err)
+	}
+}

@@ -63,15 +63,19 @@ const (
 
 // Provider is one entry of the operator's provider configuration.
 type Provider struct {
-	ID             string            `json:"id"`
-	Name           string            `json:"name"`
-	Kind           string            `json:"kind"`
-	BaseURL        string            `json:"baseUrl,omitempty"`
-	MaxTokensField string            `json:"maxTokensField,omitempty"`
-	Headers        map[string]string `json:"headers,omitempty"`
-	Placement      Placement         `json:"placement"`
-	Auth           Auth              `json:"auth"`
-	OAuth          *OAuthConfig      `json:"oauth,omitempty"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Kind           string `json:"kind"`
+	BaseURL        string `json:"baseUrl,omitempty"`
+	MaxTokensField string `json:"maxTokensField,omitempty"`
+	// SystemAsUser: the model's chat template has no system role, so the
+	// system prompt goes at the head of the first user message instead of
+	// being dropped by the server. Chat Completions providers only.
+	SystemAsUser bool              `json:"systemAsUser,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
+	Placement    Placement         `json:"placement"`
+	Auth         Auth              `json:"auth"`
+	OAuth        *OAuthConfig      `json:"oauth,omitempty"`
 	// Models, when set, is the only models a request may name; empty is any
 	// model the provider serves.
 	Models []string `json:"models,omitempty"`
@@ -100,6 +104,9 @@ func (p Provider) Validate() error {
 		return fmt.Errorf("provider %s: auth %q", p.ID, p.Auth)
 	case p.Auth == AuthOAuth && (p.OAuth == nil || p.OAuth.AuthorizeURL == "" || p.OAuth.ExchangeURL == ""):
 		return fmt.Errorf("provider %s: oauth needs authorizeUrl and exchangeUrl", p.ID)
+	case p.SystemAsUser && p.Kind != "openai":
+		// Ignored anywhere else, it would be a setting that silently does nothing.
+		return fmt.Errorf("provider %s: systemAsUser applies to Chat Completions providers only", p.ID)
 	case p.Auth == AuthNone && p.Placement == Vendor:
 		// A vendor reached with no user credential would be reached on the
 		// operator's account, for every user, with nothing to say whose call it was.
@@ -115,7 +122,7 @@ func (p Provider) adapter(client *http.Client) provider.Adapter {
 	case "gemini":
 		return provider.Gemini{BaseURL: p.BaseURL, Client: client}
 	default:
-		return provider.OpenAICompatible{Name: p.ID, BaseURL: p.BaseURL, MaxTokensField: p.MaxTokensField, Headers: p.Headers, Client: client}
+		return provider.OpenAICompatible{Name: p.ID, BaseURL: p.BaseURL, MaxTokensField: p.MaxTokensField, Headers: p.Headers, SystemAsUser: p.SystemAsUser, Client: client}
 	}
 }
 
