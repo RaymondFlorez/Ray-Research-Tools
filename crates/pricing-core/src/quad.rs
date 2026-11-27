@@ -115,13 +115,51 @@ impl Chebyshev {
         cheb
     }
 
-    /// Barycentric evaluation of the interpolant through `values` at `z`.
     /// The barycentric weight at node `i`, for an evaluation written over
     /// another number type (`adjoint`'s differentiable twin of `eval`).
     pub fn weight(&self, i: usize) -> f64 {
         self.weights[i]
     }
 
+    /// The part of `eval` at `z` that does not depend on the values.
+    ///
+    /// The boundary solve reads the interpolant at the same points on every
+    /// iteration, against new values each time; the terms `wᵢ/(z - zᵢ)` and
+    /// their sum are the same every time. They are pushed onto `terms`, and
+    /// `eval_prepared` finishes the evaluation with the same arithmetic, in the
+    /// same order, as `eval` — so the two agree to the bit, which a test checks.
+    pub fn prepare(&self, z: f64, terms: &mut Vec<f64>) -> Prepared {
+        let start = terms.len();
+        let mut denominator = 0.0;
+        for (i, &node) in self.nodes.iter().enumerate().take(self.len) {
+            let diff = z - node;
+            if diff == 0.0 {
+                terms.truncate(start);
+                return Prepared::OnNode(i);
+            }
+            let term = self.weights[i] / diff;
+            terms.push(term);
+            denominator += term;
+        }
+        Prepared::Between { start, denominator }
+    }
+
+    /// `eval(values, z)`, for a `z` that `prepare` has already seen.
+    #[inline]
+    pub fn eval_prepared(&self, values: &[f64; MAX_NODES], at: Prepared, terms: &[f64]) -> f64 {
+        match at {
+            Prepared::OnNode(i) => values[i],
+            Prepared::Between { start, denominator } => {
+                let mut numerator = 0.0;
+                for (term, value) in terms[start..start + self.len].iter().zip(values) {
+                    numerator += term * value;
+                }
+                numerator / denominator
+            }
+        }
+    }
+
+    /// Barycentric evaluation of the interpolant through `values` at `z`.
     pub fn eval(&self, values: &[f64; MAX_NODES], z: f64) -> f64 {
         let mut numerator = 0.0;
         let mut denominator = 0.0;
@@ -138,6 +176,14 @@ impl Chebyshev {
         }
         numerator / denominator
     }
+}
+
+/// Where `Chebyshev::prepare` found a point: on a node, whose value is the
+/// answer, or between them, with its terms at `start` in the caller's list.
+#[derive(Clone, Copy, Debug)]
+pub enum Prepared {
+    OnNode(usize),
+    Between { start: usize, denominator: f64 },
 }
 
 #[cfg(test)]
@@ -202,6 +248,31 @@ mod test {
         }
         for i in 0..cheb.len {
             assert_eq!(cheb.eval(&values, cheb.nodes[i]), values[i]);
+        }
+    }
+
+    /// The boundary solve's prepared reads stand in for `eval`, so they must be
+    /// `eval` to the bit, at nodes and between them, for every size the
+    /// schemes use, on values that change between reads as the solve's do.
+    #[test]
+    fn a_prepared_read_is_eval_to_the_bit() {
+        for n in [4usize, 5, 6, 8, 10, 16] {
+            let cheb = Chebyshev::new(n);
+            let mut terms = Vec::new();
+            let mut points: Vec<f64> = (0..97).map(|k| -1.0 + 2.0 * k as f64 / 96.0).collect();
+            points.extend(cheb.nodes.iter().take(cheb.len));
+            points.extend([libm::nextafter(cheb.nodes[1], 2.0), f64::NAN]);
+            let prepared: Vec<Prepared> = points.iter().map(|&z| cheb.prepare(z, &mut terms)).collect();
+            for round in 0..5 {
+                let mut values = [0.0; MAX_NODES];
+                for (i, value) in values.iter_mut().enumerate().take(cheb.len) {
+                    *value = libm::sin(1.3 * i as f64 + round as f64) * libm::exp(-(i as f64) / 3.0);
+                }
+                for (&z, &at) in points.iter().zip(&prepared) {
+                    let (want, got) = (cheb.eval(&values, z), cheb.eval_prepared(&values, at, &terms));
+                    assert_eq!(want.to_bits(), got.to_bits(), "n {n}, z {z}: {want} against {got}");
+                }
+            }
         }
     }
 }

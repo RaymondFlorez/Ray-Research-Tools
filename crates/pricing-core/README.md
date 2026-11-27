@@ -234,20 +234,27 @@ Andersen-Lake pricing every American cell and the guard sampling on top:
 
 | Book | Repricings | p50 | p95 | |
 |---|---|---|---|---|
-| 40 European legs | 15,000 | 1.85ms | 2.42ms | 37x inside budget |
-| 40 American legs, guard sampling | 15,320 | 59.3ms | 60.5ms | inside budget |
-| 120 European legs | 45,000 | 5.59ms | 5.78ms | inside budget |
-| 400 European legs | 150,000 | 18.8ms | 19.2ms | inside budget |
+| 40 European legs | 15,000 | 1.85ms | 1.97ms | 46x inside budget |
+| 40 American legs, guard sampling | 15,320 | 30.2ms | 37.6ms | inside budget |
+| 120 European legs | 45,000 | 5.60ms | 5.77ms | inside budget |
+| 400 European legs | 150,000 | 19.0ms | 20.1ms | inside budget |
 
-**In the browser it is tighter, and one scheme does not fit every surface.** WASM runs the
-same code about two and a half times slower, which takes a book of forty American legs to
-172ms. `GridSpec::quality` is the lever:
+The American book was 57.5–59.3ms until 27 November; "Why a grid can afford it" has what
+changed, and nothing about the prices did.
 
-| quality | 40 American legs, native | in WASM | badge |
+**In the browser it is tighter, and one scheme does not fit every target.** WASM runs the
+same code about 1.8 times slower here, which takes a book of forty American legs to 53ms p50
+at `Standard`: inside the 90ms p95, outside PRD 7.1's 40ms median. `GridSpec::quality` is the
+lever (`examples/quality_bench.rs` native, `scripts/bench-grid-wasm.mjs` in Chromium, p50):
+
+| quality | 40 American legs, native | in Chromium | badge |
 |---|---|---|---|
-| `Draft` | 22.3ms | 55.9ms | `draft, unchecked` |
-| `Standard` | 61.1ms | 171.7ms | `approx, max err 0.0 ticks` |
-| `Exact` | 140.1ms | — | `exact` |
+| `Draft` | 13.5ms | 21.5–22.6ms | `draft, unchecked` |
+| `Standard` | 30.3ms | 52.4–54.3ms | `approx, max err 0.0 ticks` |
+| `Exact` | 82.6ms | 150.7–152.4ms | `exact` |
+
+They were 20.8, 56.6 and 143.3ms native, and 49.4, 138.2 and 330.2ms in Chromium, the day
+before, by the same two benches on the same machine.
 
 A browser drags at `Draft` and settles at `Standard`, the same trade the canvas already
 makes when it drops detail while panning (PRD 3.6). The two are not far apart: across a
@@ -349,11 +356,11 @@ every parameter, itself anchored against that 32,767-step lattice — over 1,680
 
 | method | mean | p95 | worst | cost |
 |---|---|---|---|---|
-| Bjerksund-Stensland 93 | 0.026266 | 0.130264 | 0.698977 | 0.9µs |
-| Leisen-Reimer, 51 steps | 0.002277 | 0.011521 | 0.062449 | 4.0µs |
-| Leisen-Reimer, 255 steps | 0.000444 | 0.002263 | 0.012503 | 69µs |
-| **Andersen-Lake FAST** | **0.000096** | **0.000486** | **0.002129** | 26µs |
-| Andersen-Lake ACCURATE | 0.000024 | 0.000117 | 0.001096 | 167µs |
+| Bjerksund-Stensland 93 | 0.026266 | 0.130264 | 0.698977 | 0.85µs |
+| Leisen-Reimer, 51 steps | 0.002277 | 0.011521 | 0.062449 | 3.2µs |
+| Leisen-Reimer, 255 steps | 0.000444 | 0.002263 | 0.012503 | 66µs |
+| **Andersen-Lake FAST** | **0.000096** | **0.000486** | **0.002129** | 19µs |
+| Andersen-Lake ACCURATE | 0.000024 | 0.000117 | 0.001096 | 107µs |
 
 The 51-step lattice — *the guard's own reference* — has a worst case of 6.2 cents against
 the half-tick tolerance of 0.5 cents it was policing. The yardstick was out by twelve times
@@ -406,14 +413,33 @@ orders of magnitude on its own.
 
 ## Why a grid can afford it
 
-Andersen-Lake costs 26µs a price against Bjerksund-Stensland's 0.9µs, and 15,000 of those
-would be 390ms — five times over budget.
+Andersen-Lake costs 19µs a price against Bjerksund-Stensland's 0.85µs, and 15,000 of those
+would be 285ms — three times over budget.
 
 It fits because the exercise boundary does not depend on the spot, and is homogeneous of
 degree one in the strike. A 25x15 grid over a 40-leg book is 15,000 repricings but only 600
 distinct `(leg, volatility)` pairs: the spot axis moves the option through a boundary that
 does not move with it. `grid::BoundaryCache` solves each one once, at a unit strike, and
 every cell then costs one pricing integral.
+
+The same argument goes two levels further down, and it halved the grid. Inside the boundary
+solve, the fixed point re-reads the boundary at the same points on every iteration: the
+times, the discount factors, the variance half of `d±` and the interpolation weights at those
+points do not change between iterations, only the boundary's values do. Inside the pricing
+integral, the same is true across the spot axis: everything but the log-moneyness is the
+same at every spot. Both are now computed once (`Chebyshev::prepare`, `Solver::premium_table`)
+and the loops do what is left — the interpolation itself and two normal CDFs a point. The
+guard's own solves are kept per `(leg, volatility)` as well, so two sampled cells on one vol
+level share one, and an escalated stratum reuses its column's. `examples/grid_bench.rs`
+prints where the time now goes: a boundary at 20µs, a cell's price from its table at 0.35µs
+and its Greeks at 0.1µs, and the guard's solves at 51µs each.
+
+Every value is the same expression with its operands in the same order, so every price is
+the same to the bit: `examples/bits_digest.rs` folds 30,720 Andersen-Lake prices across every
+scheme and every grid cell over three books, three qualities, three decays, three markets and
+two guard tolerances into two digests, and they were `30ceea67b42b91c9` and `d71a5b86ad33bfa4`
+before the change and after it. `quad`'s tests hold a prepared read to `eval`, bit for bit. No fixed-point solve was found to reach an exact repeat within its iterations, so
+stopping early would change bits and was not done.
 
 That is also why `Solver::price` routes through the unit boundary itself rather than
 solving at the contract's own strike. The two are identical in algebra and differ in the
@@ -641,9 +667,12 @@ type, held to the same bits as `price` on every scheme and contract in the tests
   gamma and speed attached, vega with vanna, and maturity with charm; a second sweep seeded on
   vol gives volga.
 
-It does not buy speed. With five inputs, reverse mode has nothing to amortize: all ten Greeks
-take 26 to 28 prices' worth across runs (5.3ms, a price being about 200µs), where bumping them
-takes 25.
+It does not buy speed, and since 27 November it costs some. With five inputs, reverse mode has
+nothing to amortize: all ten Greeks take 5.3–5.7ms across runs (`examples/adjoint_scan.rs`),
+which was 26 to 28 prices' worth when a price took about 200µs. The price path has since had its
+loop invariants hoisted (see "Why a grid can afford it") and the tape, which differentiates its
+own copy of the arithmetic, has not; a price is now 122–155µs, the adjoint 37 to 44 prices'
+worth, and bumping, at 25 prices, 3.1–3.3ms — faster than the adjoint by about 1.7 times.
 What it buys is exact derivatives of the price on the screen, with no step size to choose.
 Where Andersen-Lake hands a contract to Black-Scholes — no exercise region, or degenerate
 inputs — the Greeks are the closed forms. One finding worth knowing: as the rate goes to zero
@@ -748,6 +777,13 @@ WASM.
 - **The cluster.** "100k paths x 252 steps x 40 assets runs on Ray ... result matrices
   persist to S3": no Ray and no S3. What exists is the per-path arithmetic they would
   distribute, at 3.3e7 asset-steps a second on one core.
+- **PRD 7.1's median on the hardest book in a browser.** Forty American legs at Standard
+  reprice in Chromium at 52–54ms p50, inside the 90ms p95 but over the 40ms median; Draft and
+  the demo's half-American book meet both. What is left is about 600 boundary solves, each
+  dominated by two normal CDFs a quadrature point, and the guard's own solves.
+- **The adjoint's tape is not hoisted.** It differentiates its own copy of the Andersen-Lake
+  arithmetic, which still recomputes the loop invariants the price path no longer does, so
+  ten Greeks now cost more than bumping for them.
 - **Andersen-Lake's Newton acceleration.** Three attempts diverged; the plain fixed-point
   iteration ships (see *The method, and one thing that did not work*).
 - **Quasi-random sampling across assets.** Sobol with a Brownian bridge is single-asset;

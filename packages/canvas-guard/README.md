@@ -46,7 +46,7 @@ passes is a table whose thresholds were chosen after the measurements.
 | Row | Budget p95 | Observed p95 | |
 |---|---|---|---|
 | Pan / zoom frame | 16ms | 18.8ms | 5,000 nodes on SwiftShader, a CPU rasterizer. The p50 is inside at 7.1ms. Real hardware should clear it, but that is an inference. |
-| Options book reprice, 40 legs × 375 cells | 90ms | 171.7ms | Quality-dependent. `draft` reprices in 55.9ms and meets it; `standard` goes through Andersen-Lake and does not. The canvas drags at draft and settles at standard, so the budget holds while the analyst is moving and misses when they stop. The recorded figure is the one that fails — taking the draft number would be choosing the measurement that passes. |
+| Options book reprice, 40 legs × 375 cells | 90ms | 58.0ms | Missed on the median: the hardest book, all 40 legs American at `standard`, reprices in Chromium at 54.3ms p50 against a 40ms target (`scripts/bench-grid-wasm.mjs`). The p95 and the 300ms ceiling hold. At `draft` it is 22.6ms p50, and the demo's mixed-exercise book meets both targets at `standard`, 27.3–28.0ms p50. The recorded figure is the one that fails. A row is met only when its p50 is inside too, as `checkLatency` already required. |
 | Monte Carlo 100k × 252 × 40 | 9s | 30.0s | Single-threaded native, against a budget the PRD explicitly puts on a cluster. 3.3x over, landing exactly on the 30s ceiling, with throughput flat at 3.3e7 asset-steps/s from 10k paths to 100k — so the useful reading is that the budget assumes about four cores. |
 
 `checkLatency` throws on an interaction name that is not in the table rather

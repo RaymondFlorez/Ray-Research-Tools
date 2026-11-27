@@ -20,8 +20,8 @@
  * Three rows are measured and **missed**, and they stay recorded as missed. A
  * table where every row passes is a table whose thresholds were chosen after
  * the measurements. Two of the three miss on a software rasterizer or a single
- * core against a budget the PRD writes for a GPU or a cluster, which the
- * caveats say — and which is a reason to keep reading, not a reason to round
+ * core against a budget the PRD writes for a GPU or a cluster, and the third
+ * on its median alone, which the caveats say — and which is a reason to keep reading, not a reason to round
  * the row up to a pass.
  */
 
@@ -145,11 +145,11 @@ export const LATENCY_BUDGETS: readonly BudgetedInteraction[] = [
     ceilingMs: 300,
     evidence: {
       kind: 'measured',
-      p50Ms: 55.9,
-      p95Ms: 171.7,
-      where: 'canvas-pricing, 40 American legs across a 25x15 grid in Chromium',
+      p50Ms: 54.3,
+      p95Ms: 58.0,
+      where: 'scripts/bench-grid-wasm.mjs: 40 American legs across a 25x15 grid at `standard` in headless Chromium, 41 runs',
       caveat:
-        'quality-dependent, and the figure recorded is the one that misses. At `draft` the book reprices in 55.9ms and at `standard` in 171.7ms, because American legs go through Andersen-Lake rather than a closed form — two hundred and seventy times more accurate at four times the cost. The canvas drags at draft and settles at standard, so the budget is met while the analyst is moving and missed when they stop. Recording the draft number alone would be choosing the measurement that passes. 40 European legs reprice in 2.3ms.',
+        'the hardest book there is, every leg American, at the quality the canvas settles at: inside the 90ms p95 and the 300ms ceiling, outside the 40ms p50. The figure recorded is the one that misses. At `draft` the same book reprices in 22.6ms p50; the demo\'s mixed-exercise book (half its legs American) reprices at `standard` in 27.3 to 28.0ms p50 across runs (apps/canvas-demo/scripts/payoff-shots.mjs), inside both. 40 European legs reprice in 2.3ms.',
     },
   },
   {
@@ -266,8 +266,11 @@ export interface LatencyReport {
 /**
  * The table with its status resolved.
  *
- * A row is `met` only when it was measured *and* the p95 is inside the budget.
- * An unmeasured row is never `met`: the whole reason for the third state is
+ * A row is `met` only when it was measured *and* both its targets hold: the p95
+ * inside the budget, and the p50 inside its own target where a p50 was
+ * recorded. `checkLatency` breaches on either, so a table that passed a row on
+ * its p95 alone would call met what the monitor alerts on. An unmeasured row is
+ * never `met`: the whole reason for the third state is
  * that a missing measurement and a passing one are different, and collapsing
  * them is how a coverage number becomes a ceiling on what anyone will look at.
  */
@@ -286,7 +289,9 @@ export function latencyReport(
       };
     }
     const observed = budget.evidence.p95Ms;
-    const status: BudgetStatus = observed === undefined || observed <= budget.p95Ms ? 'met' : 'missed';
+    const median = budget.evidence.p50Ms;
+    const status: BudgetStatus =
+      (observed === undefined || observed <= budget.p95Ms) && (median === undefined || median <= budget.p50Ms) ? 'met' : 'missed';
     return {
       interaction: budget.interaction,
       p50Ms: budget.p50Ms,

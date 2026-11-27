@@ -3,7 +3,8 @@
 
 use std::time::Instant;
 
-use pricing_core::bsm::OptionType;
+use pricing_core::andersen_lake as al;
+use pricing_core::bsm::{self, Inputs, OptionType};
 use pricing_core::grid::{self, GridSpec, GuardConfig, GuardOutcome, Leg, Market, Style};
 
 fn book(legs: usize, style: Style) -> Vec<Leg> {
@@ -78,7 +79,36 @@ fn main() {
     let elapsed = started.elapsed().as_secs_f64() * 1000.0;
     println!(
         "\n{:<38} {:.0}ms for {} repricings (guard: {:?})",
-        "every cell on the lattice:", elapsed, result.repricings,
+        "every cell checked at the guard's scheme:", elapsed, result.repricings,
         if result.guard.outcome == GuardOutcome::Escalated { "escalated" } else { "passed" }
     );
+
+    // Where the American book's time goes: a boundary per (leg, vol) at the
+    // grid's scheme, a premium-table read per cell, and the guard's own solves.
+    println!("\nwhere the time goes, per unit:");
+    let inputs = Inputs { spot: 100.0, strike: 100.0, time: 0.5, rate: 0.04, dividend: 0.015, vol: 0.3, kind: OptionType::Put };
+    for (name, scheme) in [("Draft", al::DRAFT), ("Standard", al::FAST), ("guard", al::GUARD)] {
+        let solver = al::solver_for(scheme);
+        let mut sink = 0.0;
+        let started = Instant::now();
+        for k in 0..2_000 {
+            sink += solver.unit_put_boundary(0.04, 0.015, 0.3 + k as f64 * 1e-6, 0.5).at(0.2);
+        }
+        let solve = started.elapsed().as_secs_f64() * 1e6 / 2_000.0;
+        let boundary = solver.unit_put_boundary(0.04, 0.015, 0.3, 0.5);
+        let table = solver.premium_table(&boundary, 0.04, 0.015, 0.3, 0.5);
+        let started = Instant::now();
+        for k in 0..20_000 {
+            sink += solver.price_on(&Inputs { spot: 90.0 + k as f64 * 1e-3, ..inputs }, &table);
+        }
+        let cell = started.elapsed().as_secs_f64() * 1e6 / 20_000.0;
+        println!("  {name:<9} boundary solve {solve:>6.2}µs   price from its table {cell:>5.3}µs   ({sink:.0})");
+    }
+    let mut sink = 0.0;
+    let started = Instant::now();
+    for k in 0..20_000 {
+        sink += bsm::greeks(&Inputs { spot: 90.0 + k as f64 * 1e-3, ..inputs }).delta;
+    }
+    let greeks = started.elapsed().as_secs_f64() * 1e6 / 20_000.0;
+    println!("  Black-Scholes Greeks, every cell, every leg {greeks:.3}µs   ({sink:.0})");
 }

@@ -96,6 +96,18 @@ describe('the report', () => {
     const got = latencyReport(fabricated);
     expect(got.rows.map((r) => r.status)).toEqual(['missed', 'met']);
   });
+
+  // `checkLatency` alerts on a p50 over its target, so the table cannot call
+  // that row met because its p95 is inside.
+  it('marks a row missed when the observed p50 is outside its target, whatever the p95', () => {
+    const at = (p50Ms: number): BudgetedInteraction => ({
+      interaction: `p50 ${p50Ms}`,
+      p50Ms: 10,
+      p95Ms: 20,
+      evidence: { kind: 'measured', p50Ms, p95Ms: 15, where: 'a harness somewhere', caveat: 'a caveat of sufficient length' },
+    });
+    expect(latencyReport([at(11), at(10)]).rows.map((r) => r.status)).toEqual(['missed', 'met']);
+  });
 });
 
 describe('checking an observed distribution', () => {

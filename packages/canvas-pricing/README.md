@@ -230,18 +230,29 @@ A 40-leg book across a 25x15 grid is 15,000 repricings. The book is pushed leg b
 the grid is repriced in a single call, and the cells are read straight out of WASM
 memory as a typed array. Measured in Chromium on this machine:
 
-| Book | Quality | Time | Guard |
-|---|---|---|---|
-| 40 European legs | — | 2.3ms | not needed |
-| 40 American legs | `draft` | 55.9ms | not checked |
-| 40 American legs | `standard` | 171.7ms | passed |
+| Book | Quality | p50 | p95 | Guard |
+|---|---|---|---|---|
+| 40 European legs | — | 2.3ms | | not needed |
+| 40 American legs | `draft` | 21.5–22.6ms | 22.5–24.2ms | not checked |
+| 40 American legs | `standard` | 52.4–54.3ms | 57.8–58.0ms | passed |
+| 40 American legs | `exact` | 150.7–152.4ms | 159.8–173.1ms | not needed |
+| the demo's book, half American | `standard` | 27.3–28.0ms | 28.2–38.8ms | passed |
 
-Against a 90ms p95 budget. American legs are priced by Andersen-Lake rather than a closed
-form — two hundred and seventy times more accurate, and enough that the guard no longer
-escalates at all — at four times the cost, which takes `standard` out of budget in a
-browser on the hardest book.
+Ranges are across runs: two of `scripts/bench-grid-wasm.mjs` for the all-American book, three
+of `apps/canvas-demo/scripts/payoff-shots.mjs` for the demo's. Against PRD 7.1's 40ms p50 and
+90ms p95, `draft` and `standard` are inside the p95 on both books, the all-American book at
+`standard` is outside the p50, and `exact` is outside both: it is for a pinned position, not
+a surface being dragged. American legs are priced by Andersen-Lake rather than a closed form — two hundred and
+seventy times more accurate, and enough that the guard no longer escalates at all.
 
-So the grid takes a `quality`. Drag at `draft`, settle at `standard`, the same trade the
+Until 27 November the same all-American book took 138.2ms at `standard` in Chromium, measured
+by the same script on the same machine (171.7ms when first measured, in September). The
+boundary solve and the pricing integral were recomputing, on every iteration and at every
+spot, quantities that depend on neither; they are now computed once each
+(`pricing-core`'s README, "Why a grid can afford it"), and every price is the same to the
+bit.
+
+That p50 is what the grid's `quality` is for. Drag at `draft`, settle at `standard`, the same trade the
 canvas already makes when it drops detail while panning. Across the 40-leg book the two
 differ by $1.41 on the worst cell, against a half-tick tolerance on that book of $100 — far
 below anything a chart can show.
@@ -500,6 +511,10 @@ against nothing at all.
 - **The surprise series is the caller's.** `estimateShockShape` takes event dates with a
   policy surprise and the curve's moves; extracting surprises from futures, and choosing
   which days count as policy events, happens before it.
+- **The hardest book misses PRD 7.1's 40ms median in the browser at Standard.** Forty
+  American legs reprice in Chromium at 52.4–54.3ms p50 (58ms p95, inside the 90ms); the
+  demo's half-American book meets it at 27–28ms, and Draft meets it on either. A book with
+  more American legs than that drags at Draft to stay inside the median.
 - **Cash dividends on the grid are over budget in the browser at Standard.** A book of
   40 dividend-paying American legs reprices in 59ms native but 125–132ms in WASM at Standard,
   76–80ms at Draft; the browser should drag at Draft.

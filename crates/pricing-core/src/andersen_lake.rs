@@ -48,7 +48,7 @@
 
 use crate::bsm::{self, Inputs, OptionType};
 use crate::normal::cdf;
-use crate::quad::{Chebyshev, Legendre, MAX_NODES};
+use crate::quad::{Chebyshev, Legendre, Prepared, MAX_NODES};
 
 /// The four numbers that size the solver, in Andersen-Lake's own order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,8 +80,8 @@ pub struct Scheme {
 pub const FAST: Scheme =
     Scheme { integration: 7, iterations: 8, collocation: 6, pricing: 11 };
 
-/// For a grid being dragged: mean 3.9e-4, worst 4.4e-3, at 15µs — five eighths
-/// of `FAST`'s cost.
+/// For a grid being dragged: mean 3.9e-4, worst 4.4e-3, at 11µs — five eighths
+/// of `FAST`'s cost (`examples/al_sweep.rs`).
 ///
 /// Its worst case is inside the half-tick tolerance, but only just: 4.4e-3
 /// against 5e-3, on 1,680 cases. That is a measured margin of twelve percent
@@ -91,13 +91,16 @@ pub const DRAFT: Scheme =
     Scheme { integration: 5, iterations: 8, collocation: 5, pricing: 7 };
 
 /// The scheme the grid guard checks the fast path against: mean 5.0e-5, worst
-/// 2.3e-3, at 69µs — about two and a half times `FAST`'s cost.
+/// 2.3e-3, at 47µs — about two and a half times `FAST`'s cost.
 ///
 /// Sized by the budget rather than by ambition. The guard prices two percent of
-/// cells times every leg, which is 320 prices on the PRD's worked example, so
-/// every microsecond here costs a third of a millisecond there. `ACCURATE`
-/// would be the better yardstick and takes the grid from 37ms to 96ms, which is
-/// over budget for a yardstick that improves the worst case by a factor of two.
+/// cells times every leg, which is 320 prices on the PRD's worked example and
+/// one boundary solve per leg for each vol level those cells land on, so a
+/// microsecond here costs up to a third of a millisecond there. `ACCURATE`
+/// would be the better yardstick and takes the native grid from 30ms to 44ms:
+/// inside the 90ms, but half as much time again for a yardstick that improves
+/// the worst case by a factor of two, on a book already over the PRD's 40ms
+/// median in a browser.
 pub const GUARD: Scheme =
     Scheme { integration: 7, iterations: 16, collocation: 8, pricing: 15 };
 
@@ -158,18 +161,115 @@ impl Boundary<'_> {
     }
 }
 
-/// `d₋` and `d₊` for a log-ratio that has already been formed.
+/// `d₋` and `d₊` for an elapsed time `u`, waiting for a log-ratio.
 ///
-/// Taking the log rather than the ratio keeps the one place that could
-/// overflow — `B(τ)/B(s)` for a boundary that has collapsed — out of the
+/// `d± = (ln-ratio + drift·u)/(σ√u) ± ½σ²u/(σ√u)`: only the log-ratio moves
+/// with the boundary or the spot, so the rest is held here and `d_pair`
+/// finishes it. Taking the log rather than the ratio keeps the one place that
+/// could overflow — `B(τ)/B(s)` for a boundary that has collapsed — out of the
 /// caller's arithmetic.
-#[inline]
-fn d_pair(log_ratio: f64, u: f64, drift: f64, half_var: f64, vol: f64) -> (f64, f64) {
-    let sqrt_u = libm::sqrt(u);
-    let scale = vol * sqrt_u;
-    let base = (log_ratio + drift * u) / scale;
-    let spread = half_var * u / scale;
-    (base - spread, base + spread)
+#[derive(Clone, Copy, Debug)]
+struct DTerms {
+    drift_u: f64,
+    scale: f64,
+    spread: f64,
+}
+
+impl DTerms {
+    const EMPTY: DTerms = DTerms { drift_u: 0.0, scale: 0.0, spread: 0.0 };
+
+    #[inline]
+    fn new(u: f64, drift: f64, half_var: f64, vol: f64) -> DTerms {
+        let sqrt_u = libm::sqrt(u);
+        let scale = vol * sqrt_u;
+        DTerms { drift_u: drift * u, scale, spread: half_var * u / scale }
+    }
+
+    #[inline]
+    fn d_pair(&self, log_ratio: f64) -> (f64, f64) {
+        let base = (log_ratio + self.drift_u) / self.scale;
+        (base - self.spread, base + self.spread)
+    }
+}
+
+/// Where a history term reads the boundary: at τ - u ≤ 0 it is B(0) itself.
+#[derive(Clone, Copy, Debug)]
+enum Level {
+    Zero,
+    At(Prepared),
+}
+
+/// One point of the history integral, everything but the boundary's value.
+#[derive(Clone, Copy, Debug)]
+struct History {
+    level: Level,
+    terms: DTerms,
+    rate_weight: f64,
+    dividend_weight: f64,
+}
+
+impl History {
+    const EMPTY: History =
+        History { level: Level::Zero, terms: DTerms::EMPTY, rate_weight: 0.0, dividend_weight: 0.0 };
+}
+
+/// One collocation node of the boundary solve, with its history points.
+struct Collocation {
+    index: usize,
+    direct: DTerms,
+    rate_discount: f64,
+    dividend_discount: f64,
+    history: [History; MAX_NODES],
+}
+
+/// One node of the pricing integral, with everything but the spot worked out.
+#[derive(Clone, Copy, Debug)]
+struct PremiumNode {
+    level: f64,
+    terms: DTerms,
+    rate_discount: f64,
+    dividend_discount: f64,
+    weight: f64,
+}
+
+impl PremiumNode {
+    const EMPTY: PremiumNode =
+        PremiumNode { level: 0.0, terms: DTerms::EMPTY, rate_discount: 0.0, dividend_discount: 0.0, weight: 0.0 };
+}
+
+/// The early-exercise premium's integrand for one boundary, at every node the
+/// pricing rule uses, waiting for a spot. `Solver::premium_table` builds one.
+#[derive(Clone, Copy, Debug)]
+pub struct PremiumTable {
+    level_at_time: f64,
+    /// The unit boundary's level at expiry; a contract's is its strike times this.
+    at_expiry: f64,
+    len: usize,
+    nodes: [PremiumNode; MAX_NODES],
+}
+
+impl PremiumTable {
+    /// The put's price, for a spot above the boundary.
+    fn put_price(&self, inputs: &Inputs, log_spot_over_expiry: f64) -> f64 {
+        let spot = inputs.spot;
+        let strike = inputs.strike;
+        let intrinsic = strike - spot;
+        let european = bsm::price(inputs);
+
+        let mut premium = 0.0;
+        for node in &self.nodes[..self.len] {
+            // ln(S/B(s)) = ln(S/B(0)) - ln(B(s)/B(0)).
+            let (dm, dp) = node.terms.d_pair(log_spot_over_expiry - node.level);
+            let integrand = inputs.rate * strike * node.rate_discount * cdf(-dm)
+                - inputs.dividend * spot * node.dividend_discount * cdf(-dp);
+            premium += node.weight * integrand;
+        }
+
+        // Two bounds that hold exactly, whatever the quadrature did: an
+        // American option is worth at least its European twin, and at least its
+        // intrinsic value.
+        (european + premium).max(european).max(intrinsic)
+    }
 }
 
 /// The solver, holding the quadrature tables its scheme implies.
@@ -242,37 +342,79 @@ impl Solver {
         let mut boundary =
             Boundary { at_expiry, time, cheb: &self.cheb, h: [0.0; MAX_NODES] };
 
+        // Everything the iteration reads that the iterate does not change,
+        // worked out once rather than once per iteration: the times, the
+        // discount factors, the variance terms of d±, and where the boundary is
+        // read back (`prepare`). Only H moves between iterations, so what is
+        // left inside the loop is the interpolation itself and the two normal
+        // CDFs per point. Each quantity is the expression the loop used to
+        // compute, with its operands in the same order, so the iterates are the
+        // same to the bit; `examples/grid_bench.rs` has what it saves.
+        let mut terms = Vec::with_capacity(last * gl.len * self.cheb.len);
+        let mut nodes: Vec<Collocation> = Vec::with_capacity(last);
+        for (i, &node) in self.cheb.nodes.iter().enumerate().take(last) {
+            let tau = time * sq(0.5 * (1.0 + node));
+            if tau <= 0.0 {
+                continue;
+            }
+            let direct = DTerms::new(tau, drift, half_var, vol);
+            let mut history = [History::EMPTY; MAX_NODES];
+            for (j, h) in history.iter_mut().enumerate().take(gl.len) {
+                let v = 0.5 * (1.0 + gl.nodes[j]);
+                let elapsed = tau * sq(v);
+                let back = tau - elapsed;
+                // Boundary::log_level, split at the point where it reads H.
+                let level = if back <= 0.0 {
+                    Level::Zero
+                } else {
+                    Level::At(self.cheb.prepare(2.0 * libm::sqrt(back / time) - 1.0, &mut terms))
+                };
+                // dv/dy folds into the weight: u = τv², du = 2τv dv, v = (1+y)/2.
+                let jacobian = gl.weights[j] * tau * v;
+                *h = History {
+                    level,
+                    terms: DTerms::new(elapsed, drift, half_var, vol),
+                    rate_weight: jacobian * libm::exp(-rate * elapsed),
+                    dividend_weight: jacobian * libm::exp(-dividend * elapsed),
+                };
+            }
+            nodes.push(Collocation {
+                index: i,
+                direct,
+                rate_discount: libm::exp(-rate * tau),
+                dividend_discount: libm::exp(-dividend * tau),
+                history,
+            });
+        }
+
         for _ in 0..self.scheme.iterations {
             // Jacobi, not Gauss-Seidel: every node is updated from the same
             // previous boundary, so the answer cannot depend on node ordering.
             let mut next = boundary.h;
-            for (i, &node) in self.cheb.nodes.iter().enumerate().take(last) {
-                let tau = time * sq(0.5 * (1.0 + node));
-                if tau <= 0.0 {
-                    continue;
-                }
+            for node in &nodes {
+                let i = node.index;
                 // ln(B(τ)/B(0)) at this node, straight out of the state.
                 let log_b_tau = -libm::sqrt(boundary.h[i].max(0.0));
 
                 // The direct terms: the boundary against the strike.
-                let (dm, dp) =
-                    d_pair(log_expiry_over_strike + log_b_tau, tau, drift, half_var, vol);
-                let mut numerator = libm::exp(-rate * tau) * cdf(dm);
-                let mut denominator = libm::exp(-dividend * tau) * cdf(dp);
+                let (dm, dp) = node.direct.d_pair(log_expiry_over_strike + log_b_tau);
+                let mut numerator = node.rate_discount * cdf(dm);
+                let mut denominator = node.dividend_discount * cdf(dp);
 
                 // The history terms: the boundary against itself, all the way back.
                 let mut num_integral = 0.0;
                 let mut den_integral = 0.0;
-                for j in 0..gl.len {
-                    let v = 0.5 * (1.0 + gl.nodes[j]);
-                    let elapsed = tau * sq(v);
+                for h in &node.history[..gl.len] {
+                    let level = match h.level {
+                        Level::Zero => 0.0,
+                        Level::At(at) => {
+                            -libm::sqrt(self.cheb.eval_prepared(&boundary.h, at, &terms).max(0.0))
+                        }
+                    };
                     // ln(B(τ)/B(s)) with both exponentials and the log gone.
-                    let log_ratio = log_b_tau - boundary.log_level(tau - elapsed);
-                    let (dm, dp) = d_pair(log_ratio, elapsed, drift, half_var, vol);
-                    // dv/dy folds into the weight: u = τv², du = 2τv dv, v = (1+y)/2.
-                    let jacobian = gl.weights[j] * tau * v;
-                    num_integral += jacobian * libm::exp(-rate * elapsed) * cdf(dm);
-                    den_integral += jacobian * libm::exp(-dividend * elapsed) * cdf(dp);
+                    let (dm, dp) = h.terms.d_pair(log_b_tau - level);
+                    num_integral += h.rate_weight * cdf(dm);
+                    den_integral += h.dividend_weight * cdf(dp);
                 }
                 numerator += rate * num_integral;
                 denominator += dividend * den_integral;
@@ -359,39 +501,74 @@ impl Solver {
     /// The pricing integral, with the boundary's scale supplied separately so a
     /// unit boundary can serve any strike.
     fn put_price_scaled(&self, inputs: &Inputs, boundary: &Boundary<'_>, at_expiry: f64) -> f64 {
-        let spot = inputs.spot;
-        let strike = inputs.strike;
-        let time = inputs.time;
-        let intrinsic = strike - spot;
-
         // In log space, so the comparison costs a log rather than an exp — and
         // the log is needed a few lines down anyway.
-        let log_spot_over_expiry = libm::log(spot / at_expiry);
-        if log_spot_over_expiry <= boundary.log_level(time) {
-            return intrinsic;
+        let log_spot_over_expiry = libm::log(inputs.spot / at_expiry);
+        if log_spot_over_expiry <= boundary.log_level(inputs.time) {
+            return inputs.strike - inputs.spot;
         }
+        self.premium_table(boundary, inputs.rate, inputs.dividend, inputs.vol, inputs.time)
+            .put_price(inputs, log_spot_over_expiry)
+    }
 
-        let european = bsm::price(inputs);
+    /// The pricing integral's nodes for one boundary, everything but the spot.
+    ///
+    /// A grid prices one `(leg, volatility)` at every spot on its axis, and the
+    /// integrand's times, discount factors, variance terms and boundary levels
+    /// are the same at all of them. `rate`, `dividend` and `vol` are the put's
+    /// (for a call, the mirrored put's), and with `time` must be the ones
+    /// `boundary` was solved for.
+    pub fn premium_table(
+        &self,
+        boundary: &Boundary<'_>,
+        rate: f64,
+        dividend: f64,
+        vol: f64,
+        time: f64,
+    ) -> PremiumTable {
         let gl = &self.pricing;
-        let drift = inputs.rate - inputs.dividend;
-        let half_var = 0.5 * inputs.vol * inputs.vol;
-
-        let mut premium = 0.0;
-        for j in 0..gl.len {
+        let drift = rate - dividend;
+        let half_var = 0.5 * vol * vol;
+        let mut nodes = [PremiumNode::EMPTY; MAX_NODES];
+        for (j, node) in nodes.iter_mut().enumerate().take(gl.len) {
             let v = 0.5 * (1.0 + gl.nodes[j]);
             let elapsed = time * sq(v);
-            // ln(S/B(s)) = ln(S/B(0)) - ln(B(s)/B(0)).
-            let log_ratio = log_spot_over_expiry - boundary.log_level(time - elapsed);
-            let (dm, dp) = d_pair(log_ratio, elapsed, drift, half_var, inputs.vol);
-            let integrand = inputs.rate * strike * libm::exp(-inputs.rate * elapsed) * cdf(-dm)
-                - inputs.dividend * spot * libm::exp(-inputs.dividend * elapsed) * cdf(-dp);
-            premium += gl.weights[j] * time * v * integrand;
+            *node = PremiumNode {
+                level: boundary.log_level(time - elapsed),
+                terms: DTerms::new(elapsed, drift, half_var, vol),
+                rate_discount: libm::exp(-rate * elapsed),
+                dividend_discount: libm::exp(-dividend * elapsed),
+                weight: gl.weights[j] * time * v,
+            };
         }
+        PremiumTable { level_at_time: boundary.log_level(time), at_expiry: boundary.at_expiry, len: gl.len, nodes }
+    }
 
-        // Two bounds that hold exactly, whatever the quadrature did: an
-        // American option is worth at least its European twin, and at least its
-        // intrinsic value.
-        (european + premium).max(european).max(intrinsic)
+    /// `price_with`, against a table `premium_table` built from the unit
+    /// boundary `price_with` would have been given. The same price, to the bit.
+    pub fn price_on(&self, inputs: &Inputs, table: &PremiumTable) -> f64 {
+        if inputs.is_degenerate() {
+            return bsm::price(inputs);
+        }
+        let put = match inputs.kind {
+            OptionType::Put => *inputs,
+            OptionType::Call => Inputs {
+                spot: inputs.strike,
+                strike: inputs.spot,
+                rate: inputs.dividend,
+                dividend: inputs.rate,
+                kind: OptionType::Put,
+                ..*inputs
+            },
+        };
+        if put.rate <= 0.0 {
+            return bsm::price(inputs);
+        }
+        let log_spot_over_expiry = libm::log(put.spot / (put.strike * table.at_expiry));
+        if log_spot_over_expiry <= table.level_at_time {
+            return put.strike - put.spot;
+        }
+        table.put_price(&put, log_spot_over_expiry)
     }
 
     /// American price. Calls go through the put by symmetry.
