@@ -508,28 +508,65 @@ impl Solver {
         let last = cheb.len - 1;
         let log_expiry_over_strike = (at_expiry / strike).ln();
 
+        // What the iteration reads that the iterate does not change, recorded
+        // once rather than once per iteration: on a tape that is the
+        // difference between eight copies of every discount factor and one.
+        // The same split as `Solver::put_boundary`, with the operands in the
+        // same order, so the `f64` instance keeps `price`'s bits.
+        let mut terms = Vec::with_capacity(last * gl.len * cheb.len);
+        let mut nodes: Vec<Collocated<F>> = Vec::with_capacity(last);
+        for (i, &node) in cheb.nodes.iter().enumerate().take(last) {
+            let tau = time * F::c(sq(0.5 * (1.0 + node)));
+            if tau.v() <= 0.0 {
+                continue;
+            }
+            let history = (0..gl.len)
+                .map(|j| {
+                    let v = 0.5 * (1.0 + gl.nodes[j]);
+                    let elapsed = tau * F::c(sq(v));
+                    let back = tau - elapsed;
+                    let level = if back.v() <= 0.0 {
+                        None
+                    } else {
+                        Some(cheb.prepare(2.0 * libm::sqrt(back.v() / time.v()) - 1.0, &mut terms))
+                    };
+                    let jacobian = F::c(gl.weights[j]) * tau * F::c(v);
+                    Point {
+                        level,
+                        d: DTerms::new(elapsed, drift, half_var, vol),
+                        rate_weight: jacobian * (-(rate * elapsed)).exp(),
+                        dividend_weight: jacobian * (-(dividend * elapsed)).exp(),
+                    }
+                })
+                .collect();
+            nodes.push(Collocated {
+                index: i,
+                direct: DTerms::new(tau, drift, half_var, vol),
+                rate_discount: (-(rate * tau)).exp(),
+                dividend_discount: (-(dividend * tau)).exp(),
+                history,
+            });
+        }
+
         let mut h: Vec<F> = vec![F::c(0.0); cheb.len];
         for _ in 0..self.scheme.iterations {
             let mut next = h.clone();
-            for (i, &node) in cheb.nodes.iter().enumerate().take(last) {
-                let tau = time * F::c(sq(0.5 * (1.0 + node)));
-                if tau.v() <= 0.0 {
-                    continue;
-                }
+            for node in &nodes {
+                let i = node.index;
                 let log_b_tau = neg_root(h[i]);
-                let (dm, dp) = d_pair(log_expiry_over_strike + log_b_tau, tau, drift, half_var, vol);
-                let mut numerator = (-(rate * tau)).exp() * dm.ncdf();
-                let mut denominator = (-(dividend * tau)).exp() * dp.ncdf();
+                let (dm, dp) = node.direct.pair(log_expiry_over_strike + log_b_tau);
+                let mut numerator = node.rate_discount * dm.ncdf();
+                let mut denominator = node.dividend_discount * dp.ncdf();
                 let mut num_integral = F::c(0.0);
                 let mut den_integral = F::c(0.0);
-                for j in 0..gl.len {
-                    let v = 0.5 * (1.0 + gl.nodes[j]);
-                    let elapsed = tau * F::c(sq(v));
-                    let log_ratio = log_b_tau - log_level(cheb, &h, tau - elapsed, time);
-                    let (dm, dp) = d_pair(log_ratio, elapsed, drift, half_var, vol);
-                    let jacobian = F::c(gl.weights[j]) * tau * F::c(v);
-                    num_integral = num_integral + jacobian * (-(rate * elapsed)).exp() * dm.ncdf();
-                    den_integral = den_integral + jacobian * (-(dividend * elapsed)).exp() * dp.ncdf();
+                for point in &node.history {
+                    let level = match point.level {
+                        None => F::c(0.0),
+                        Some(at) => prepared_level(&h, at, &terms, cheb.len),
+                    };
+                    let (dm, dp) = point.d.pair(log_b_tau - level);
+                    num_integral = num_integral + point.rate_weight * dm.ncdf();
+                    den_integral = den_integral + point.dividend_weight * dp.ncdf();
                 }
                 numerator = numerator + rate * num_integral;
                 denominator = denominator + dividend * den_integral;
@@ -622,6 +659,60 @@ fn log_level<F: Scalar>(cheb: &crate::quad::Chebyshev, h: &[F], tau: F, time: F)
         denominator += term;
     }
     neg_root(numerator / F::c(denominator))
+}
+
+/// `d±` for an elapsed time `u`, everything but the log-ratio: `d_pair` split
+/// where the boundary enters.
+#[derive(Clone, Copy)]
+struct DTerms<F> {
+    drift_u: F,
+    scale: F,
+    spread: F,
+}
+
+impl<F: Scalar> DTerms<F> {
+    fn new(u: F, drift: F, half_var: F, vol: F) -> DTerms<F> {
+        let sqrt_u = u.sqrt();
+        let scale = vol * sqrt_u;
+        DTerms { drift_u: drift * u, scale, spread: half_var * u / scale }
+    }
+
+    #[inline]
+    fn pair(&self, log_ratio: F) -> (F, F) {
+        let base = (log_ratio + self.drift_u) / self.scale;
+        (base - self.spread, base + self.spread)
+    }
+}
+
+/// One history point of the boundary solve, with where it reads the boundary.
+struct Point<F> {
+    level: Option<crate::quad::Prepared>,
+    d: DTerms<F>,
+    rate_weight: F,
+    dividend_weight: F,
+}
+
+struct Collocated<F> {
+    index: usize,
+    direct: DTerms<F>,
+    rate_discount: F,
+    dividend_discount: F,
+    history: Vec<Point<F>>,
+}
+
+/// `log_level` at a point `Chebyshev::prepare` has seen: the same terms, the
+/// same order, against this iterate's `h`.
+fn prepared_level<F: Scalar>(h: &[F], at: crate::quad::Prepared, terms: &[f64], len: usize) -> F {
+    match at {
+        crate::quad::Prepared::OnNode(i) => neg_root(h[i]),
+        crate::quad::Prepared::Between { start, denominator } => {
+            let mut numerator = F::c(0.0);
+            for (term, &value) in terms[start..start + len].iter().zip(h) {
+                numerator = numerator + F::c(*term) * value;
+            }
+            neg_root(numerator / F::c(denominator))
+        }
+    }
 }
 
 #[inline]

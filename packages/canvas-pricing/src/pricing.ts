@@ -135,7 +135,7 @@ export class Pricer {
    * The PRD names a lattice for this. A lattice snaps the exercise boundary to
    * its nodes, so its price is a staircase in vol and rate and its exact vega
    * missed by up to 3% at 400 steps; the crate's README has the measurement.
-   * About 40 prices' worth of work, 5.3 to 5.7ms natively: a detail-view call,
+   * About 28 prices' worth of work, 3.3 to 3.6ms natively: a detail-view call,
    * not a grid one.
    */
   americanGreeks(inputs: OptionInputs): Greeks {

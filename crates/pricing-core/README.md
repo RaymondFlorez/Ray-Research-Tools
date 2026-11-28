@@ -667,12 +667,16 @@ type, held to the same bits as `price` on every scheme and contract in the tests
   gamma and speed attached, vega with vanna, and maturity with charm; a second sweep seeded on
   vol gives volga.
 
-It does not buy speed, and since 27 November it costs some. With five inputs, reverse mode has
-nothing to amortize: all ten Greeks take 5.3–5.7ms across runs (`examples/adjoint_scan.rs`),
-which was 26 to 28 prices' worth when a price took about 200µs. The price path has since had its
-loop invariants hoisted (see "Why a grid can afford it") and the tape, which differentiates its
-own copy of the arithmetic, has not; a price is now 122–155µs, the adjoint 37 to 44 prices'
-worth, and bumping, at 25 prices, 3.1–3.3ms — faster than the adjoint by about 1.7 times.
+It does not buy speed. With five inputs, reverse mode has nothing to amortize: all ten Greeks
+take 3.3–3.6ms across runs (`examples/adjoint_scan.rs`), 27 to 29 prices' worth at a price of
+about 123µs, where bumping, at 25 prices, takes 3.1–3.3ms — about even, the adjoint a tenth
+slower. On 27 November the price path had its loop invariants hoisted (see "Why a grid can
+afford it") and the tape had not, which left the adjoint at 5.3–5.7ms, 1.7 times bumping; the
+tape's boundary solve now records each invariant once rather than once an iteration. That
+moved the price, delta, gamma and speed by nothing and the vol, rate and time Greeks by at most
+1e-12 relative (one node's adjoint now gathers eight iterations' contributions before it is
+propagated, which rounds differently), over 108 contracts. Each Greeks call still solves the
+boundary twice, once per seeded sweep, though the spot-seeded one does not need it.
 What it buys is exact derivatives of the price on the screen, with no step size to choose.
 Where Andersen-Lake hands a contract to Black-Scholes — no exercise region, or degenerate
 inputs — the Greeks are the closed forms. One finding worth knowing: as the rate goes to zero
@@ -781,9 +785,9 @@ WASM.
   reprice in Chromium at 52–54ms p50, inside the 90ms p95 but over the 40ms median; Draft and
   the demo's half-American book meet both. What is left is about 600 boundary solves, each
   dominated by two normal CDFs a quadrature point, and the guard's own solves.
-- **The adjoint's tape is not hoisted.** It differentiates its own copy of the Andersen-Lake
-  arithmetic, which still recomputes the loop invariants the price path no longer does, so
-  ten Greeks now cost more than bumping for them.
+- **The adjoint is not faster than bumping.** Ten American Greeks by adjoint take about a
+  tenth longer than 25 bumped prices; each call solves the boundary once per seeded sweep, and
+  the spot sweep's solve could be shared.
 - **Andersen-Lake's Newton acceleration.** Three attempts diverged; the plain fixed-point
   iteration ships (see *The method, and one thing that did not work*).
 - **Quasi-random sampling across assets.** Sobol with a Brownian bridge is single-asset;
