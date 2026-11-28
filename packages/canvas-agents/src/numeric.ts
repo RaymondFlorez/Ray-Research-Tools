@@ -45,14 +45,19 @@ export interface Numeral {
  * cells disagree about which one a negative sign is, and a sign that fails to
  * parse would read as a magnitude — which is the one transcription error that
  * must never pass.
+ *
+ * A currency symbol between the sign and the digits is part of the numeral:
+ * `-$396,629` is how a loss is written, and reading it as `396,629` with a
+ * stray hyphen in front made a model's correct sentence a transcription error.
+ * An unsigned `$396,629` matches from the digits, as it always did.
  */
-const SIGN = '[-−]?';
+const SIGN = '(?:[-−][$€£]?)?';
 const GROUPED = `${SIGN}\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?`;
 const PLAIN = `${SIGN}\\d+(?:\\.\\d+)?`;
 const NUMERAL = new RegExp(`${GROUPED}|${PLAIN}`, 'g');
 
 export function parseNumber(literal: string): number {
-  return Number.parseFloat(literal.replace(/,/g, '').replace(/−/g, '-'));
+  return Number.parseFloat(literal.replace(/[,$€£]/g, '').replace(/−/g, '-'));
 }
 
 /** Every numeric literal in `text`, in order. */
@@ -94,6 +99,27 @@ export function toleranceFor(numeral: Numeral): number {
 }
 
 /** Whether `actual` is inside what `numeral` claims. */
+/**
+ * Words that put a minus sign on the number after them.
+ *
+ * "A loss of $396,629" is how a loss is written, and reading it as +396,629
+ * failed every draft one real model wrote, on every rewrite, for a number it
+ * had right: Phi-3-mini would not write the minus however it was asked. Taking
+ * the magnitude instead would open the other hole — "a loss of $396,629"
+ * against a *gain* of 396,629 has to fail — so the words are read as the sign
+ * they are. A number already written negative is not negated twice: "a loss of
+ * -396,629" is sloppy and still means a loss.
+ */
+const LOSS_WORDS =
+  /\b(?:loss(?:es)?(?:\s+of)?|lost|loses?|down(?:\s+by)?|fell(?:\s+by)?|falls?(?:\s+by)?|fall\s+of|declin(?:e|es|ed)(?:\s+(?:of|by))?|drop(?:s|ped)?(?:\s+(?:of|by))?|decrease(?:s|d)?(?:\s+(?:of|by))?|lower\s+by)\s+(?:about\s+|approximately\s+|roughly\s+|around\s+)?[$€£]?$/i;
+
+/** The value a numeral is written as, with the sign its preceding words give it. */
+export function proseValue(text: string, numeral: Numeral): { value: number; signedByWords: boolean } {
+  const before = text.slice(Math.max(0, numeral.start - 40), numeral.start);
+  if (numeral.value > 0 && LOSS_WORDS.test(before)) return { value: -numeral.value, signedByWords: true };
+  return { value: numeral.value, signedByWords: false };
+}
+
 export function agrees(numeral: Numeral, actual: number): boolean {
   if (!Number.isFinite(actual)) return false;
   return Math.abs(actual - numeral.value) <= toleranceFor(numeral);
@@ -115,7 +141,8 @@ export function formatLike(value: number, literal: string): string {
   const [whole = '0', fraction] = fixed.split('.');
   const body = grouped ? whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : whole;
   const sign = value < 0 ? (literal.startsWith('−') ? '−' : '-') : '';
-  return `${sign}${body}${fraction === undefined ? '' : `.${fraction}`}`;
+  const currency = /[$€£]/.exec(literal)?.[0] ?? '';
+  return `${sign}${currency}${body}${fraction === undefined ? '' : `.${fraction}`}`;
 }
 
 /**

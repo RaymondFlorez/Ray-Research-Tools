@@ -12,6 +12,12 @@
  *
  *   DATAPLANE_PG_URL=postgres://... node scripts/execute-live.mjs [year,...]
  *
+ * With GATEWAY_URL set, a third step has a model write the answer through
+ * services/gateway (SCRIBE_MODEL, default qwen2.5-1.5b, one of the local
+ * open-weight models in canvas-router/scripts/live-fixtures.mjs, pinned at
+ * seed 1), and the join reconciles every number it wrote against the cells
+ * the pricer computed, handing mistakes back for at most two rewrites.
+ *
  * Needs Go, network access to home.treasury.gov, `npm run build`, and the WASM
  * build (`cargo build --release --target wasm32-unknown-unknown` in
  * crates/pricing-core).
@@ -25,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const dist = (p) => import(join(ROOT, `packages/${p}/dist/index.js`));
-const { Blackboard, curveShockAgent, parInstruments, plan, retrievalAgent, run, scope, toPlanSteps } = await dist('canvas-agents');
+const { Blackboard, curveShockAgent, modelScribe, parInstruments, plan, retrievalAgent, run, scope, toPlanSteps } = await dist('canvas-agents');
 const { RemotePointInTime, remoteSource } = await dist('canvas-data');
 const { BondAnalytics, CurveEngine, instantiatePricing } = await dist('canvas-pricing');
 
@@ -74,6 +80,21 @@ try {
   const curves = new CurveEngine(exportsReady);
   const source = remoteSource(new RemotePointInTime({ baseUrl: BASE, user: 'pm', purpose: 'agents.execute' }), 'data plane (Postgres)');
 
+  const GATEWAY = process.env.GATEWAY_URL;
+  const cells = [];
+  let scribe;
+  if (GATEWAY) {
+    const { GatewayClient } = await dist('canvas-router');
+    const { ROUTES } = await import(join(ROOT, 'packages/canvas-router/scripts/live-fixtures.mjs'));
+    const route = ROUTES[process.env.SCRIBE_MODEL ?? 'qwen2.5-1.5b'];
+    if (!route) throw new Error(`no route for ${process.env.SCRIBE_MODEL}`);
+    const client = new GatewayClient({ baseUrl: GATEWAY, user: 'pm' });
+    // The sleeve is positions, so only a self-hosted model may read it; the gateway enforces that too.
+    const complete = async (system, user) =>
+      (await client.chat({ provider: route.provider, model: route.model, system, messages: [{ role: 'user', text: user }], maxTokens: 200, dataClass: 'positions', purpose: 'synthesis.final', pinned: { seed: 1 } })).text;
+    scribe = modelScribe({ complete, factIds: ['sleeve:pnl', 'sleeve:shock', 'sleeve:base'], cells: () => cells });
+  }
+
   const question = 'What does a 50bp rise in rates do to the bond sleeve?';
   const compiled = plan({
     scope: scope({ question, resolve: () => [] }),
@@ -81,6 +102,7 @@ try {
     steps: [
       { id: 'rates', kind: 'retrieval', agent: 'retriever', description: 'read the Treasury par curve as of now', dependsOn: [], estimatedCents: 0, estimatedMs: 100 },
       { id: 'sleeve', kind: 'compute', agent: 'simulator', description: 'bootstrap the curve and reprice the sleeve under +50bp', dependsOn: ['rates'], estimatedCents: 0, estimatedMs: 100 },
+      ...(scribe ? [{ id: 'answer', kind: 'reasoning', agent: 'scribe', taskClass: 'synthesis.final', description: 'write the answer', dependsOn: ['sleeve'], estimatedCents: 0, estimatedMs: 5_000 }] : []),
     ],
   });
   const board = new Blackboard('execute-live', question, 10);
@@ -90,14 +112,25 @@ try {
     board,
     agents: {
       rates: retrievalAgent({ source, knowledgeTime, keys: POINTS.map((p) => ({ key: p.key, unit: 'pct' })) }),
-      sleeve: curveShockAgent({ curves, points: POINTS, book: SLEEVE, shock: { shape: 'parallel', bps: 50 } }),
+      sleeve: curveShockAgent({ curves, points: POINTS, book: SLEEVE, shock: { shape: 'parallel', bps: 50 }, cells }),
+      ...(scribe ? { answer: scribe.agent } : {}),
     },
+    ...(scribe ? { join: scribe.join } : {}),
   });
   const ms = performance.now() - started;
 
   console.log(`\n${question}\nplan by ${compiled.author.user}, ${compiled.steps.length} steps; ran in ${result.waves} waves, ${ms.toFixed(0)}ms`);
   for (const s of board.steps()) console.log(`  ${s.id.padEnd(7)} ${s.status.padEnd(7)} ${s.note ?? ''}`);
   if (result.failed.length > 0 || result.skipped.length > 0) process.exitCode = 1;
+  if (scribe) {
+    console.log(`\nthe answer, by ${process.env.SCRIBE_MODEL ?? 'qwen2.5-1.5b'} through the gateway (pinned):`);
+    scribe.drafts.forEach((d, i) => console.log(`  draft ${i + 1}: ${d}`));
+    for (const [i, round] of (result.join?.rounds ?? []).entries()) {
+      console.log(`  join round ${i + 1}: ${round.length === 0 ? 'every number traces to its cell' : round.map((f) => `${f.kind}: ${f.message}`).join('; ')}`);
+    }
+    console.log(`  join ${result.join?.ok ? 'passed' : 'FAILED'} after ${result.join?.attempts ?? 0} attempt(s)`);
+    if (result.join && !result.join.ok) process.exitCode = 1;
+  }
   console.log('\nread from the data plane (real, US Treasury daily par yield curve):');
   for (const p of POINTS) {
     const f = board.fact(`rates:${p.key}`);

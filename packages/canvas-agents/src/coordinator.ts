@@ -57,7 +57,11 @@ export interface JoinSpec {
    * Absent, the join applies the corrections mechanically instead. See
    * `patch` in `reconciler.ts` for why that fallback exists.
    */
-  rerunScribe?: (corrections: readonly Correction[], previous: Narrative) => Promise<Narrative> | Narrative;
+  rerunScribe?: (
+    corrections: readonly Correction[],
+    previous: Narrative,
+    findings: readonly Finding[],
+  ) => Promise<Narrative> | Narrative;
   documents?: ReadonlyMap<string, string>;
   /** How many Scribe attempts before the join gives up and says so. */
   maxAttempts?: number;
@@ -235,7 +239,13 @@ export async function joinAndReconcile(board: Blackboard, spec: JoinSpec): Promi
       text: `join failed: ${result.findings.map((f) => `${f.kind} (${f.message})`).join('; ')}`,
     });
 
-    if (attempt === maxAttempts || result.corrections.length === 0) {
+    // A mechanical patch can only replace digits, so without corrections there
+    // is nothing for it to do. A Scribe that writes can also drop a number it
+    // had no source for, so it is handed every finding: on a real model the
+    // last thing standing between a draft and a pass was a date it wrote
+    // unprompted, which no correction names.
+    const actionable = spec.rerunScribe ? result.findings.length > 0 : result.corrections.length > 0;
+    if (attempt === maxAttempts || !actionable) {
       return { ok: false, attempts: attempt, narrative, findings: result.findings, rounds };
     }
 
@@ -245,7 +255,7 @@ export async function joinAndReconcile(board: Blackboard, spec: JoinSpec): Promi
     }
 
     narrative = spec.rerunScribe
-      ? await spec.rerunScribe(result.corrections, narrative)
+      ? await spec.rerunScribe(result.corrections, narrative, result.findings)
       : patch(narrative, result.corrections);
     board.say({
       from: 'scribe' as AgentRole,

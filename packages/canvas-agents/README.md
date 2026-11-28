@@ -389,14 +389,52 @@ Measured 28 November 2026 on the curve for 27 November: two waves in 45ms, worst
 bootstrap residual 8e-13bp, +50bp P&L of -$396,629 on $20mm face, 1.0075 of the
 yield-DV01 estimate.
 
+## The answer, written by a model and reconciled
+
+`modelScribe` (`src/scribe.ts`) is the join's Scribe as a real model. The
+reconciler's contract is a handle on every numeral, which a model cannot emit as
+offsets, so it is asked to write each number followed by its fact id —
+`a loss of $396,628.94 [sleeve:pnl]` — and `readCitations` turns each marker
+into a handle over the numeral before it. The model types the digits itself;
+rendering facts into placeholders would make every number right by
+construction and leave the reconciler checking a template. A rewrite is handed
+every finding, not only the digit corrections: a writer can drop a number it had
+no source for, which a mechanical patch cannot. A draft that cites none of its
+facts fails the step rather than passing the join on silence.
+
+`scripts/execute-live.mjs` with `GATEWAY_URL` adds the step: the model writes
+through the gateway, pinned, and the join checks it against the pricer's cells.
+Measured 28 November 2026 on the real Treasury curve, three local models:
+
+| Model | Result |
+|---|---|
+| Phi-3-mini (3.8B) | First draft wrote the loss as **$3,966,289.37**, ten times the cell's -$396,628.94; the join failed it, handed back the correction, and the rewrite passed: every number traced to its cell on the second attempt. |
+| Qwen2.5-1.5B | Cited the P&L correctly (as "a loss of -396,628.94"), and wrote the question's "50bp" uncited in every draft; failed after three. |
+| SmolLM2-1.7B | Cited nothing; the step failed and the join asked for no rewrite. |
+
+The first run found a fault in the checker, not the models: every draft that
+wrote "a loss of $396,628.94" failed as a transcription error, because the
+reconciler compared +396,628.94 with the cell's -396,628.94, and Phi-3 would
+not write the minus however it was asked. Taking the magnitude would let a gain
+written as a loss through, so `proseValue` reads the sign the words give it —
+"loss of", "down", "fell by" and their kin before a positive number make it
+negative — and `redteam.ts` holds both sides: `loss_in_words` must pass and
+`gain_as_loss` must be caught. The same run found `-$396,629` read as
++396,629, the minus before a currency symbol lost; `findNumerals` now takes the
+symbol into the numeral.
+
 ## What is not here
 
 - No measure of whether a plan is good. `readPlan` checks that a plan can
   run and approval puts a person in front of it; nothing scores a plan against
   the question, which is why no model's plan runs unshown.
-- The runtime makes no model calls. The retriever and the pricers in
-  `workers.ts` are real; every reasoning step (extraction, the Scribe) is still
-  a function the caller supplies, and the Critic's prose is a callback.
+- The runtime makes no model calls of its own. The retriever, the pricers and
+  the Scribe are real when the caller hands them a source, the WASM module and a
+  model; extraction steps and the Critic's prose are still callbacks.
+- No model passes the Scribe's contract reliably. One of three local models
+  passed it once, on its rewrite. A frontier model is untested here (no vendor
+  key), and the uncited restatement of the question's own numbers is the most
+  common failure.
   `plan-live.mjs` reaches a real model for the plan and executes nothing, and a
   model's plan names its own step ids, so binding its steps to these agents is
   the caller's: nothing here maps "retrieve the curve" to `retrievalAgent`.

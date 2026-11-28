@@ -234,6 +234,12 @@ export const INJECTIONS: readonly Injection[] = [
     apply: (c) => rewrite(c, 'f-vega', '3,870'),
   },
   {
+    id: 'gain_as_loss',
+    description: 'a positive delta written as a fall: the digits right, the sign carried by the wrong word',
+    expect: 'transcription',
+    apply: (c) => rewrite(c, 'f-delta', 'down 12,450'),
+  },
+  {
     id: 'digit_swap',
     description: 'two digits transpose inside an otherwise cited number',
     expect: 'transcription',
@@ -437,6 +443,13 @@ export const CLEAN: readonly CleanVariant[] = [
     description: 'an explicitly hedged number inside the band a hedge buys',
     apply: (c) => {
       rewrite(c, 'f-delta', 'about 12,500');
+    },
+  },
+  {
+    id: 'loss_in_words',
+    description: 'a short vega written as a fall of its magnitude, as an analyst writes a loss',
+    apply: (c) => {
+      rewrite(c, 'f-vega', 'down 3,870');
     },
   },
   {

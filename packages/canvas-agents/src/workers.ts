@@ -44,6 +44,7 @@ import type {
 import type { Blackboard, Fact, PlanStep } from './blackboard.js';
 import type { AgentFn, AgentOutcome } from './coordinator.js';
 import { sameUnit } from './numeric.js';
+import type { CellReading } from './reconciler.js';
 
 /** What the retriever read for one key, as the board holds it. */
 export const factId = (stepId: string, key: string): string => `${stepId}:${key}`;
@@ -146,6 +147,11 @@ export interface CurveShockOptions {
   points: readonly CurvePoint[];
   book: readonly Bond[];
   shock: AnyCurveShock;
+  /**
+   * The canvas's cell readings, which the join reconciles a narrative
+   * against. Each output the node computes is written here as it computes it.
+   */
+  cells?: CellReading[];
 }
 
 /**
@@ -194,17 +200,21 @@ export function curveShockAgent(options: CurveShockOptions): AgentFn {
     const nodeId = `${step.id}/sleeve`;
     const asof = inputs.map((i) => (i.fact.value as NonNullable<Fact['value']>).asof).sort().at(-1) as string;
     const cacheKey = hash(canonicalize({ instruments, shock: options.shock, book: options.book, inputs: inputs.map((i) => i.fact.provenance) }));
-    const assert = (port: string, claim: string, number: number, derivation?: Fact['derivation']): Fact =>
-      board.assert({
+    const assert = (port: string, claim: string, number: number, derivation?: Fact['derivation'], unit = 'usd'): Fact => {
+      options.cells?.push({ nodeId, cacheKey, port, label: claim, value: number, unit, asof });
+      return board.assert({
         id: `${step.id}:${port}`,
         claim,
-        value: { number, unit: 'usd', asof },
+        value: { number, unit, asof },
         provenance: { kind: 'cell', nodeId, cacheKey, port },
         confidence: 1,
         assertedBy: step.agent,
         ...(derivation ? { derivation } : {}),
       });
+    };
     const shockName = options.shock.shape === 'custom' ? 'the drawn shock' : `a ${options.shock.bps}bp ${options.shock.shape} shock`;
+    // The size of the move is an input the answer will state, so it is a fact too.
+    if (options.shock.shape !== 'custom') assert('shock', `the ${options.shock.shape} shock applied`, options.shock.bps, undefined, 'bps');
     const before = assert('base', 'bond sleeve value on the curve', baseValue);
     const after = assert('shocked', `bond sleeve value under ${shockName}`, shockedValue);
     assert('pnl', `bond sleeve P&L under ${shockName}`, shockedValue - baseValue, { op: 'difference', operands: [after.id, before.id] });
@@ -228,6 +238,8 @@ export interface BookGridOptions {
   };
   /** Odd step counts put today's market on the centre cell. */
   grid: GridSpec;
+  /** The canvas's cell readings; see `CurveShockOptions.cells`. */
+  cells?: CellReading[];
 }
 
 /**
@@ -266,6 +278,7 @@ export function bookGridAgent(options: BookGridOptions): AgentFn {
       ['delta', centre.delta, 'shares'],
       ['vega', centre.vega, 'usd per vol'],
     ] as const) {
+      options.cells?.push({ nodeId, cacheKey, port, label: `options book ${port}`, value: number, unit, asof });
       board.assert({
         id: `${step.id}:${port}`,
         claim: `options book ${port} at today's market`,

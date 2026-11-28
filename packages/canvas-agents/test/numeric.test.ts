@@ -39,6 +39,20 @@ describe('finding numerals in prose', () => {
   });
 });
 
+describe('a loss written with its currency', () => {
+  // "-$396,629" was read as 396,629: a model's correct sentence became a
+  // transcription error, and a correction would have dropped the dollar sign.
+  it('reads a minus before the currency symbol as the sign', () => {
+    expect(findNumerals('down -$396,629, or −£1.5').map((n) => [n.literal, n.value])).toEqual([['-$396,629', -396_629], ['−£1.5', -1.5]]);
+    expect(findNumerals('worth $396,629').map((n) => [n.literal, n.value])).toEqual([['396,629', 396_629]]);
+  });
+
+  it('renders a correction with the currency it was written with', () => {
+    expect(formatLike(-396_629.47, '-$369,629')).toBe('-$396,629');
+    expect(formatLike(-396_629.47, '396,629')).toBe('-396,629');
+  });
+});
+
 describe('the tolerance a rendering claims', () => {
   it('is half a unit in the last displayed place', () => {
     expect(displayTolerance('3,870')).toBe(0.5);

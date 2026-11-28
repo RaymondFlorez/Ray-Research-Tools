@@ -34,7 +34,7 @@
  */
 
 import type { Blackboard, Fact } from './blackboard.js';
-import { agrees, findNumerals, formatLike, normalizeUnit, sameUnit, toleranceFor } from './numeric.js';
+import { agrees, findNumerals, formatLike, normalizeUnit, proseValue, sameUnit, toleranceFor } from './numeric.js';
 
 /** A span of the narrative that renders one fact, or is declared non-numeric prose. */
 export interface Handle {
@@ -296,14 +296,19 @@ export function reconcile(input: ReconcileInput): ReconcileResult {
       continue;
     }
 
-    // text -> fact
-    if (!agrees(numeral, fact.value.number)) {
+    // text -> fact, with the sign the sentence's words give the number
+    const prose = proseValue(narrative.text, numeral);
+    if (!agrees({ ...numeral, value: prose.value }, fact.value.number)) {
       add(
         'transcription',
-        `narrative says ${numeral.literal} where ${fact.id} holds ${fact.value.number}`,
-        { factId: fact.id, span, expected: fact.value.number, found: numeral.value },
+        `narrative says ${prose.signedByWords ? `a fall of ${numeral.literal}` : numeral.literal} where ${fact.id} holds ${fact.value.number}`,
+        { factId: fact.id, span, expected: fact.value.number, found: prose.value },
       );
-      corrections.push(correction(fact, numeral, fact.value.number));
+      // Under a loss word a negative value is written as its magnitude; a
+      // positive one cannot be fixed by digits, and the correction says so by
+      // carrying the sign.
+      const shown = prose.signedByWords && fact.value.number < 0 ? -fact.value.number : fact.value.number;
+      corrections.push(correction(fact, numeral, shown));
       continue;
     }
 
