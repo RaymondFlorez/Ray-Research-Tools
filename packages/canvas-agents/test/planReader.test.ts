@@ -20,8 +20,8 @@ describe('reading a model\'s plan', () => {
     expect(r.problems).toEqual([]);
     expect(r.steps.map((s) => [s.id, s.estimatedCents])).toEqual([['retrieve', 1], ['subtext', 5], ['shock', 1], ['answer', 5]]);
     expect(r.steps[2]!.method).toBe('parallel');
-    const p = plan({ scope: ready, steps: r.steps });
-    expect([p.totalCents, p.estimatedMs, p.warnings]).toEqual([12, 6_500, []]);
+    const p = plan({ scope: ready, author: { kind: 'model', model: 'a model' }, steps: r.steps });
+    expect([p.totalCents, p.estimatedMs, p.warnings, p.needsApproval]).toEqual([12, 6_500, [], true]);
   });
 
   it('names every fault and runs none of a plan that has one', () => {

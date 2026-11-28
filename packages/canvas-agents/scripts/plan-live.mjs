@@ -1,7 +1,8 @@
 /**
  * The QueryNode's front door over real models: a question, scoped, then
  * decomposed into a plan by a model through services/gateway, read by
- * `readPlan`, and shown as a `plan()` with its cost and approval.
+ * `readPlan`, and shown as a `plan()` with its cost and approval. Every plan
+ * here is a model's, so every one is shown before it runs.
  *
  * The cascade escalates when `readPlan` finds a fault, so the verifier is
  * deterministic: a plan is accepted when every step names a real kind, agent
@@ -118,8 +119,8 @@ for (const question of QUESTIONS) {
   if (ok) {
     accepted += 1;
     const read = readPlan(last.answer.text, { estimate });
-    const p = plan({ scope: scoped, steps: read.steps });
-    if (shown.length < 3) shown.push({ question, by: last.decision.model.id, steps: p.steps.map((s) => `${s.id}[${s.kind}/${s.agent}${s.taskClass ? `/${s.taskClass}` : ''}]<-${s.dependsOn.join(',') || '-'}`), cents: p.totalCents, approval: p.needsApproval });
+    const p = plan({ scope: scoped, author: { kind: 'model', model: last.decision.model.id }, steps: read.steps });
+    if (shown.length < 3) shown.push({ question, by: last.decision.model.id, steps: p.steps.map((s) => `${s.id}[${s.kind}/${s.agent}${s.taskClass ? `/${s.taskClass}` : ''}]<-${s.dependsOn.join(',') || '-'}`), cents: p.totalCents, approval: p.approvalReason });
   }
   console.log(`${ok ? 'plan    ' : 'no plan '} ${(ms / 1000).toFixed(1)}s  ${r.steps.map((s) => `${s.decision.model.id}:${s.verdict.accepted ? 'ok' : 'no'}`).join(' -> ')}  ${question}`);
 }
@@ -127,4 +128,4 @@ console.log('\nper model:', JSON.stringify(tally));
 console.log(`runnable plans: ${accepted} of ${QUESTIONS.length}`);
 console.log('faults found, by kind:');
 for (const [k, n] of Object.entries(problems).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`  ${n}  ${k}`);
-for (const s of shown) console.log(`\n${s.question}\n  by ${s.by}, ${s.cents.toFixed(2)}c, approval ${s.approval ? 'needed' : 'not needed'}\n  ${s.steps.join('\n  ')}`);
+for (const s of shown) console.log(`\n${s.question}\n  by ${s.by}, ${s.cents.toFixed(2)}c, shown before it runs: ${s.approval}\n  ${s.steps.join('\n  ')}`);

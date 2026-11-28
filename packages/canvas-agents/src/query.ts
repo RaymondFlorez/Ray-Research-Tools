@@ -22,7 +22,11 @@
  * **"The plan is shown to the analyst before execution for anything above a
  * cost threshold or flagged high-rigor."** So the plan carries a cost estimate
  * per step, and `needsApproval` is a function of that estimate rather than a
- * flag someone sets.
+ * flag someone sets. A third trigger is a product decision beyond the PRD,
+ * taken on 27 November: a plan a model wrote is shown whatever it costs (see
+ * `PlanAuthor`). And "shown before execution" is enforced rather than hoped
+ * for: `toPlanSteps`, the one way into the coordinator, refuses a plan that
+ * needs approval until `approve` has been called on it.
  *
  * **"Plans are editable: the analyst can delete a step, add a data source, or
  * change a method."** Which means a plan is data, and editing it has to keep
@@ -194,16 +198,45 @@ export interface PlannedStep {
   alternatives?: string[];
 }
 
+/**
+ * Who wrote the steps.
+ *
+ * A model's decomposition is shown before it runs, whatever it costs. That is
+ * a product decision beyond the PRD's two triggers, and it rests on a
+ * measurement: `scripts/plan-live.mjs` had four open-weight models of 0.36B to
+ * 3.8B parameters plan twelve analyst questions, and the plans `readPlan`
+ * accepts are *runnable* — real kinds, real agents, no circles — which is not
+ * the same as good. A runnable plan can fetch the wrong thing, skip the step
+ * the question turns on, or price a shock nobody asked for, and nothing in this
+ * repo measures whether a model's plan is a good one. Until something does, no
+ * model has earned the right to spend on its own plan unshown, so the rule is
+ * every model rather than a size threshold nobody measured.
+ *
+ * Required, so a caller cannot get the cheaper path by leaving it out.
+ */
+export type PlanAuthor =
+  | { kind: 'analyst'; user: string }
+  | { kind: 'model'; model: string };
+
 export interface Plan {
   question: string;
+  author: PlanAuthor;
   steps: PlannedStep[];
   totalCents: number;
   /** Critical path, not the sum: steps in a wave run together. */
   estimatedMs: number;
   /** True when the plan must be shown before anything runs. */
   needsApproval: boolean;
+  /** Every reason it must be shown, joined: a plan can be dear *and* a model's. */
   approvalReason?: string;
   warnings: string[];
+  /**
+   * Why it cannot run at all, whoever approves it: an unresolved mention, a
+   * step whose input is not in the plan. `toPlanSteps` refuses while any remain.
+   */
+  blockers: string[];
+  /** Set by `approve`, on a frozen copy; never by `plan`. */
+  approval?: { by: string; at: string };
 }
 
 /** Above this estimate, the plan is shown before it runs. */
@@ -211,6 +244,7 @@ export const APPROVAL_CENTS = 25;
 
 export interface PlanInput {
   scope: Scope;
+  author: PlanAuthor;
   steps: readonly PlannedStep[];
   /** The analyst asked for rigor, which shows the plan whatever it costs. */
   highRigor?: boolean;
@@ -220,10 +254,10 @@ export function plan(input: PlanInput): Plan {
   const steps = [...input.steps];
   const totalCents = steps.reduce((total, s) => total + s.estimatedCents, 0);
   const estimatedMs = criticalPath(steps);
-  const warnings: string[] = [];
+  const blockers: string[] = [];
 
   if (!input.scope.ready) {
-    warnings.push(
+    blockers.push(
       `${input.scope.ambiguous.length} mention(s) are unresolved: ${input.scope.ambiguous
         .map((a) => a.mention)
         .join(', ')}. The plan cannot run until they are chosen.`,
@@ -232,26 +266,71 @@ export function plan(input: PlanInput): Plan {
 
   const missing = steps.filter((s) => s.dependsOn.some((d) => !steps.some((t) => t.id === d)));
   for (const step of missing) {
-    warnings.push(`${step.id} depends on a step that is not in the plan`);
+    blockers.push(`${step.id} depends on a step that is not in the plan`);
   }
 
-  const needsApproval = input.highRigor === true || totalCents > APPROVAL_CENTS;
+  const reasons: string[] = [];
+  if (input.highRigor === true) reasons.push('flagged high-rigor');
+  if (totalCents > APPROVAL_CENTS) {
+    reasons.push(`estimated at ${totalCents.toFixed(0)} cents, above the ${APPROVAL_CENTS}-cent threshold`);
+  }
+  if (input.author.kind === 'model') reasons.push(`written by ${input.author.model}, and a model's plan is shown before it runs`);
+  const needsApproval = reasons.length > 0;
   return {
     question: input.scope.question,
+    author: input.author,
     steps,
     totalCents,
     estimatedMs,
     needsApproval,
-    ...(needsApproval
-      ? {
-          approvalReason:
-            input.highRigor === true
-              ? 'flagged high-rigor'
-              : `estimated at ${totalCents.toFixed(0)} cents, above the ${APPROVAL_CENTS}-cent threshold`,
-        }
-      : {}),
-    warnings,
+    ...(needsApproval ? { approvalReason: reasons.join('; ') } : {}),
+    warnings: [...blockers],
+    blockers,
   };
+}
+
+/** The plan cannot go to the coordinator, and why. */
+export class PlanNotRunnable extends Error {
+  constructor(readonly reasons: readonly string[]) {
+    super(`the plan cannot run: ${reasons.join('; ')}`);
+    this.name = 'PlanNotRunnable';
+  }
+}
+
+// Only `approve` adds to this, and only frozen plans: an approval cannot be
+// written onto a plan by hand, copied onto another, or outlive an edit (every
+// edit builds a new plan through `plan`, which is not in here).
+const approved = new WeakSet<Plan>();
+
+const deepFreeze = <T>(value: T): T => {
+  if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+    for (const v of Object.values(value)) deepFreeze(v);
+    Object.freeze(value);
+  }
+  return value;
+};
+
+/**
+ * The analyst approves the plan as shown.
+ *
+ * Returns a frozen copy carrying who approved it and when, which is the copy
+ * `toPlanSteps` will accept; the plan it was given is unchanged, and editing
+ * the approved one is impossible — an edit makes a new plan, which is
+ * unapproved. A plan that cannot run cannot be approved either: approving it
+ * would record consent to something that will stall.
+ */
+export function approve(shown: Plan, by: { user: string; at: string }): Plan {
+  if (shown.blockers.length > 0) throw new PlanNotRunnable(shown.blockers);
+  if (!by.user.trim()) throw new Error('an approval names the analyst who gave it');
+  const copy: Plan = structuredClone({ ...shown, approval: { by: by.user, at: by.at } });
+  deepFreeze(copy);
+  approved.add(copy);
+  return copy;
+}
+
+/** Whether this exact plan object came out of `approve`. */
+export function isApproved(p: Plan): boolean {
+  return approved.has(p);
 }
 
 /**
@@ -319,7 +398,7 @@ export function deleteStep(current: Plan, stepId: string, scope: Scope): Edit {
   const remaining = current.steps.filter((s) => !dead.has(s.id));
   const pruned = [...dead].filter((id) => id !== stepId);
   return {
-    plan: plan({ scope, steps: remaining }),
+    plan: plan({ scope, author: current.author, steps: remaining }),
     pruned,
     ...(pruned.length > 0
       ? { note: `removing ${stepId} also removed ${pruned.join(', ')}, which depended on it` }
@@ -328,7 +407,7 @@ export function deleteStep(current: Plan, stepId: string, scope: Scope): Edit {
 }
 
 export function addStep(current: Plan, step: PlannedStep, scope: Scope): Edit {
-  return { plan: plan({ scope, steps: [...current.steps, step] }), pruned: [] };
+  return { plan: plan({ scope, author: current.author, steps: [...current.steps, step] }), pruned: [] };
 }
 
 /** Swap the method on one step, keeping everything else. */
@@ -339,7 +418,7 @@ export function changeMethod(current: Plan, stepId: string, method: string, scop
   const target = current.steps.find((s) => s.id === stepId);
   const offered = target?.alternatives ?? [];
   return {
-    plan: plan({ scope, steps }),
+    plan: plan({ scope, author: current.author, steps }),
     pruned: [],
     ...(offered.length > 0 && !offered.includes(method)
       ? { note: `${method} is not one of the alternatives this step offered (${offered.join(', ')})` }
@@ -347,9 +426,19 @@ export function changeMethod(current: Plan, stepId: string, method: string, scop
   };
 }
 
-/** Hand the approved plan to the coordinator. */
-export function toPlanSteps(approved: Plan): Array<Omit<PlanStep, 'status'>> {
-  return approved.steps.map((step) => ({
+/**
+ * Hand the plan to the coordinator: the one way a plan's steps reach `run`.
+ *
+ * Refuses a plan with blockers, and a plan that needs approval unless it is the
+ * one `approve` returned. "Shown to the analyst before execution" is then a
+ * property of the code path rather than of the caller's diligence.
+ */
+export function toPlanSteps(ready: Plan): Array<Omit<PlanStep, 'status'>> {
+  if (ready.blockers.length > 0) throw new PlanNotRunnable(ready.blockers);
+  if (ready.needsApproval && !approved.has(ready)) {
+    throw new PlanNotRunnable([`it must be shown and approved first (${ready.approvalReason})`]);
+  }
+  return ready.steps.map((step) => ({
     id: step.id,
     description: step.description,
     agent: step.agent,

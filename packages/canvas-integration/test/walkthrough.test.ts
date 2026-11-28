@@ -149,7 +149,7 @@ describe('1 · scope and plan', () => {
       { id: 'grid', kind: 'compute', description: 'reprice the book', agent: 'simulator', dependsOn: ['portfolio', 'shock'], estimatedCents: 4, estimatedMs: 21_000 },
       { id: 'scribe', kind: 'reasoning', description: 'write the answer', agent: 'scribe', taskClass: 'synthesis.final', dependsOn: ['grid'], estimatedCents: 9, estimatedMs: 5_000 },
     ];
-    const compiled = plan({ scope: scoped, steps });
+    const compiled = plan({ scope: scoped, author: { kind: 'analyst', user: 'pm' }, steps });
     const serial = steps.reduce((t, s) => t + s.estimatedMs, 0);
     expect(compiled.estimatedMs).toBeLessThan(serial);
     expect(compiled.warnings).toEqual([]);
@@ -977,6 +977,7 @@ describe('9 · the plan runs as waves on the blackboard', () => {
     const scoped = scope({ question: 'Model a 50bps rate-hike shock across my portfolio', resolve: () => [] });
     const compiled = plan({
       scope: scoped,
+      author: { kind: 'analyst', user: 'pm' },
       steps: [
         { id: 'portfolio', kind: 'compute', description: 'load the book', agent: 'quant', dependsOn: [], estimatedCents: 1, estimatedMs: 400 },
         { id: 'curve', kind: 'compute', description: 'bootstrap', agent: 'quant', dependsOn: [], estimatedCents: 1, estimatedMs: 600 },

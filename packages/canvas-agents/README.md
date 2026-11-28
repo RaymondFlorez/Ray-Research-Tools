@@ -329,11 +329,34 @@ read as poor ones: "read the last AAPL call" is a single retrieval step tagged
 compute steps dispatching `sql.generate`, `doc.extract`, `doc.deep_read` and
 `quant.codegen` in no order a person would choose. All five cost under the
 25-cent threshold, so under the PRD's rule none would be shown before running.
-Whether a small model's plan should be shown regardless is a product decision
-the PRD does not make; nothing here makes it.
+
+## A model's plan is shown before it runs
+
+That was a product decision the PRD does not make, and it was taken on 27
+November 2026: a plan a model wrote is shown whatever it costs. `plan()` now
+requires a `PlanAuthor` — the analyst, or a named model — so the cheaper path
+cannot be had by leaving it out, and a model's plan carries `written by <model>,
+and a model's plan is shown before it runs` among its approval reasons, which
+are now all given rather than the first. The rule covers every model, not only
+small ones: what was measured is that small models' plans are runnable and
+poor, and nothing here measures whether any model's plan is good, so there is no
+size or model this code could exempt on evidence. An analyst's edit keeps the
+plan a model's: it is still mostly what the model proposed.
+
+Shown-before-it-runs is enforced, not just reported. `approve(plan, { user, at
+})` returns a frozen copy carrying who approved it and when, and `toPlanSteps`,
+the way a plan's steps reach `run`, refuses a plan that needs approval unless it
+is that copy: a spread of it, or a plan with an `approval` field written on by
+hand, is refused, and so is every edit of an approved plan until it is approved
+again. It also refuses a plan with blockers — an unresolved mention, a step
+whose input is not in the plan — which `plan()` used to warn about while
+handing the steps on anyway; such a plan cannot be approved either.
 
 ## What is not here
 
+- No measure of whether a plan is good. `readPlan` checks that a plan can
+  run and approval puts a person in front of it; nothing scores a plan against
+  the question, which is why no model's plan runs unshown.
 - The runtime makes no model calls. Every agent is a function the caller
   supplies, and the Critic's prose is a callback; `plan-live.mjs` is the one
   path that reaches a real model, for the plan, and it executes nothing. What

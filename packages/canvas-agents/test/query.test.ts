@@ -14,9 +14,16 @@ import {
   queryScope,
   scope,
   toPlanSteps,
+  approve,
+  isApproved,
+  PlanNotRunnable,
+  type PlanAuthor,
   type PlannedStep,
   type Resolver,
 } from '../src/query.js';
+
+const analyst: PlanAuthor = { kind: 'analyst', user: 'pm' };
+const model: PlanAuthor = { kind: 'model', model: 'qwen2.5-1.5b' };
 
 const resolver: Resolver = (mention) => {
   switch (mention) {
@@ -146,7 +153,7 @@ describe('the plan', () => {
   it('estimates the critical path, not the sum', () => {
     const steps = branchedSteps();
     const sum = steps.reduce((total, s) => total + s.estimatedMs, 0);
-    const result = plan({ scope: ready, steps });
+    const result = plan({ scope: ready, author: analyst, steps });
     expect(sum).toBe(39_000);
     // retrieve(4s) -> subtext(8s) = 12s; portfolio(0.5s) -> shock(21.5s) = 22s;
     // the longer branch plus the scribe.
@@ -155,31 +162,31 @@ describe('the plan', () => {
   });
 
   it('shows itself before running when it costs more than the threshold', () => {
-    const result = plan({ scope: ready, steps: branchedSteps() });
+    const result = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     expect(result.totalCents).toBe(22);
     expect(result.needsApproval).toBe(false);
 
     const expensive = branchedSteps().map((s) => ({ ...s, estimatedCents: s.estimatedCents * 3 }));
-    const shown = plan({ scope: ready, steps: expensive });
+    const shown = plan({ scope: ready, author: analyst, steps: expensive });
     expect(shown.needsApproval).toBe(true);
     expect(shown.approvalReason).toContain(`${APPROVAL_CENTS}-cent threshold`);
   });
 
   it('shows itself whatever it costs when the analyst asked for rigor', () => {
-    const result = plan({ scope: ready, steps: branchedSteps(), highRigor: true });
+    const result = plan({ scope: ready, author: analyst, steps: branchedSteps(), highRigor: true });
     expect(result.needsApproval).toBe(true);
     expect(result.approvalReason).toBe('flagged high-rigor');
   });
 
   it('refuses to be runnable while a mention is unresolved', () => {
     const unresolved = scope({ question: 'Compare MU', resolve: resolver });
-    const result = plan({ scope: unresolved, steps: branchedSteps() });
+    const result = plan({ scope: unresolved, author: analyst, steps: branchedSteps() });
     expect(result.warnings.join(' ')).toContain('cannot run until they are chosen');
   });
 
   it('names a step that depends on something not in the plan', () => {
     const orphan = branchedSteps().filter((s) => s.id !== 'portfolio');
-    expect(plan({ scope: ready, steps: orphan }).warnings.join(' ')).toContain('not in the plan');
+    expect(plan({ scope: ready, author: analyst, steps: orphan }).warnings.join(' ')).toContain('not in the plan');
   });
 
   it('survives a dependency cycle rather than recursing forever', () => {
@@ -197,7 +204,7 @@ describe('editing a plan', () => {
   // Leaving a dependent behind produces a run that stalls at a wave boundary
   // waiting on an input that will never arrive.
   it('prunes what can no longer run, and names it', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const edit = deleteStep(before, 'portfolio', ready);
     expect(edit.pruned).toEqual(expect.arrayContaining(['shock', 'scribe']));
     expect(edit.note).toContain('depended on it');
@@ -205,21 +212,21 @@ describe('editing a plan', () => {
   });
 
   it('says nothing about pruning when nothing depended on the step', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const edit = deleteStep(before, 'scribe', ready);
     expect(edit.pruned).toEqual([]);
     expect(edit.note).toBeUndefined();
   });
 
   it('re-estimates cost and time after an edit', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const after = deleteStep(before, 'portfolio', ready).plan;
     expect(after.totalCents).toBeLessThan(before.totalCents);
     expect(after.estimatedMs).toBeLessThan(before.estimatedMs);
   });
 
   it('adds a data source as a new step', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const edit = addStep(
       before,
       {
@@ -240,23 +247,108 @@ describe('editing a plan', () => {
   // "it refuses to pretend a parallel shift is the honest default" — so the
   // parallel shape is an alternative the analyst can pick, not the default.
   it('changes a method to one the step offered', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const edit = changeMethod(before, 'shock', 'parallel', ready);
     expect(edit.plan.steps.find((s) => s.id === 'shock')?.method).toBe('parallel');
     expect(edit.note).toBeUndefined();
   });
 
   it('flags a method the step never offered', () => {
-    const before = plan({ scope: ready, steps: branchedSteps() });
+    const before = plan({ scope: ready, author: analyst, steps: branchedSteps() });
     const edit = changeMethod(before, 'shock', 'invented', ready);
     expect(edit.note).toContain('not one of the alternatives');
+  });
+});
+
+describe('a plan a model wrote', () => {
+  const ready = scope({ question: 'Read the call and stress the book', resolve: resolver });
+
+  // The product decision of 27 November: whatever it costs.
+  it('is shown before it runs, however cheap, and says who wrote it', () => {
+    const mine = plan({ scope: ready, author: analyst, steps: branchedSteps() });
+    const theirs = plan({ scope: ready, author: model, steps: branchedSteps() });
+    expect(mine.totalCents).toBe(theirs.totalCents);
+    expect(mine.needsApproval).toBe(false);
+    expect(theirs.needsApproval).toBe(true);
+    expect(theirs.approvalReason).toBe("written by qwen2.5-1.5b, and a model's plan is shown before it runs");
+    expect(theirs.author).toEqual(model);
+  });
+
+  it('gives every reason it is shown, not only the first', () => {
+    const expensive = branchedSteps().map((s) => ({ ...s, estimatedCents: s.estimatedCents * 3 }));
+    const shown = plan({ scope: ready, author: model, steps: expensive, highRigor: true });
+    expect(shown.approvalReason?.split('; ')).toEqual([
+      'flagged high-rigor',
+      `estimated at 66 cents, above the ${APPROVAL_CENTS}-cent threshold`,
+      "written by qwen2.5-1.5b, and a model's plan is shown before it runs",
+    ]);
+  });
+
+  it('stays a model\'s plan through the analyst\'s edits, so the edited plan is shown again', () => {
+    const before = plan({ scope: ready, author: model, steps: branchedSteps() });
+    const after = deleteStep(approve(before, { user: 'pm', at: '2026-11-27T10:00:00Z' }), 'scribe', ready).plan;
+    expect(after.author).toEqual(model);
+    expect(after.needsApproval).toBe(true);
+    expect(isApproved(after)).toBe(false);
+    expect(() => toPlanSteps(after)).toThrow(PlanNotRunnable);
+  });
+});
+
+describe('approval', () => {
+  const ready = scope({ question: 'Read the call and stress the book', resolve: resolver });
+
+  it('is the only way a plan that must be shown reaches the coordinator', () => {
+    const shown = plan({ scope: ready, author: model, steps: branchedSteps() });
+    expect(() => toPlanSteps(shown)).toThrow(/must be shown and approved first \(written by qwen2.5-1.5b/);
+    const yes = approve(shown, { user: 'pm', at: '2026-11-27T10:00:00Z' });
+    expect(yes.approval).toEqual({ by: 'pm', at: '2026-11-27T10:00:00Z' });
+    expect(toPlanSteps(yes).map((s) => s.id)).toEqual(shown.steps.map((s) => s.id));
+    // The plan that was shown is untouched; the approved copy is a different object.
+    expect(shown.approval).toBeUndefined();
+    expect(isApproved(shown)).toBe(false);
+  });
+
+  it('cannot be forged by copying or by writing the field', () => {
+    const shown = plan({ scope: ready, author: model, steps: branchedSteps() });
+    const yes = approve(shown, { user: 'pm', at: '2026-11-27T10:00:00Z' });
+    expect(() => toPlanSteps({ ...yes })).toThrow(PlanNotRunnable);
+    expect(() => toPlanSteps({ ...shown, approval: { by: 'pm', at: 'now' } })).toThrow(PlanNotRunnable);
+  });
+
+  it('freezes what was approved, steps included', () => {
+    const yes = approve(plan({ scope: ready, author: model, steps: branchedSteps() }), { user: 'pm', at: 'now' });
+    expect(() => {
+      (yes.steps as PlannedStep[]).push(yes.steps[0]!);
+    }).toThrow(TypeError);
+    expect(() => {
+      (yes.steps[0] as { dependsOn: string[] }).dependsOn.push('elsewhere');
+    }).toThrow(TypeError);
+  });
+
+  it('is refused for a plan that cannot run, and names the analyst who gave it', () => {
+    const unresolved = scope({ question: 'Compare MU', resolve: resolver });
+    const stuck = plan({ scope: unresolved, author: analyst, steps: branchedSteps() });
+    expect(stuck.blockers.join(' ')).toContain('cannot run until they are chosen');
+    expect(() => approve(stuck, { user: 'pm', at: 'now' })).toThrow(PlanNotRunnable);
+    expect(() => toPlanSteps(stuck)).toThrow(PlanNotRunnable);
+    expect(() => approve(plan({ scope: ready, author: model, steps: branchedSteps() }), { user: ' ', at: 'now' })).toThrow(/names the analyst/);
+  });
+
+  it('is not needed for a cheap plan the analyst wrote', () => {
+    const mine = plan({ scope: ready, author: analyst, steps: branchedSteps() });
+    expect(toPlanSteps(mine)).toHaveLength(5);
+  });
+
+  it('refuses a plan with a step whose input is missing, approved or not', () => {
+    const orphan = plan({ scope: ready, author: analyst, steps: branchedSteps().filter((s) => s.id !== 'portfolio') });
+    expect(() => toPlanSteps(orphan)).toThrow(/depends on a step that is not in the plan/);
   });
 });
 
 describe('handing the approved plan to the coordinator', () => {
   it('runs it as waves, with the estimates as budgets', async () => {
     const ready = scope({ question: 'Read the call and stress the book', resolve: resolver });
-    const approved = plan({ scope: ready, steps: branchedSteps() });
+    const approved = plan({ scope: ready, author: analyst, steps: branchedSteps() });
 
     const board = new Blackboard('q1', approved.question, 100);
     board.setPlan(toPlanSteps(approved));
