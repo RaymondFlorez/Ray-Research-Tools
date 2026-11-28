@@ -58,6 +58,7 @@ fixture gives every fact its own node. A reading is now identified by node
 | `surface.test.ts` | `canvas-pricing` → `canvas-render`: a StrategyNode wired into a SurfaceNode; every heatmap cell and every visible 3D point reads back the engine's P&L, and break-even lies between cells of opposite sign. |
 | `hypothesis-ledger.test.ts` | `canvas-hypothesis` → `canvas-agents`: the HypothesisNode shows the status the ledger scores, and the Critic's "three times, right once" is read off the ledger, filtered to the analyst. |
 | `backtest-history.test.ts` | `canvas-data` → `canvas-sim`: a backtest's history loaded from the point-in-time store, and every read its strategy can make held to the store's answer for that instant. |
+| `execute.test.ts` | `canvas-agents` → `canvas-data` → `canvas-pricing` → `pricing-core`: a model's plan approved and run by real agents, a curve bootstrapped from the facts retrieval asserted, each figure checked against one the agents did not compute (par, yield DV01, legs priced one at a time). |
 | `export-chart.test.ts` | `canvas-data` → `canvas-render` → `canvas-guard`: a chart on screen exported, one cell per marker and none for a gap, each figure's class carried from the read to the vendor rule and the PDF. |
 
 ## The second bug, found the same way

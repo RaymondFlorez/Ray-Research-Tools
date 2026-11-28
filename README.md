@@ -42,7 +42,7 @@ not close.
 | Package | Description |
 |---|---|
 | [`@picasso/canvas-router`](packages/canvas-router) | PRD 4.2–4.7: the versioned routing policy, hard rules before scores, the speculative cascade, budgets that ask, and the eval harness that rewrites the policy. |
-| [`@picasso/canvas-agents`](packages/canvas-agents) | PRD 4.5: the blackboard runtime, the Critic whose useful half needs no model, the Reconciler that makes every number trace to a cell, and the return digest. |
+| [`@picasso/canvas-agents`](packages/canvas-agents) | PRD 4.5: the blackboard runtime, the Critic whose useful half needs no model, the Reconciler that makes every number trace to a cell, the return digest, plans read from a model and shown before they run, and real retrieval and pricing agents over the data plane and the WASM core. |
 | [`@picasso/canvas-guard`](packages/canvas-guard) | PRD 7: data classification, tenant isolation, the two independent egress controls, prompt-injection defenses, the degradation ladder, SLOs and export bundles. |
 | [`@picasso/canvas-integration`](packages/canvas-integration) | No `src`. The PRD's worked example run end to end, plus the collaboration, sketch and degradation seams. Found two bugs no unit suite could reach. |
 

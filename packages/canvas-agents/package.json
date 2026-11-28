@@ -22,7 +22,9 @@
   },
   "dependencies": {
     "@picasso/canvas-core": "*",
+    "@picasso/canvas-data": "*",
     "@picasso/canvas-hypothesis": "*",
+    "@picasso/canvas-pricing": "*",
     "@picasso/canvas-router": "*"
   },
   "devDependencies": {

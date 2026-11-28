@@ -16,6 +16,7 @@ export * from './coordinator.js';
 export * from './digest.js';
 export * from './query.js';
 export * from './planReader.js';
+export * from './workers.js';
 export * from './context.js';
 export * from './synthesis.js';
 export * from './evidence.js';

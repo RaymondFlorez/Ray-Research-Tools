@@ -352,14 +352,62 @@ again. It also refuses a plan with blockers — an unresolved mention, a step
 whose input is not in the plan — which `plan()` used to warn about while
 handing the steps on anyway; such a plan cannot be approved either.
 
+## Agents that do the work
+
+Until now every agent `run` scheduled was a function a test wrote.
+`src/workers.ts` has the first three that reach real systems, and they talk to
+each other only through the board:
+
+- `retrievalAgent` reads keys through a `PointInTimeSource` — the Go data plane
+  over HTTP (`remoteSource`, batched through `/v1/asof/batch`) or the
+  in-process store — at the knowledge time it is given, and asserts each
+  value as a fact with `cell` provenance on the tile it materializes, keyed on
+  the source, the key, the knowledge time and what came back. A withheld key,
+  or one with nothing known yet, fails the step, so nothing downstream prices on
+  part of its inputs; what it could read stays on the board.
+- `curveShockAgent` bootstraps a curve in WASM from par yields its
+  dependencies read and reprices a bond sleeve on it and under a shock,
+  asserting both values and the P&L with a `derivation` naming the two.
+- `bookGridAgent` reprices an options book across a spot-vol grid at the
+  spot and rate its dependencies read, and asserts value, delta and vega at
+  today's market.
+
+A pricer takes an input only from a step it depends on, never a contested or
+retracted one, and only in the unit it reads (`inputFact`). The one sum done in
+TypeScript is a sleeve's discounted cash flows; every discount factor, price and
+Greek is the WASM module's.
+
+`canvas-integration/test/execute.test.ts` runs a model's plan through approval
+and both pricers on the real module and checks each figure against something
+the agents do not compute: a bond paying the curve's own par coupons is worth
+par (exactly, here), the shock's P&L is minus the yield DV01 times 50bp to
+within 0.5% (1.0025 of it, measured), and the options book at today's market is
+its legs priced one at a time (exactly). `scripts/execute-live.mjs` does it for
+real: the Go data plane on Postgres, Treasury's own daily par curve loaded by
+`cmd/load treasury`, read over HTTP, a SYNTHETIC three-bond sleeve repriced.
+Measured 28 November 2026 on the curve for 27 November: two waves in 45ms, worst
+bootstrap residual 8e-13bp, +50bp P&L of -$396,629 on $20mm face, 1.0075 of the
+yield-DV01 estimate.
+
 ## What is not here
 
 - No measure of whether a plan is good. `readPlan` checks that a plan can
   run and approval puts a person in front of it; nothing scores a plan against
   the question, which is why no model's plan runs unshown.
-- The runtime makes no model calls. Every agent is a function the caller
-  supplies, and the Critic's prose is a callback; `plan-live.mjs` is the one
-  path that reaches a real model, for the plan, and it executes nothing. What
+- The runtime makes no model calls. The retriever and the pricers in
+  `workers.ts` are real; every reasoning step (extraction, the Scribe) is still
+  a function the caller supplies, and the Critic's prose is a callback.
+  `plan-live.mjs` reaches a real model for the plan and executes nothing, and a
+  model's plan names its own step ids, so binding its steps to these agents is
+  the caller's: nothing here maps "retrieve the curve" to `retrievalAgent`.
+- No real positions and no live equity prices. The live run reprices a
+  synthetic sleeve on the real Treasury curve; the options pricer is checked on
+  illustrative inputs, since no equity price source is reachable from here
+  without a decision this repo has not been given (EDGAR's contact, a FRED key,
+  a price vendor).
+- `parInstruments` reads a par yield of a year or less as a deposit and a
+  longer one as a semiannual par swap. That reprices its inputs exactly and is
+  not the Treasury's own convention for bills or for coupon dates. What
   is measured is the runtime, the reconciliation, the deterministic critiques
   and the plan reader.
 - No retrieval index. `disconfirming` takes a `Retrieve` function, and

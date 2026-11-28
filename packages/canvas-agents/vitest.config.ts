@@ -9,6 +9,8 @@ export default defineConfig({
         new URL('../canvas-hypothesis/src/index.ts', import.meta.url),
       ),
       '@picasso/canvas-router': fileURLToPath(new URL('../canvas-router/src/index.ts', import.meta.url)),
+      '@picasso/canvas-data': fileURLToPath(new URL('../canvas-data/src/index.ts', import.meta.url)),
+      '@picasso/canvas-pricing': fileURLToPath(new URL('../canvas-pricing/src/index.ts', import.meta.url)),
     },
   },
   test: { include: ['test/**/*.test.ts'], environment: 'node' },
